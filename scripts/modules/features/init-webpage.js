@@ -1,7 +1,7 @@
 /**
  * @fileoverview Webpage initialization script
  *
- * This script determines the language settings for the web application based on the user's browser settings
+ * This script first sets up SVG sprite, then determines the language settings for the web application based on the user's browser settings
  * and local storage preferences. It sets the language attributes on the HTML document element accordingly.
  *
  * The script respects user language settings if the `respectUserLangSetting` flag is set to true.
@@ -9,10 +9,21 @@
  *
  * The script also checks if the page was opened as no-UI mode from extension, and sets the `isOpenedAsNoUI` attribute on the HTML document element accordingly.
  *
- * @module modules/features/init-webage
+ * @module modules/features/init-webpage
+ * @requires config/icons
  */
 
+import { createSvgSprite } from "../../config/icons.js";
+
 (async function () {
+    /**
+     * Create SVG sprite
+     */
+    document.addEventListener("DOMContentLoaded", () => {
+        const sprite = createSvgSprite();
+        document.body.insertBefore(sprite, document.body.firstChild);
+    });
+
     /**
      * Flag to determine if user language settings should be respected
      */
@@ -74,7 +85,7 @@
      * @returns {Promise<boolean>}
      */
     const checkOpenedAsNoUI = async () => {
-        // 等待 storage API 初始化
+        // Wait for storage API to be available
         const storageAvailable = await waitForStorage();
         if (!storageAvailable) {
             // console.warn("Storage API not available");
