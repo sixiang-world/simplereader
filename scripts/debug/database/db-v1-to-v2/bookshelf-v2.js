@@ -10,12 +10,9 @@
  *
  * @module modules/features/bookshelf
  * @requires config/index
- * @requires config/icons
- * @requires modules/database/db-manager
  * @requires modules/text/text-processor
  * @requires modules/file/fileload-callback
  * @requires modules/components/cover-generator
- * @requires modules/components/popup-manager
  * @requires utils/base
  * @requires utils/helpers-ui
  * @requires utils/helpers-file
@@ -24,12 +21,9 @@
  */
 
 import * as CONFIG from "../../config/index.js";
-import { ICONS } from "../../config/icons.js";
-import { DBManager } from "../database/db-manager.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { FileLoadCallback } from "../file/fileload-callback.js";
 import { getCoverGenerator } from "../components/cover-generator.js";
-import { PopupManager } from "../components/popup-manager.js";
 import {
     isVariableDefined,
     getSizePrecise,
@@ -53,32 +47,141 @@ import { getProgressText, removeHistory, getIsBookFinished } from "../../utils/h
  * @description Handles IndexedDB operations for book storage
  * @private
  */
-class BookshelfDB extends DBManager {
-    /**
-     * Object store names
-     * @type {Object}
-     * @private
-     */
-    #objectStoreNames = {
-        bookfiles: CONFIG.CONST_DB.DB_STORES[0].name,
-        bookProcessed: CONFIG.CONST_DB.DB_STORES[1].name,
+class BookshelfDB {
+    #indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB;
+    #db = null;
+    #dbVersion = 2;
+    #dbName = "SimpleTextReader";
+    #objectStores = {
+        bookfiles: "bookfiles",
+        bookProcessed: "bookProcessed",
     };
 
     /**
-     * Constructor for BookshelfDB
-     * @constructor
+     * Establishes connection to IndexedDB
+     * @returns {Promise<IDBDatabase>} Database connection
+     * @throws {Error} When connection fails
      */
-    constructor() {
-        super({
-            dbName: CONFIG.CONST_DB.DB_NAME,
-            dbVersion: CONFIG.CONST_DB.DB_VERSION,
-            objectStores: CONFIG.CONST_DB.DB_STORES,
-            errorCallback: () => bookshelf.disable(),
-            initCallback: async () => {
+    #connect() {
+        return new Promise((resolve, reject) => {
+            const req = this.#indexedDB.open(this.#dbName, this.#dbVersion);
+            req.onupgradeneeded = (evt) => {
+                const db = evt.target.result;
+                console.log(`Upgrading to version ${db.version}`);
+
+                // Create an objectStore for this database
+                // This will be used to store book metadata
+                if (!db.objectStoreNames.contains(this.#objectStores.bookfiles)) {
+                    db.createObjectStore(this.#objectStores.bookfiles, { keyPath: "name" });
+                }
+
+                // Create an objectStore for this database
+                // This will be used to store processed books
+                if (!db.objectStoreNames.contains(this.#objectStores.bookProcessed)) {
+                    db.createObjectStore(this.#objectStores.bookProcessed, { keyPath: "name" });
+                }
+            };
+            req.onsuccess = (evt) => {
+                resolve(evt.target.result);
+            };
+            req.onerror = (evt) => {
+                console.log("openDB.onError");
+                bookshelf.disable();
+                reject(evt.target.error);
+            };
+        });
+    }
+
+    /**
+     * Gets the database version
+     * @returns {Promise<number>} Database version
+     * @throws {Error} When database initialization fails
+     */
+    async #getDBVersion() {
+        return new Promise((resolve, reject) => {
+            const request = this.#indexedDB.open(this.#dbName);
+
+            request.onsuccess = (event) => {
+                const db = event.target.result;
+                const version = db.version;
+                db.close(); // Always close the database when done
+                resolve(version);
+            };
+
+            request.onerror = (event) => {
+                reject(`Error opening database: ${event.target.error}`);
+            };
+        });
+    }
+
+    /**
+     * Gets an object store from the database
+     * @param {string|string[]} storeNames - Name(s) of the object store(s)
+     * @param {string} [mode="readonly"] - Transaction mode ("readonly" or "readwrite")
+     * @returns {IDBObjectStore|Object<string, IDBObjectStore>} The requested object store(s)
+     */
+    #getObjectStore(storeNames, mode = "readonly") {
+        // Ensure storeNames is either a string or an array
+        if (typeof storeNames !== "string" && !Array.isArray(storeNames)) {
+            throw new Error("storeNames must be a string or an array.");
+        }
+
+        // Normalize to array for consistent handling
+        const names = Array.isArray(storeNames) ? storeNames : [storeNames];
+
+        const transaction = this.#db.transaction(names, mode);
+        transaction.onerror = function (evt) {
+            console.error("Transaction error:", evt.target.error);
+        };
+
+        // Return a single store or an object containing multiple stores
+        if (names.length === 1) {
+            return transaction.objectStore(names[0]); // Single store
+        }
+
+        // Return an object mapping store names to their respective object stores
+        return names.reduce((stores, name) => {
+            stores[name] = transaction.objectStore(name);
+            return stores;
+        }, {});
+    }
+
+    /**
+     * Executes an IndexedDB request and wraps it in a Promise
+     * @param {IDBRequest} request - The request to execute
+     * @returns {Promise<any>} Result of the request
+     * @throws {Error} When request fails
+     */
+    #exec(request) {
+        return new Promise((resolve, reject) => {
+            request.onsuccess = (evt) => {
+                resolve(evt.target.result);
+            };
+            request.onerror = (evt) => {
+                console.log("exec.onError: ");
+                console.log(evt.target);
+                reject(evt.target.error);
+            };
+        });
+    }
+
+    /**
+     * Initializes the database connection and performs cleanup
+     * @async
+     * @returns {Promise<boolean>} Success status
+     */
+    async #init() {
+        try {
+            if (!this.#db) {
+                this.#db = await this.#connect();
                 // await this.removeAllBooks();
                 await this.removeAllCloudBooks();
-            },
-        });
+            }
+            return true;
+        } catch (e) {
+            console.log(e);
+            return false;
+        }
     }
 
     /**
@@ -89,47 +192,36 @@ class BookshelfDB extends DBManager {
      * @param {boolean} [isFromLocal=true] - Whether book is from local storage
      * @param {boolean} [isOnServer=false] - Whether book is stored on server
      * @returns {Promise<IDBValidKey>} Key of stored book
-     * @throws {Error} When database initialization fails or transaction fails
+     * @throws {Error} When database initialization fails
      */
     async putBook(name, data, isFromLocal = true, isOnServer = false) {
-        if (!(await this.init())) {
+        if (!(await this.#init())) {
             throw new Error("Init local db error!");
         }
 
-        // Get the language of the book
-        const { isEastern } = await TextProcessor.getLanguageAndEncodingFromBook(data);
+        // Get the object stores
+        const { bookfiles: tbl, bookProcessed: processedTbl } = this.#getObjectStore(
+            [this.#objectStores.bookfiles, this.#objectStores.bookProcessed],
+            "readwrite"
+        );
 
-        try {
-            const bookData = {
-                name,
-                data,
-                isFromLocal,
-                isOnServer,
-                isEastern,
-            };
+        // Save processed book info to bookProcessed
+        await this.#exec(
+            processedTbl.put({
+                name: name,
+            })
+        );
 
-            await this.put(bookData, {
-                stores: {
-                    [this.#objectStoreNames.bookfiles]: (inputData) => ({
-                        name: inputData.name,
-                        data: inputData.data,
-                        isFromLocal: inputData.isFromLocal,
-                        isOnServer: inputData.isOnServer,
-                        processed: false,
-                        pageBreakOnTitle: CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE ?? true,
-                        isEastern: inputData.isEastern,
-                    }),
-                    [this.#objectStoreNames.bookProcessed]: (inputData) => ({
-                        name: inputData.name,
-                    }),
-                },
-            });
-
-            return true;
-        } catch (error) {
-            console.error("Error putting book:", error);
-            throw error;
-        }
+        // Save book info to bookfiles
+        return await this.#exec(
+            tbl.put({
+                name: name,
+                data: data,
+                isFromLocal: isFromLocal,
+                isOnServer: isOnServer,
+                processed: false,
+            })
+        );
     }
 
     /**
@@ -138,90 +230,47 @@ class BookshelfDB extends DBManager {
      * @param {string} name - Book filename
      * @param {Object} processedData - Processed book data
      * @returns {Promise<IDBValidKey>} Key of updated book
-     * @throws {Error} When database initialization fails or transaction fails
+     * @throws {Error} When database initialization fails
      */
     async updateProcessedBook(name, processedData) {
-        if (!(await this.init())) {
+        // console.log("updateProcessedBook: ", name, processedData);
+
+        if (!(await this.#init())) {
             throw new Error("Init local db error!");
         }
 
-        try {
-            const [existingBook, existingProcessedBook] = await Promise.all([
-                this.get([this.#objectStoreNames.bookfiles], name),
-                this.get([this.#objectStoreNames.bookProcessed], name),
-            ]);
+        // Get the object stores
+        const { bookfiles: tbl, bookProcessed: processedTbl } = this.#getObjectStore(
+            [this.#objectStores.bookfiles, this.#objectStores.bookProcessed],
+            "readwrite"
+        );
 
-            if (!existingBook) {
-                throw new Error(`Book with name "${name}" not found in the database.`);
-            }
-
-            if (!existingProcessedBook) {
-                throw new Error(`Processed book with name "${name}" not found in the database.`);
-            }
-
-            await this.put(
-                { name, ...processedData },
-                {
-                    stores: {
-                        [this.#objectStoreNames.bookfiles]: () => ({
-                            ...existingBook,
-                            processed: true,
-                            pageBreakOnTitle: CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE ?? true,
-                        }),
-                        [this.#objectStoreNames.bookProcessed]: () => ({
-                            ...existingProcessedBook,
-                            ...processedData,
-                        }),
-                    },
-                }
-            );
-
-            return true;
-        } catch (error) {
-            console.error("Error updating processed book:", error);
-            throw error;
-        }
-    }
-
-    /**
-     * Updates the language of a book
-     * @async
-     * @param {string} name - Book filename
-     * @param {boolean} isEastern - Whether the book is in Eastern language
-     * @returns {Promise<IDBValidKey>} Key of updated book
-     * @throws {Error} When database initialization fails or transaction fails
-     */
-    async updateBookLanguage(name, isEastern) {
-        if (!(await this.init())) {
-            throw new Error("Init local db error!");
+        const existingBook = await this.#exec(tbl.get(name));
+        if (!existingBook) {
+            throw new Error(`Book with name "${name}" not found in the database.`);
         }
 
-        try {
-            const existingBook = await this.get([this.#objectStoreNames.bookfiles], name);
-            if (!existingBook) {
-                throw new Error(`Book with name "${name}" not found in the database.`);
-            }
+        // Update the book metadata
+        await this.#exec(
+            tbl.put({
+                ...existingBook, // Keep all existing data
+                processed: true, // Set the processed flag to true
+            })
+        );
 
-            await this.put(
-                { name, isEastern },
-                {
-                    stores: {
-                        [this.#objectStoreNames.bookfiles]: () => ({
-                            ...existingBook,
-                            isEastern,
-                        }),
-                        [this.#objectStoreNames.bookProcessed]: () => ({
-                            name,
-                        }),
-                    },
-                }
-            );
-
-            return true;
-        } catch (error) {
-            console.error("Error updating book language:", error);
-            throw error;
+        const existingProcessedBook = await this.#exec(processedTbl.get(name));
+        if (!existingProcessedBook) {
+            throw new Error(`Processed book with name "${name}" not found in the database.`);
         }
+        // Update the book data with processed information
+        const updatedBook = {
+            ...existingProcessedBook, // Keep all existing data
+            ...processedData, // Add or overwrite with processed data
+        };
+        // console.log("updatedBook: ", updatedBook);
+
+        // Save the updated book back to the database
+        return await this.#exec(processedTbl.put(updatedBook));
     }
 
     /**
@@ -229,68 +278,59 @@ class BookshelfDB extends DBManager {
      * @async
      * @param {string} name - Book filename
      * @returns {Promise<Object>} Book data
-     * @throws {Error} When database initialization fails or transaction fails
+     * @throws {Error} When database initialization fails
      */
     async getBook(name) {
-        if (!(await this.init())) {
+        if (!(await this.#init())) {
             throw new Error("Init local db error!");
         }
 
-        try {
-            const [bookFile, processedBook] = await Promise.all([
-                this.get([this.#objectStoreNames.bookfiles], name),
-                this.get([this.#objectStoreNames.bookProcessed], name),
-            ]);
+        // Get the object stores
+        const { bookfiles: tbl, bookProcessed: processedTbl } = this.#getObjectStore([
+            this.#objectStores.bookfiles,
+            this.#objectStores.bookProcessed,
+        ]);
 
-            if (!bookFile && !processedBook) {
-                return null;
-            }
-
-            return {
-                ...(bookFile || {}),
-                ...(processedBook || {}),
-            };
-        } catch (error) {
-            console.error("Error getting book:", error);
-            throw error;
-        }
+        const result = await this.#exec(tbl.get(name));
+        const processedResult = await this.#exec(processedTbl.get(name));
+        return (
+            {
+                ...result,
+                ...processedResult,
+            } ?? null
+        );
     }
 
     /**
      * Retrieves all books from the database
      * @async
      * @returns {Promise<Array>} Array of all books
-     * @throws {Error} When database initialization fails or transaction fails
+     * @throws {Error} When database initialization fails
      */
     async getAllBooks() {
-        if (!(await this.init())) {
+        if (!(await this.#init())) {
             throw new Error("Init local db error!");
         }
 
-        try {
-            await this.ensureStoresAvailable([this.#objectStoreNames.bookfiles, this.#objectStoreNames.bookProcessed]);
-            // console.log("Required stores are available");
-
-            const allBooks = await this.getAll([this.#objectStoreNames.bookfiles], {
-                useCursor: true,
-            });
-            // console.log("Books:", books);
-            return allBooks;
-        } catch (error) {
-            console.error("Error getting all books:", error);
-            return [];
-        }
+        const tbl = this.#getObjectStore(this.#objectStores.bookfiles);
+        const result = await this.#exec(tbl.getAll());
+        return result;
     }
 
     /**
      * Retrieves all cloud-stored books from the database
      * @async
      * @returns {Promise<Array>} Array of cloud-stored books
-     * @throws {Error} When database initialization fails or transaction fails
+     * @throws {Error} When database initialization fails
      */
     async getAllCloudBooks() {
-        const books = await this.getAllBooks();
-        return books.filter((book) => book.isOnServer);
+        if (!(await this.#init())) {
+            throw new Error("Init local db error!");
+        }
+
+        const tbl = this.#getObjectStore(this.#objectStores.bookfiles);
+        const result = await this.#exec(tbl.getAll());
+        return result.filter((book) => book.isOnServer);
     }
 
     /**
@@ -298,148 +338,290 @@ class BookshelfDB extends DBManager {
      * @async
      * @param {string} name - Book filename
      * @returns {Promise<boolean>} Whether book exists
-     * @throws {Error} When database initialization fails or transaction fails
+     * @throws {Error} When database initialization fails
      */
     async isBookExist(name) {
-        if (!(await this.init())) {
+        if (!(await this.#init())) {
             throw new Error("Init local db error!");
         }
 
-        return await this.exists(this.#objectStoreNames.bookfiles, name);
+        const tbl = this.#getObjectStore(this.#objectStores.bookfiles);
+        const result = await this.#exec(tbl.getKey(name));
+        return !!result;
     }
 
     /**
      * Removes a book from the database
      * @async
      * @param {string} name - Book filename
-     * @throws {Error} When database initialization fails or transaction fails
+     * @throws {Error} When database initialization fails
      */
     async removeBook(name) {
-        if (!(await this.init())) {
+        if (!(await this.#init())) {
             throw new Error("Init local db error!");
         }
 
-        try {
-            await this.delete([this.#objectStoreNames.bookfiles, this.#objectStoreNames.bookProcessed], name);
-            return true;
-        } catch (error) {
-            console.error("Error removing book:", error);
-            throw error;
-        }
+        // Get the object stores
+        const { bookfiles: tbl, bookProcessed: processedTbl } = this.#getObjectStore(
+            [this.#objectStores.bookfiles, this.#objectStores.bookProcessed],
+            "readwrite"
+        );
+
+        await this.#exec(tbl.delete(name));
+        await this.#exec(processedTbl.delete(name));
     }
 
     /**
      * Removes all books from the database
      * @async
-     * @throws {Error} When database initialization fails or transaction fails
+     * @throws {Error} When database initialization fails
      */
     async removeAllBooks() {
-        if (!(await this.init())) {
+        if (!(await this.#init())) {
             throw new Error("Init local db error!");
         }
 
-        try {
-            await this.clear([this.#objectStoreNames.bookfiles, this.#objectStoreNames.bookProcessed]);
-            return true;
-        } catch (error) {
-            console.error("Error removing all books:", error);
-            throw error;
-        }
+        // Get the object stores
+        const { bookfiles: tbl, bookProcessed: processedTbl } = this.#getObjectStore(
+            [this.#objectStores.bookfiles, this.#objectStores.bookProcessed],
+            "readwrite"
+        );
+
+        await this.#exec(tbl.clear());
+        await this.#exec(processedTbl.clear());
     }
 
     /**
      * Removes all cloud-stored books that aren't local
      * @async
-     * @throws {Error} When database initialization fails or transaction fails
+     * @throws {Error} When database initialization fails
      */
     async removeAllCloudBooks() {
-        if (!(await this.init())) {
+        if (!(await this.#init())) {
             throw new Error("Init local db error!");
         }
 
-        try {
-            const cloudBooks = await this.getAllCloudBooks();
+        // Get the object stores
+        const { bookfiles: tbl, bookProcessed: processedTbl } = this.#getObjectStore(
+            [this.#objectStores.bookfiles, this.#objectStores.bookProcessed],
+            "readwrite"
+        );
 
-            for (const book of cloudBooks) {
-                await this.delete([this.#objectStoreNames.bookfiles, this.#objectStoreNames.bookProcessed], book.name);
-            }
-
-            return true;
-        } catch (error) {
-            console.error("Error removing all cloud books:", error);
-            throw error;
-        }
+        const books = await this.#exec(tbl.getAll());
+        // books = books.filter(book => book.isOnServer);
+        await Promise.all(
+            books.map(async (book) => {
+                if (book.isOnServer && !book.isFromLocal) {
+                    // console.log(book);
+                    await this.#exec(tbl.delete(book.name));
+                    await this.#exec(processedTbl.delete(book.name));
+                }
+            })
+        );
     }
 
     /**
      * Upgrades the database schema
      * @async
-     * @throws {Error} When database initialization fails or transaction fails
+     * @throws {Error} When database initialization fails
      */
-    async upgradeBookshelfDB(force = false) {
-        // console.log("upgradeBookshelfDB: force =", force);
-        const currentDBVersion = await this.getDBVersion();
-        const configuredDBVersion = this.getConfiguredDBVersion();
+    async upgradeDB() {
+        const currentDBVersion = await this.#getDBVersion();
+        // console.log("currentDBVersion: ", currentDBVersion);
 
-        if (currentDBVersion > configuredDBVersion) {
-            throw new Error(
-                `Database version mismatch! Current: ${currentDBVersion}, Expected: ${configuredDBVersion}`
-            );
-        } else if (currentDBVersion === configuredDBVersion && !force) {
+        if (currentDBVersion > this.#dbVersion) {
+            throw new Error(`Database version mismatch! Current: ${currentDBVersion}, Expected: ${this.#dbVersion}`);
+        } else if (currentDBVersion === this.#dbVersion) {
             return;
         }
 
-        if (!(await this.init())) {
+        // Initialize the database
+        if (!(await this.#init())) {
             throw new Error("Init local db error!");
         }
 
-        try {
-            const allBooks = await this.getAllBooks();
-            for (const book of allBooks) {
-                const { name } = book;
-                const processedBook = await this.get([this.#objectStoreNames.bookProcessed], name);
-                await this.put(book, {
-                    stores: {
-                        [this.#objectStoreNames.bookfiles]: () => ({
-                            name: book.name,
-                            data: book.data,
-                            isFromLocal: book.isFromLocal ?? true,
-                            isOnServer: book.isOnServer ?? false,
-                            processed: book.processed ?? false,
-                            pageBreakOnTitle:
-                                book.pageBreakOnTitle ?? CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE ?? true,
-                            isEastern: book.isEastern ?? true,
-                        }),
-                        [this.#objectStoreNames.bookProcessed]: () => ({
-                            name: book.name,
-                            ...(processedBook || {}),
-                            bookAndAuthor: processedBook?.bookAndAuthor ?? { bookName: "", author: "" },
-                            title_page_line_number_offset: processedBook?.title_page_line_number_offset ?? 0,
-                            seal_rotate_en: processedBook?.seal_rotate_en ?? "0deg",
-                            seal_left: processedBook?.seal_left ?? "0",
-                            file_content_chunks: processedBook?.file_content_chunks ?? [],
-                            all_titles: processedBook?.all_titles ?? [],
-                            all_titles_ind: processedBook?.all_titles_ind ?? {},
-                            footnotes: processedBook?.footnotes ?? [],
-                            footnote_processed_counter: processedBook?.footnote_processed_counter ?? 0,
-                            page_breaks: processedBook?.page_breaks ?? [],
-                            total_pages: processedBook?.total_pages ?? 0,
-                            is_eastern_lan: processedBook?.is_eastern_lan ?? true,
-                        }),
-                    },
-                });
+        // Define required fields for bookfiles and bookProcessed
+        const bookfilesFields = ["name", "data", "isFromLocal", "isOnServer", "processed"];
+        const bookProcessedFields = [
+            "name",
+            "bookAndAuthor",
+            "title_page_line_number_offset",
+            "seal_rotate_en",
+            "seal_left",
+            "file_content_chunks",
+            "all_titles",
+            "all_titles_ind",
+            "footnotes",
+            "footnote_processed_counter",
+            "page_breaks",
+            "total_pages",
+            "is_eastern_lan",
+        ];
+
+        // Get the object stores
+        const { bookfiles: tbl, bookProcessed: processedTbl } = this.#getObjectStore(
+            [this.#objectStores.bookfiles, this.#objectStores.bookProcessed],
+            "readwrite"
+        );
+
+        // Fetch all books in one go
+        const allBooks = await this.#exec(tbl.getAll());
+        const processedBooksMap = new Map((await this.#exec(processedTbl.getAll())).map((book) => [book.name, book]));
+
+        // Track if any changes are made
+        let dbUpdated = false;
+
+        for (const book of allBooks) {
+            const { name, ...rest } = book;
+
+            // Separate fields for bookProcessed
+            const processedData = {};
+            bookProcessedFields.forEach((field) => {
+                if (rest[field] !== undefined) {
+                    processedData[field] = rest[field];
+                    delete rest[field]; // Remove from bookfiles
+                }
+            });
+
+            // Ensure bookfiles only contains required fields
+            const bookfilesData = {};
+            bookfilesFields.forEach((field) => {
+                if (book[field] !== undefined) {
+                    bookfilesData[field] = book[field];
+                }
+            });
+
+            // Apply default values for bookfiles
+            bookfilesFields.forEach((field) => {
+                if (bookfilesData[field] === undefined) {
+                    bookfilesData[field] = this.#getDefaultValueForField(field);
+                }
+            });
+
+            // Get the existing processed book if it exists
+            const existingProcessedBook = processedBooksMap.get(name);
+
+            // Create or update entry in bookProcessed
+            const updatedProcessedBook = {
+                name: name,
+                ...existingProcessedBook, // Keep all existing data
+                ...processedData, // Overwrite or add any missing fields
+            };
+
+            // Ensure all required fields in bookProcessed have default values if missing
+            bookProcessedFields.forEach((field) => {
+                if (updatedProcessedBook[field] === undefined) {
+                    updatedProcessedBook[field] = this.#getDefaultValueForField(field);
+                }
+            });
+
+            // If the book does not exist in bookProcessed, create it
+            if (!existingProcessedBook) {
+                console.log(`Creating new entry in bookProcessed for book: ${name}`);
+                dbUpdated = true;
+                await this.#exec(processedTbl.put(updatedProcessedBook));
+            } else {
+                // If the updated entry differs from the existing one, update it
+                if (JSON.stringify(existingProcessedBook) !== JSON.stringify(updatedProcessedBook)) {
+                    console.log(`Updating entry in bookProcessed for book: ${name}`);
+                    dbUpdated = true;
+                    await this.#exec(processedTbl.put(updatedProcessedBook));
+                }
             }
 
-            if (allBooks.length > 0) {
-                await this.printAllDatabases();
-                console.log("Database upgrade completed.");
+            // Clean up excessive fields in bookfiles
+            if (JSON.stringify(await this.#exec(tbl.get(name))) !== JSON.stringify(bookfilesData)) {
+                dbUpdated = true;
+                await this.#exec(tbl.put(bookfilesData));
             }
-
-            return true;
-        } catch (error) {
-            console.error("Error upgrading database:", error);
-            throw error;
         }
+
+        // Print database records only if changes were made
+        if (dbUpdated) {
+            await this.printAllDatabases();
+            console.log("Database upgrade completed.");
+        }
+    }
+
+    /**
+     * Gets the default value for a field
+     * @param {string} field - Field name
+     * @returns {any} Default value for the field
+     */
+    #getDefaultValueForField(field) {
+        const defaults = {
+            // bookfiles fields
+            name: "",
+            data: new File([], ""), // Empty File object
+            isFromLocal: true,
+            isOnServer: false,
+            processed: false,
+
+            // bookProcessed fields
+            bookAndAuthor: {},
+            title_page_line_number_offset: 0,
+            seal_rotate_en: "0deg",
+            seal_left: "0",
+            file_content_chunks: [],
+            all_titles: [],
+            all_titles_ind: {},
+            footnotes: [],
+            footnote_processed_counter: 0,
+            page_breaks: [],
+            total_pages: 0,
+            is_eastern_lan: true,
+        };
+        return defaults[field];
+    }
+
+    /**
+     * Prints all records in the "bookfiles" object store
+     * @async
+     * @throws {Error} When database initialization fails
+     */
+    async #printBookfiles() {
+        if (!(await this.#init())) {
+            throw new Error("Init local db error!");
+        }
+
+        const tbl = this.#getObjectStore(this.#objectStores.bookfiles);
+        const records = await this.#exec(tbl.getAll());
+        console.log("All records in bookfiles:");
+        console.table(records);
+    }
+
+    /**
+     * Prints all records in the "bookProcessed" object store
+     * @async
+     * @throws {Error} When database initialization fails
+     */
+    async #printBookProcessed() {
+        if (!(await this.#init())) {
+            throw new Error("Init local db error!");
+        }
+
+        const processedTbl = this.#getObjectStore(this.#objectStores.bookProcessed);
+        const records = await this.#exec(processedTbl.getAll());
+
+        // Preprocess records to include sizes of arrays and objects
+        const processedRecords = records.map((record) => {
+            const preprocessValue = (key, value) => {
+                if (key === "bookAndAuthor" && value && typeof value === "object") {
+                    return `${value.bookName}, ${value.author}`;
+                } else if (Array.isArray(value)) {
+                    return `Array(${value.length})`; // Show array length
+                } else if (value && typeof value === "object") {
+                    return `Object(${Object.keys(value).length})`; // Show object key count
+                }
+                return value; // Keep primitive values as-is
+            };
+
+            // Process each record's properties
+            return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, preprocessValue(key, value)]));
+        });
+
+        console.log("All records in bookProcessed:");
+        console.table(processedRecords);
     }
 
     /**
@@ -448,41 +630,14 @@ class BookshelfDB extends DBManager {
      * @throws {Error} When database initialization fails
      */
     async printAllDatabases() {
-        if (!(await this.init())) {
+        if (!(await this.#init())) {
             throw new Error("Init local db error!");
         }
 
-        console.log("Printing all book-related database records...");
-
-        try {
-            await this.printStoreRecords({
-                storeNames: [this.#objectStoreNames.bookfiles, this.#objectStoreNames.bookProcessed],
-                preprocessors: {
-                    [this.#objectStoreNames.bookfiles]: (record) => record,
-                    [this.#objectStoreNames.bookProcessed]: (record) => {
-                        const preprocessValue = (key, value) => {
-                            if (key === "bookAndAuthor" && value && typeof value === "object") {
-                                return `${value.bookName}, ${value.author}`;
-                            } else if (Array.isArray(value)) {
-                                return `Array(${value.length})`;
-                            } else if (value && typeof value === "object") {
-                                return `Object(${Object.keys(value).length})`;
-                            }
-                            return value;
-                        };
-
-                        return Object.fromEntries(
-                            Object.entries(record).map(([key, value]) => [key, preprocessValue(key, value)])
-                        );
-                    },
-                },
-            });
-
-            console.log("Finished printing all book-related database records.");
-        } catch (error) {
-            console.error("Error printing book-related databases:", error);
-            throw error;
-        }
+        console.log("Printing all database records...");
+        await this.#printBookfiles();
+        await this.#printBookProcessed();
+        console.log("Finished printing all database records.");
     }
 }
 
@@ -498,8 +653,6 @@ const bookshelf = {
     _coverGenerator: null,
     _FILENAME_: "STR-Filename",
     _CACHE_FLAG_: "STR-Cache-File",
-
-    _FILE_LOAD_CALLBACK_FUNC_: null,
 
     /**
      * Reopens the last read book on startup
@@ -523,13 +676,13 @@ const bookshelf = {
      * Opens a book from the bookshelf
      * @async
      * @param {string} fname - Filename of the book to open
-     * @param {boolean} [forceRefresh=false] - Whether to force refresh the book
      * @returns {Promise<boolean>} Success status of opening the book
      * @throws {Error} When book cannot be opened or found
      */
-    async openBook(fname, forceRefresh = false) {
+    async openBook(fname) {
         if (this.enabled) {
             // console.log("Open book from cache: " + fname);
+            // showLoadingScreen();
             try {
                 // check if the book exists in db
                 if (!(await this.isBookExist(fname))) {
@@ -553,19 +706,11 @@ const bookshelf = {
                                 false
                             );
                         } catch (e) {
-                            PopupManager.showNotification({
-                                iconName: "ERROR",
-                                text: `${CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToOpen} "${fname}"`,
-                                iconColor: "error",
-                            });
+                            // alert("An error occurred!");
                             throw new Error(`openBook error: "${fname}"`);
                         }
                     } else {
-                        PopupManager.showNotification({
-                            iconName: "ERROR",
-                            text: `${CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToOpen} "${fname}"`,
-                            iconColor: "error",
-                        });
+                        // alert("An error occurred!");
                         throw new Error(`openBook error: "${fname}"`);
                     }
                 }
@@ -575,16 +720,10 @@ const bookshelf = {
                 const book_isOnServer = fetchedBook?.isOnServer ?? false;
                 const book_isFromLocal = fetchedBook?.isFromLocal ?? true;
                 const book_processed = fetchedBook?.processed ?? false;
-                const book_pageBreakOnTitle = fetchedBook?.pageBreakOnTitle ?? true;
                 if (book) {
                     book[this._CACHE_FLAG_] = true;
                     resetVars();
-                    if (
-                        !book_processed ||
-                        CONFIG.RUNTIME_CONFIG.ALWAYS_PROCESS ||
-                        book_pageBreakOnTitle !== CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE ||
-                        forceRefresh
-                    ) {
+                    if (!book_processed || CONFIG.RUNTIME_CONFIG.ALWAYS_PROCESS) {
                         await this.processBook(book);
                     } else {
                         await this.handleBook(book, fetchedBook);
@@ -593,11 +732,7 @@ const bookshelf = {
                     setBookLastReadTimestamp(fname);
                     return true;
                 } else {
-                    PopupManager.showNotification({
-                        iconName: "ERROR",
-                        text: `${CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToOpen} "${fname}"`,
-                        iconColor: "error",
-                    });
+                    // alert("An error occurred!");
                     throw new Error(`openBook error: "${fname}"`);
                 }
             } catch (e) {
@@ -658,8 +793,7 @@ const bookshelf = {
         isOnServer = false,
         refreshBookshelf = true,
         hardRefresh = true,
-        sortBookshelf = true,
-        inFileLoadCallback = false
+        sortBookshelf = true
     ) {
         if (bookshelf.enabled) {
             if (file.type === "text/plain") {
@@ -676,19 +810,14 @@ const bookshelf = {
 
                         await bookshelf.db.putBook(file.name, file, isFromLocal, isOnServer);
                         if (!(await bookshelf.db.isBookExist(file.name))) {
-                            PopupManager.showNotification({
-                                iconName: "ERROR",
-                                text: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToSave,
-                                iconColor: "error",
-                            });
+                            // alert("Failed to save to local bookshelf (storage may be full)");
                             throw new Error(`saveBook error (localStorage full): "${file.name}"`);
                         }
 
                         // Refresh Bookshelf in DropZone
                         // await bookshelf.refreshBookList();
                         // console.log(`refreshBookshelf: ${refreshBookshelf}, HardRefresh: ${hardRefresh}`);
-                        if (refreshBookshelf)
-                            await resetUI(refreshBookshelf, hardRefresh, sortBookshelf, inFileLoadCallback);
+                        if (refreshBookshelf) await resetUI(refreshBookshelf, hardRefresh, sortBookshelf);
                     } catch (e) {
                         console.log(e);
                     }
@@ -744,33 +873,58 @@ const bookshelf = {
         if (progress) {
             bookElm.addClass("read").css("--read-progress", progress);
             if (getIsBookFinished(fname)) {
-                bookElm.data("isFinished", true);
                 // bookElm.find(".progress").html(CONFIG.RUNTIME_VARS.STYLE.ui_bookFinished).attr("title", progress);
                 // add styling to the text of read
                 const read_text = `<span class="read_text">
-                ${ICONS.FINISHED}
-                ${CONFIG.RUNTIME_VARS.STYLE.ui_bookFinished}</span>`;
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40">
+                    <path d="M27.361,8.986a5.212,5.212,0,0,0-4.347-4.347,72.73,72.73,0,0,0-14.028,0A5.212,5.212,0,0,0,4.639,8.986a72.72,72.72,0,0,0,0,14.027,5.212,5.212,0,0,0,4.347,4.348,72.73,72.73,0,0,0,14.028,0,5.212,5.212,0,0,0,4.347-4.348A72.72,72.72,0,0,0,27.361,8.986Zm-4.194,4.083L16.2,20.922a1.5,1.5,0,0,1-1.114.5h-.008a1.5,1.5,0,0,1-1.111-.492L9.36,15.86a1.5,1.5,0,1,1,2.221-2.015l3.482,3.836,5.861-6.6a1.5,1.5,0,1,1,2.243,1.992Z"/>
+                </svg>${CONFIG.RUNTIME_VARS.STYLE.ui_bookFinished}</span>`;
                 bookElm.find(".progress").html(read_text);
 
                 // add a badge to the book cover
-                // const badge = `<div class="bookFinished_badge">${ICONS.FINISHED_BADGE_OLD}</div>`;
-                const badge = `<div class="bookFinished_badge">${ICONS.FINISHED_BADGE}</div>`;
+                // const badge = `<div class="bookFinished_badge">
+                //     <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 800 800" style="enable-background:new 0 0 800 800;">
+                //         <style type="text/css">
+                //             .svg-st0{fill:#FFC54D;}
+                //             .svg-st1{fill:#EDB24A;}
+                //             .svg-st2{fill:#EF4D4D;}
+                //             .svg-st3{fill:#EF4D4D;}
+                //             .svg-st4{fill:#FFF0BA;}
+                //         </style>
+                //         <circle class="svg-st0" cx="400" cy="558" r="155.3"/>
+                //         <circle class="svg-st1" cx="400" cy="558" r="124.7"/>
+                //         <path class="svg-st0" d="M400,362.7c-14.7,0-26.7,12-26.7,26.7c0,14.7,12,26.7,26.7,26.7c14.7,0,26.7-12,26.7-26.7 C426.7,374.7,414.7,362.7,400,362.7z M400,407.3c-10,0-17.3-8-17.3-17.3s8-17.3,17.3-17.3s17.3,8,17.3,17.3S410,407.3,400,407.3z"/>
+                //         <path class="svg-st2" d="M548,104.7v208c0,6-4,12-10.7,15.3L458,365.3l-46.7,21.3c-6.7,3.3-15.3,3.3-22,0l-46-22L264,327.3 c-6.7-3.3-10.7-9.3-10.7-15.3V104.7c0-10,10-18,22-18h251.3C538,86.7,548,94.7,548,104.7z"/>
+                //         <path class="svg-st3" d="M457.3,86.7v278.7l-46,21.3c-6.7,3.3-15.3,3.3-22,0l-46-22v-278H457.3z"/>
+                //         <path class="svg-st4" d="M406.9,467.7l22.7,45.3c1.3,2,3.3,4,5.3,4l50,7.3c6,1.3,8.7,8,4,12.7l-36,36c-1.3,1.3-2.7,4-2,6.7l8.7,50 c1.3,6-5.3,10.7-10.7,7.3l-44.7-23.3c-2-1.3-4.7-1.3-6.7,0L352.2,637c-5.3,2.7-12-1.3-10.7-7.3l8.7-50c0.7-2-0.7-4.7-2-6.7l-36-35.3 c-4-4-2-12,4-12.7l50-7.3c2-0.7,4-1.3,5.3-4l22.7-45.3C396.2,462.3,404.2,462.3,406.9,467.7z"/>
+                //         </svg>
+                // </div>`;
+                const badge = `<div class="bookFinished_badge">
+                    <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+                    viewBox="0 0 800 800" style="enable-background:new 0 0 800 800;" xml:space="preserve">
+                    <style type="text/css">
+                    .svg-st0{fill:#FFC54D;}
+                    .svg-st1{fill:#EF4D4D;}
+                    .svg-st2{fill:#EF4D4D;}
+                    </style>
+                    <path class="svg-st0" d="M574.7,568.7l-37.3-37.3c-3.3-3.3-5.4-12.7-5.4-12.7V466c0,0-7.9-17.3-17.2-18H462c-4.7,0.7-9.3-1.3-12.7-4.6 L418,412c12.7-6.7,21.3-20,21.3-35.3c0-22-18-39.3-39.3-39.3s-39.3,18-39.3,39.3c0,15.3,8.7,28.7,21.3,35.3l-31.3,31.3 c-3.3,3.3-12.7,5.7-12.7,5.7h-52.7c-9.5,0-17.3,7.8-17.3,17.3v52.5c0,4.7-2,9.3-5.3,12.7l-37.2,37.2c-6.8,6.8-6.8,17.9,0,24.7 l37.2,37.2c3.3,3.3,5.3,8,5.3,12.7v52.5c0,9.5,7.8,17.3,17.3,17.3H338c0,0,9.3,2.3,12.7,5.6L388,756c6.7,6.7,18,6.7,24.7,0 l37.3-37.3c3.3-3.3,8-5.3,12.7-4.7h52.7c9.3-0.6,17.3-8.6,17.6-17.9v-52.7c-0.3-4.7,1.7-9.3,5-12.7l37.3-37.3 C581.3,586.7,581.3,576,574.7,568.7z M400,354c13.3,0,23.3,10.7,23.3,23.3c0,13.3-10.7,23.3-23.3,23.3c-12.7,0-23.3-10.7-23.3-23.3 S386.7,354,400,354z"/>
+                    <path class="svg-st1" d="M547,98v208c0,6-4,12-10.7,15.3l-79.4,37.3l-46.7,21.3c-6.7,3.3-15.3,3.3-22,0l-46-22l-79.4-37.3 c-6.7-3.3-10.7-9.3-10.7-15.3V98c0-10,10-18,22-18h251.7C537,80,547,88,547,98z"/>
+                    <path class="svg-st2" d="M457,80v278.7L411,380c-6.7,3.3-15.3,3.3-22,0l-46-22V80L457,80L457,80z"/>
+                    </svg>
+                </div>`;
                 bookElm.find(".coverContainer").append(badge);
             } else {
                 if (parseInt(progress) >= 99) {
-                    bookElm.data("almostDone", true);
                     const almostDone_text = `<span class="almostDone_text">${CONFIG.RUNTIME_VARS.STYLE.ui_bookAlmostDone}</span>`;
                     bookElm
                         .find(".progress")
                         .html(progress + almostDone_text)
                         .attr("title", progress);
                 } else {
-                    bookElm.data("inProgress", true);
                     bookElm.find(".progress").html(progress).attr("title", progress);
                 }
             }
         } else {
-            bookElm.data("unRead", true);
             bookElm.removeClass("read").css("--read-progress", "");
             // bookElm.find(".progress").html(CONFIG.RUNTIME_VARS.STYLE.ui_bookNotRead);
 
@@ -779,7 +933,15 @@ const bookshelf = {
             bookElm.find(".progress").html(notRead_text);
 
             // add a badge to the book cover
-            const badge = `<div class="bookNotRead_badge">${ICONS.NEWBOOK_RIBBON}</div>`;
+            const badge = `<div class="bookNotRead_badge">
+                <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 200" style="enable-background:new 0 0 200 200;">
+                <style type="text/css">.svg-shadow{fill:#CC3432;}.svg-ribbon{fill:#EF4D4D;}</style>
+                <g id="SVGRepo_bgCarrier"></g>
+                <g id="SVGRepo_tracerCarrier"></g>
+                <path class="svg-shadow" d="M199.3,90.5L109.8,0.8c-0.1,0-7.5,4.1-7.6,4.2h8.8l84,84.2V98L199.3,90.5z"/>
+                <polygon class="svg-ribbon" points="156,1 109.4,1 199,90.7 199,44.1 "/>
+                </svg>
+            </div>`;
             bookElm.find(".coverContainer").append(badge);
         }
     },
@@ -794,32 +956,38 @@ const bookshelf = {
         // generate book cover art
         const canvasWidth = getSizePrecise(CONFIG.RUNTIME_VARS.STYLE.ui_bookCoverWidth);
         const canvasHeight = getSizePrecise(CONFIG.RUNTIME_VARS.STYLE.ui_bookCoverHeight);
-        const book = $(
-            `<div class="book" data-filename="${bookInfo.name}">
-                <div class="coverContainer">
-                    <span class="coverText">${bookInfo.name}</span>
-                    <canvas class="coverCanvas" width="${canvasWidth}" height="${canvasHeight}"></canvas>
-                </div>
-                <div class="infoContainer">
-                    <div class="progress"></div>
-                    <div class="isOnServer">
-                        ${bookInfo.isOnServer && !bookInfo.isFromLocal ? `${ICONS.BOOK_IS_ON_SERVER}` : ""}
-                    </div>
-                    <div class="delete-btn-wrapper">
-                        <span class="delete-btn hasTitle" title="${CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_removeBook}">
-                            ${ICONS.DELETE_BOOK}
-                        </span>
-                    </div>
-                    <div id="bookInfoMenuBtn-${idx}" class="bookInfoMenuBtn hasTitle" title="${
-                CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_bookInfo
-            }">
-                        <input id="dot-menu-${idx}" type="checkbox" class="dot-menu__checkbox">
-                        <label for="dot-menu-${idx}" class="dot-menu__label"><span></span></label>
-                    </div>
-                </div>
-            </div>`
-        );
         const currentBookNameAndAuthor = TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.name));
+        const book = $(`<div class="book" data-filename="${bookInfo.name}">
+            <div class="coverContainer">
+                <span class="coverText">${bookInfo.name}</span>
+                <canvas class="coverCanvas" width="${canvasWidth}" height="${canvasHeight}"></canvas>
+            </div>
+            <div class="infoContainer">
+                <div class="progress"></div>
+                <div class="isOnServer">
+                    ${
+                        bookInfo.isOnServer && !bookInfo.isFromLocal
+                            ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40">
+                    <path d="M24.7793,25.30225H7.2207A6.02924,6.02924,0,0,1,1.84375,22.0708c-1.99856-3.83755.74946-8.94738,5.2832-8.8418a9.30623,9.30623,0,0,1,17.74121-.0249A6.04953,6.04953,0,0,1,24.7793,25.30225ZM7.25781,15.22754c-3.1607-.153-4.95556,3.33035-3.62493,5.94832a4.01435,4.01435,0,0,0,3.63079,2.12736l17.5166-.001A4.05253,4.05253,0,1,0,22.11722,16.202a1.00012,1.00012,0,0,1-1.41312-.05653c-1.00583-1.32476,1.17841-2.28273,2.15235-2.65332A7.30425,7.30425,0,0,0,8.8623,14.4779C8.70326,15.24838,7.89656,15.30989,7.25781,15.22754Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>`
+                            : ""
+                    }
+                </div>
+                <div class="delete-btn-wrapper">
+                    <span class="delete-btn hasTitle" title="${CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_removeBook}">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 7V18C6 19.1046 6.89543 20 8 20H16C17.1046 20 18 19.1046 18 18V7M6 7H5M6 7H8M18 7H19M18 7H16M10 11V16M14 11V16M8 7V5C8 3.89543 8.89543 3 10 3H14C15.1046 3 16 3.89543 16 5V7M8 7H16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    </span>
+                </div>
+                <div id="bookInfoMenuBtn-${idx}" class="bookInfoMenuBtn hasTitle" title="${
+            CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_bookInfo
+        }">
+                    <input id="dot-menu-${idx}" type="checkbox" class="dot-menu__checkbox">
+                    <label for="dot-menu-${idx}" class="dot-menu__label"><span></span></label>
+                </div>
+            </div>
+            </div>`);
         const canvas = book.find(".coverCanvas");
         const ctx = canvas[0].getContext("2d");
         const coverSettings = this._getCoverSettings({
@@ -833,16 +1001,12 @@ const bookshelf = {
         } else {
             book.find(".coverContainer").css("box-shadow", "var(--ui_bookshadow)");
         }
-        book.data("isEastern", bookInfo.isEastern);
-        book.data("bookNameAndAuthor", currentBookNameAndAuthor);
 
         // add mouseover effect
         book.find(".coverContainer")
             .on("mouseenter", function () {
                 book.find(".delete-btn-wrapper").css("opacity", "1");
                 $(this).css("box-shadow", "var(--ui_bookshadow_hover)");
-                // add a tooltip to the book cover
-                $(this).attr("title", CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_book_altClick);
             })
             .on("mouseleave", function (e) {
                 if (
@@ -852,9 +1016,7 @@ const bookshelf = {
                     e.offsetY >= $(this).height()
                 ) {
                     book.find(".delete-btn-wrapper").css("opacity", "0");
-                    const tempBookAuthor =
-                        book.data("bookNameAndAuthor") ??
-                        TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.name));
+                    const tempBookAuthor = TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.name));
                     if (tempBookAuthor.author === "") {
                         $(this).css("box-shadow", "var(--ui_bookshadow_noAuthor)");
                     } else {
@@ -869,29 +1031,26 @@ const bookshelf = {
             .on("mouseleave", function () {
                 book.find(".delete-btn-wrapper").css("opacity", "0");
             });
+        // book.find(".delete-btn-wrapper").on("mouseenter", function() {
+        //     book.find(".coverContainer").css('box-shadow', 'var(--ui_bookshadow_hover)');
+        // }).on("mouseleave", function() {
+        //     const tempBookAuthor = TextProcessor.getBookNameAndAuthor(bookInfo.name.replace(/(.txt)$/i, ''));
+        //     if (tempBookAuthor.author === "") {
+        //         book.find(".coverContainer").css('box-shadow', 'var(--ui_bookshadow_noAuthor)');
+        //     } else {
+        //         book.find(".coverContainer").css('box-shadow', 'var(--ui_bookshadow)');
+        //     }
+        // });
 
         // add click event
         book.find(".coverContainer").on("click", (evt) => {
             evt.originalEvent.stopPropagation();
-            if (evt.altKey) {
-                // Alt key on Windows/Linux, Option key on Mac
-                console.log(`Force reprocess ${bookInfo.name}.`);
-                this.openBook(bookInfo.name, true);
-            } else {
-                this.openBook(bookInfo.name);
-            }
-        });
-
-        // add right click event
-        book.find(".coverContainer").on("contextmenu", (evt) => {
-            evt.originalEvent.stopPropagation();
-            console.log("Right clicked");
+            this.openBook(bookInfo.name);
         });
 
         // add delete event
         book.find(".delete-btn").on("click", (evt) => {
             evt.originalEvent.stopPropagation();
-
             this.removeBook(bookInfo.name, () => {
                 let b = $(evt.currentTarget).parents(".book");
                 b.fadeOut(300, () => {
@@ -904,16 +1063,13 @@ const bookshelf = {
                     $(".booklist").trigger("contentchange"); // recalculate booklist height
 
                     // change isFromLocal to false
-                    // setIsFromLocal(bookInfo.name, false);
-                    // bookInfo.isFromLocal = false;
+                    setIsFromLocal(bookInfo.name, false);
+                    bookInfo.isFromLocal = false;
 
                     // if the book is neither from local nor on server, remove it from history
-                    // if (!bookInfo.isFromLocal && !bookInfo.isOnServer) {
-                    //     removeHistory(bookInfo.name);
-                    // }
-
-                    // remove the book from history
-                    removeHistory(bookInfo.name);
+                    if (!bookInfo.isFromLocal && !bookInfo.isOnServer) {
+                        removeHistory(bookInfo.name);
+                    }
                 });
                 // b.animate({width: 0, opacity: 0}, 500, () => b.remove());
             });
@@ -931,9 +1087,7 @@ const bookshelf = {
 
             // add bookInfoMenu
             if (book.find(".dot-menu__checkbox").is(":checked")) {
-                const tempBookAuthor =
-                    book.data("bookNameAndAuthor") ??
-                    TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.name));
+                const tempBookAuthor = TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.name));
                 const tempBookTitle = tempBookAuthor.bookName;
                 const tempBookAuthorName =
                     tempBookAuthor.author === ""
@@ -1037,9 +1191,7 @@ const bookshelf = {
             const book_filename = book.getAttribute("data-filename");
             const book_cover = book.getElementsByTagName("canvas")[0];
             const ctx = book_cover.getContext("2d");
-            const bookNameAndAuthor =
-                $(book).data("bookNameAndAuthor") ??
-                TextProcessor.getBookNameAndAuthor(removeFileExtension(book_filename));
+            const bookNameAndAuthor = TextProcessor.getBookNameAndAuthor(removeFileExtension(book_filename));
             const coverSettings = this._getCoverSettings({
                 width: book_cover.width,
                 height: book_cover.height,
@@ -1050,35 +1202,12 @@ const bookshelf = {
     },
 
     /**
-     * Gets the language of a book
-     * @async
-     * @param {Object} book - Book object
-     * @returns {Promise<boolean>} Language of the book
-     */
-    async _getBookLanguage(book) {
-        if (book.isEastern !== undefined) {
-            return book.isEastern;
-        }
-        const result = await TextProcessor.getLanguageAndEncodingFromBook(book.data);
-        return result.isEastern;
-    },
-
-    /**
      * Refreshes the bookshelf display and book list
      * @async
      * @param {boolean} [hardRefresh=false] - Whether to completely rebuild the book list
      * @param {boolean} [sortBookshelf=true] - Whether to sort the books
      */
     async refreshBookList(hardRefresh = false, sortBookshelf = true) {
-        // console.log(
-        //     "Refreshing book list...",
-        //     "hardRefresh:",
-        //     hardRefresh,
-        //     "sortBookshelf:",
-        //     sortBookshelf,
-        //     "enabled:",
-        //     this.enabled
-        // );
         if (this.enabled) {
             if (navigator.storage) {
                 const storageInfo = await navigator.storage.estimate();
@@ -1092,21 +1221,15 @@ const bookshelf = {
                 $("#bookshelfUsageText").hide();
             }
             try {
-                const allBooks = await this.db.getAllBooks();
-                for (const book of allBooks) {
+                for (const book of await this.db.getAllBooks()) {
                     const final_isFromLocal = book.isFromLocal ?? false;
                     const final_isOnServer = book.isOnServer ?? false;
-                    const final_isEastern = await this._getBookLanguage(book);
                     const new_book = {
                         name: book.name,
                         size: book.data.size,
                         isFromLocal: final_isFromLocal,
                         isOnServer: final_isOnServer,
-                        isEastern: final_isEastern,
                     };
-                    if (book.isEastern === undefined || book.isEastern !== final_isEastern) {
-                        await bookshelf.db.updateBookLanguage(book.name, final_isEastern);
-                    }
 
                     const lastOpenedTimestamp = localStorage.getItem(`${new_book.name}_lastopened`);
                     if (lastOpenedTimestamp) {
@@ -1150,9 +1273,6 @@ const bookshelf = {
             } catch (e) {
                 console.log(e);
             }
-
-            // Update filter bar
-            this._updateFilterBar();
 
             // If there is no book in bookshelf, hide the bookshelf
             // Otherwise, show the bookshelf, but not the bookshelf trigger button
@@ -1250,292 +1370,10 @@ const bookshelf = {
     },
 
     /**
-     * Aligns the filter bar to the first book of the bookshelf and also aligns the filter bar to the right of the last book of the first row
-     * @private
-     */
-    _alignFilterBar() {
-        setTimeout(() => {
-            const filterBar = document.querySelector(".booklist-filter-bar");
-            const firstBook = document.querySelector(".bookshelf .book");
-            const booklist = document.querySelector(".bookshelf .booklist");
-
-            if (!firstBook || !filterBar || !booklist) {
-                console.warn("Required elements not found.");
-                return;
-            }
-
-            // Get the size and spacing of a single book
-            const bookStyle = window.getComputedStyle(firstBook);
-            const bookWidth = firstBook.offsetWidth;
-            const bookMarginLeft = parseFloat(bookStyle.marginLeft);
-            const bookMarginRight = parseFloat(bookStyle.marginRight);
-            const bookTotalWidth = bookWidth + bookMarginLeft + bookMarginRight;
-
-            // Get the margin of the booklist
-            const booklistStyle = window.getComputedStyle(booklist);
-            const booklistMarginValue = parseFloat(booklistStyle.marginLeft);
-
-            // Get the available width of the booklist
-            const booklistRect = booklist.getBoundingClientRect();
-            const availableWidth = booklistRect.width;
-
-            // Calculate the maximum number of books per row
-            const maxBooksPerRow = Math.floor(availableWidth / bookTotalWidth);
-
-            // Calculate the center offset when the row is full
-            const totalRowWidth = bookTotalWidth * maxBooksPerRow - (bookMarginLeft + bookMarginRight);
-            const remainingSpace = availableWidth - totalRowWidth;
-            const centerOffset = remainingSpace / 2;
-
-            // Calculate the theoretical position of the first book (if the row is full)
-            const relativeLeft = booklistMarginValue + centerOffset;
-
-            // console.log({
-            //     maxBooksPerRow,
-            //     bookTotalWidth,
-            //     availableWidth,
-            //     totalRowWidth,
-            //     centerOffset,
-            //     booklistMarginValue,
-            //     relativeLeft,
-            //     theoreticalLastBookRight: relativeLeft + totalRowWidth,
-            //     filterBarLeft: relativeLeft - getSizePrecise(),
-            //     filterBarWidth: totalRowWidth + 2 * getSizePrecise(),
-            // });
-
-            // Apply position and width
-            filterBar.style.left = `${relativeLeft - getSizePrecise()}px`;
-            filterBar.style.width = `${totalRowWidth + 2 * getSizePrecise()}px`;
-        }, 0);
-    },
-
-    /**
-     * Updates the filter bar with book list filter buttons, book count, and remove all books button
-     * @private
-     */
-    _updateFilterBar() {
-        /**
-         * Get all book information and initialize variables
-         */
-        const allBooks = Object.values(CONFIG.VARS.ALL_BOOKS_INFO);
-        const filterBar = $(".booklist-filter-bar");
-        const booklist = $(".bookshelf .booklist");
-
-        // If no books, hide the filter bar
-        if (allBooks.length === 0) {
-            filterBar.removeClass("visible");
-            return;
-        }
-
-        // Helper function to show/hide the filter bar
-        const setFilterBarVisibility = (visible) => {
-            if (visible) {
-                // console.log("show filter bar");
-
-                // Show all filter buttons
-                filterBar.find(".booklist-filter-btn").show();
-
-                // Align the filter bar
-                bookshelf._alignFilterBar();
-
-                // Use requestAnimationFrame to ensure the position is set before showing
-                requestAnimationFrame(() => {
-                    filterBar.addClass("visible");
-                });
-            } else {
-                // console.log("hide filter bar");
-
-                // Hide filter buttons, keep the counter visible
-                filterBar.find(".booklist-filter-btn").hide();
-
-                // Important: even when hiding buttons, call the alignment function
-                bookshelf._alignFilterBar();
-
-                filterBar.removeClass("visible");
-            }
-        };
-
-        // Helper function to create filter buttons
-        const createFilterButton = (text, className = "") => {
-            return $("<button></button>").addClass("booklist-filter-btn").addClass(className).text(text);
-        };
-
-        // Clear existing filter bar
-        filterBar.empty();
-
-        /**
-         * Step 1: Create filter buttons on the left side of the filter bar
-         */
-        let filterButtonCount = 0;
-
-        // Categorize books by language and status
-        const categories = {
-            chinese: allBooks.filter((book) => book.isEastern),
-            english: allBooks.filter((book) => !book.isEastern),
-            unread: allBooks.filter((book) => !book.lastOpenedTimestamp),
-            inProgress: allBooks.filter(
-                (book) => book.lastOpenedTimestamp && parseInt(book.progress) < 99 && !book.isFinished
-            ),
-            finishing: allBooks.filter(
-                (book) => book.lastOpenedTimestamp && parseInt(book.progress) >= 99 && !book.isFinished
-            ),
-            finished: allBooks.filter((book) => book.isFinished),
-        };
-
-        // Get the names of the categories
-        const categories_names = {
-            chinese: CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_chinese,
-            english: CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_english,
-            unread: CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_unread,
-            finishing: CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_finishing,
-            inProgress: CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_inProgress,
-            finished: CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_finished,
-        };
-
-        // Print the number of books in each category
-        // console.group("Number of books in each category");
-        // Object.keys(categories).forEach((category) => {
-        //     console.log(`${category}: ${categories[category].length}`);
-        // });
-        // console.groupEnd();
-
-        // Create button container
-        const buttonContainer = $("<div></div>").addClass("booklist-filter-buttons");
-
-        // Create "All" button if any filterable categories exist
-        if (allBooks.length > 0) {
-            buttonContainer.append(createFilterButton(CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_all, "active"));
-            filterButtonCount++;
-        }
-
-        // Add language buttons only if both types of books exist
-        if (categories.chinese.length > 0 && categories.english.length > 0) {
-            buttonContainer.append(createFilterButton(categories_names.chinese));
-            buttonContainer.append(createFilterButton(categories_names.english));
-            filterButtonCount += 2;
-        }
-
-        // Add filter buttons for categories
-        for (const [category, books] of Object.entries(categories)) {
-            if (category !== "chinese" && category !== "english" && books.length > 0) {
-                buttonContainer.append(createFilterButton(categories_names[category]));
-                filterButtonCount++;
-            }
-        }
-
-        /**
-         * Step 2: Create book counter and remove all button on the right side of the filter bar
-         */
-        // Add book counter and remove all button container
-        const utilitiesContainer = $("<div></div>").addClass("booklist-filter-utilities");
-
-        // Add book counter on the right side of the filter bar
-        const totalBooks = allBooks.length;
-        // Instead of CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_counter, we need to chop the last character of the string when the language is English and the last character is "s" and the total books is less than or equal to 1.
-        const counterPrefix =
-            CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_counter_prefix +
-            (CONFIG.RUNTIME_VARS.WEB_LANG === "en" ? " " : "");
-        const counterSuffix =
-            CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_counter_suffix +
-            (CONFIG.RUNTIME_VARS.WEB_LANG === "en" && totalBooks > 1 ? "s" : "");
-        const counterElement = $("<button></button>")
-            .addClass("booklist-filter-counter prevent-select")
-            .attr("disabled", true)
-            .text(`${counterPrefix}${totalBooks} ${counterSuffix}`);
-
-        // Add remove all button
-        const removeAllBtn = $("<button></button>")
-            .addClass("booklist-remove-all")
-            .html(
-                `${ICONS.DELETE_ALL_BOOKS}<span class="booklist-remove-all-text">${CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_removeAllBooks}</span>`
-            );
-
-        // Add click handler for remove all button
-        removeAllBtn.on("click", () => {
-            if (allBooks.length === 0) return;
-
-            PopupManager.showConfirmationPopup({
-                iconName: "DELETE_ALL_BOOKS",
-                title: CONFIG.RUNTIME_VARS.STYLE.ui_removeAllBooks_confirm_title,
-                text: CONFIG.RUNTIME_VARS.STYLE.ui_removeAllBooks_confirm_text,
-                onConfirm: () => {
-                    // Remove all books
-                    const promises = allBooks.map(
-                        (book) =>
-                            new Promise((resolve) => {
-                                this.removeBook(book.name, resolve);
-                                removeHistory(book.name);
-                            })
-                    );
-
-                    Promise.all(promises).then(() => {
-                        // Clear the booklist
-                        $(".booklist").empty();
-                        CONFIG.VARS.ALL_BOOKS_INFO = {};
-                        $(".booklist").trigger("contentchange");
-                    });
-                },
-            });
-        });
-
-        // Add elements to containers
-        utilitiesContainer.append(counterElement, removeAllBtn);
-
-        /**
-         * Step 3: Add left and right containers to filter bar
-         */
-        // Add left and right containers to filter bar
-        filterBar.append(buttonContainer, utilitiesContainer);
-
-        // Add click event handler for filter buttons
-        filterBar.find(".booklist-filter-btn").on("click", function () {
-            const $this = $(this);
-            const filterType = $this.text();
-
-            // Update button state
-            filterBar.find(".booklist-filter-btn").removeClass("active");
-            $this.addClass("active");
-
-            // Filter books
-            const books = $(".bookshelf .book");
-            books.show(); // Show all books first
-
-            // Filter books
-            if (filterType !== CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_all) {
-                books
-                    .filter((_, book) => {
-                        switch (filterType) {
-                            case CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_chinese:
-                                return !$(book).data("isEastern");
-                            case CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_english:
-                                return $(book).data("isEastern");
-                            case CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_unread:
-                                return !$(book).data("unRead");
-                            case CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_finishing:
-                                return !$(book).data("almostDone");
-                            case CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_inProgress:
-                                return !$(book).data("inProgress");
-                            case CONFIG.RUNTIME_VARS.STYLE.ui_bookshelf_filterBtn_finished:
-                                return !$(book).data("isFinished");
-                        }
-                    })
-                    .hide();
-            }
-        });
-
-        // Show or hide filter bar based on the number of buttons
-        setFilterBarVisibility(filterButtonCount > 0);
-    },
-
-    /**
      * Resets the dropzone styles
      * @private
      */
     _resetDropzoneStyles() {
-        CONFIG.RUNTIME_VARS.STYLE.ui_dropZoneImgText_lineNumber = this._detectLineWrap(
-            CONFIG.DOM_ELEMENT.DROPZONE_TEXT
-        );
-
         if (isVariableDefined(CONFIG.DOM_ELEMENT.DROPZONE_TEXT)) {
             $(CONFIG.DOM_ELEMENT.DROPZONE_TEXT).removeClass("dropzone-text-custom").addClass("dropzone-text-default");
         }
@@ -1550,10 +1388,6 @@ const bookshelf = {
      * @private
      */
     _setDropzoneStyles() {
-        CONFIG.RUNTIME_VARS.STYLE.ui_dropZoneImgText_lineNumber = this._detectLineWrap(
-            CONFIG.DOM_ELEMENT.DROPZONE_TEXT
-        );
-
         if (isVariableDefined(CONFIG.DOM_ELEMENT.DROPZONE_TEXT)) {
             $(CONFIG.DOM_ELEMENT.DROPZONE_TEXT).removeClass("dropzone-text-default").addClass("dropzone-text-custom");
         }
@@ -1563,28 +1397,11 @@ const bookshelf = {
     },
 
     /**
-     * Detects the number of lines in an element
-     * @private
-     */
-    _detectLineWrap(element) {
-        // Get the computed line height of the element
-        const computedStyle = window.getComputedStyle(element);
-        const lineHeight = parseFloat(computedStyle.lineHeight);
-
-        // Get the scroll height of the element
-        const scrollHeight = element.scrollHeight;
-
-        // Calculate the number of lines
-        const lines = Math.round(scrollHeight / lineHeight);
-
-        return lines; // Returns the number of lines (e.g., 2, 3, etc.)
-    },
-
-    /**
      * Shows the bookshelf UI if enabled and contains books
+     * @async
      * @returns {Object} The bookshelf instance for chaining
      */
-    show() {
+    async show() {
         if (this.enabled) {
             if (isVariableDefined($(".bookshelf")) && $(".bookshelf .booklist").children().length > 0) {
                 $(".bookshelf").show();
@@ -1600,7 +1417,7 @@ const bookshelf = {
      * @param {boolean} [doNotRemove=true] - If false, removes the bookshelf element instead of hiding
      * @returns {Object} The bookshelf instance for chaining
      */
-    hide(doNotRemove = true) {
+    async hide(doNotRemove = true) {
         if (this.enabled) {
             this._resetDropzoneStyles();
             if (!doNotRemove) {
@@ -1646,29 +1463,19 @@ const bookshelf = {
      * Enables the bookshelf module and sets up event handlers
      * @returns {Object} The bookshelf instance for chaining
      */
-    async enable() {
+    enable() {
         if (!this.enabled) {
             this.db = new BookshelfDB();
-            await this.db.upgradeBookshelfDB();
-            this._FILE_LOAD_CALLBACK_FUNC_ = (file) =>
-                this.saveBook(
-                    file,
-                    true, // isFromLocal
-                    false, // isOnServer
-                    true, // refreshBookshelf
-                    true, // hardRefresh
-                    true, // sortBookshelf
-                    true // inFileLoadCallback
-                );
-            FileLoadCallback.regBefore(this._FILE_LOAD_CALLBACK_FUNC_);
+            this.db.upgradeDB();
+            FileLoadCallback.regBefore(this.saveBook);
             this.enabled = true;
 
             if (CONFIG.RUNTIME_CONFIG.UPGRADE_DB) {
-                await this.db.upgradeBookshelfDB(true);
+                this.db.upgradeDB();
             }
 
             if (CONFIG.RUNTIME_CONFIG.PRINT_DATABASE) {
-                await this.db.printAllDatabases();
+                this.db.printAllDatabases();
             }
 
             // Listen for refreshBookList event
@@ -1678,8 +1485,8 @@ const bookshelf = {
             });
 
             // Listen for settings change events
-            document.addEventListener("updateAllBookCovers", async () => {
-                await this.updateAllBookCovers();
+            document.addEventListener("updateAllBookCovers", () => {
+                this.updateAllBookCovers();
             });
 
             // Listen for showBookshelfTriggerBtn event
@@ -1692,23 +1499,12 @@ const bookshelf = {
                 this.hideTriggerBtn();
             });
 
-            // Listen for showBookshelf event
-            document.addEventListener("showBookshelf", () => {
-                this.show();
-            });
-
-            // Listen for hideBookshelf event
-            document.addEventListener("hideBookshelf", () => {
-                this.hide();
-            });
-
             // Listen for handleMultipleBooks event
             document.addEventListener("handleMultipleBooks", async (event) => {
                 const { files, isFromLocal, isOnServer } = event.detail;
 
                 if (this.enabled) {
                     showLoadingScreen();
-
                     for (const [i, file] of files.entries()) {
                         const final_isFromLocal = getIsFromLocal(file.name) || isFromLocal;
                         const final_isOnServer = getIsOnServer(file.name) || isOnServer;
@@ -1726,7 +1522,37 @@ const bookshelf = {
                         );
                     }
 
-                    hideLoadingScreen(false);
+                    // // Since we use loading screen, we don't need the following code
+                    // // The previous code load the entire array of files at once and set the second parameter of saveBook to true when processing the last file of the array, which is not ideal for large array of files.
+                    // // The following code load ten files at a time. After processing the last file of the ten, set the second parameter of saveBook to true.
+                    // let i = 0;
+                    // while (i < files.length) {
+                    //     let j = i + num_load_batch;
+                    //     if (j > files.length) {
+                    //         j = files.length;
+                    //     }
+
+                    //     // console.log(`Loading file ${i+1} to ${j} of ${files.length}.`);
+                    //     for (let k = i; k < j; k++) {
+                    //         // console.log(`Loading file ${k+1} of ${files.length}; ${k}, ${i}, ${j}, ${(k === j - 1)}`);
+                    //         // console.log(k, j, files[k].name);
+                    //         const final_isFromLocal = getIsFromLocal(files[k].name) || isFromLocal;
+                    //         const final_isOnServer = getIsOnServer(files[k].name) || isOnServer;
+                    //         setIsFromLocal(files[k].name, final_isFromLocal);
+                    //         setIsOnServer(files[k].name, final_isOnServer);
+                    //         // console.log(`${files[k].name}, final_isFromLocal: ${final_isFromLocal}, final_isOnServer: ${final_isOnServer}, refresh: ${(k === j - 1)}, sort: ${(k === files.length - 1)}, k=${k}, j=${j}`);
+
+                    //         // console.log(`${files[k].name}, refresh: ${(k === j - 1)}, sort: ${(k === files.length - 1)}, k=${k}, j=${j}`);
+                    //         // await bookshelf.saveBook(files[k], final_isFromLocal, final_isOnServer, i === 0 ? true : (k === j - 1), false, (k === files.length - 1));
+
+                    //         // console.log(`${files[k].name}, refresh: ${i === 0 ? true : (k === files.length - 1)}, sort: ${(k === files.length - 1)}, k=${k}, j=${j}`);
+                    //         await bookshelf.saveBook(files[k], final_isFromLocal, final_isOnServer, (k === files.length - 1), false, (k === files.length - 1));
+                    //     }
+                    //     // console.log('Loading finished.');
+                    //     i = j;
+                    // }
+
+                    hideLoadingScreen();
                 } else {
                     console.log(
                         "Multiple files selected, only the first one will be loaded since bookshelf is disabled."
@@ -1768,8 +1594,7 @@ const bookshelf = {
                         }
 
                         // Get all existing books
-                        const allBooks = await this.db.getAllBooks();
-                        for (const book of allBooks) {
+                        for (const book of await this.db.getAllBooks()) {
                             const final_isFromLocal = book.isFromLocal || false;
                             const final_isOnServer = book.isOnServer || false;
                             const new_file = {
@@ -1811,7 +1636,7 @@ const bookshelf = {
                         }
                         container.trigger("contentchange");
                     } catch (e) {
-                        console.log("Error in handleMultipleBooksWithoutLoading:", e);
+                        console.log("Error in handleMultipleFilesWithoutLoading:", e);
                     }
 
                     // If there is no book in bookshelf, hide the bookshelf
@@ -1825,7 +1650,7 @@ const bookshelf = {
                         // this.showTriggerBtn();
                     }
 
-                    hideLoadingScreen(false);
+                    hideLoadingScreen();
                 }
             });
 
@@ -1838,14 +1663,19 @@ const bookshelf = {
             <div class="title">${CONFIG.RUNTIME_VARS.STYLE.ui_bookshelfCachedStorage}
             <div class="sub-title">${CONFIG.RUNTIME_VARS.STYLE.ui_bookshelfCachedStorage_subTitle}<br/>
                 <span id="bookshelfUsageText">${CONFIG.RUNTIME_VARS.STYLE.ui_bookshelfCachedStorage_usage}&nbsp;<span id="bookshelfUsagePct"></span>% (<span id="bookshelfUsage"></span> / <span id="bookshelfQuota"></span>)</span></div></div>
-            <nav class="booklist-filter-bar"></nav>
             <div class="booklist"></div>
             <div class="bookshelf-btn-group">
                 <div id="scrollTop-btn" class="btn-icon hasTitle" title="${CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_bookshelf_scrollTop}" style="visibility:hidden">
-                    ${ICONS.BOOKLIST_SCROLL_TOP}
+                    <svg class="icon" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 125">
+                        <path class="tofill" d="M15.1,65.7c-3.6,0-7.2-1.5-9.7-4.5C0.9,55.8,1.7,47.9,7,43.4l34.9-29.1c4.7-3.9,11.5-3.9,16.2,0L93,43.4 c5.4,4.5,6.1,12.4,1.6,17.8c-4.5,5.4-12.4,6.1-17.8,1.6L50,40.5L23.2,62.8C20.8,64.8,18,65.7,15.1,65.7z" opacity="1"/>
+                        <path class="tofill" d="M15.1,113.6c-3.6,0-7.2-1.5-9.7-4.5C0.9,103.6,1.7,95.8,7,91.3l34.9-29.1c4.7-3.9,11.5-3.9,16.2,0L93,91.3 c5.4,4.5,6.1,12.4,1.6,17.8c-4.5,5.4-12.4,6.1-17.8,1.6L50,88.3l-26.8,22.3C20.8,112.6,18,113.6,15.1,113.6z" opacity="0.5"/>
+                    </svg>
                 </div>
                 <div id="scrollBottom-btn" class="btn-icon hasTitle" title="${CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_bookshelf_scrollBottom}" style="visibility:hidden">
-                    ${ICONS.BOOKLIST_SCROLL_BOTTOM}
+                    <svg class="icon" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 125">
+                        <path class="tofill" d="M84.9,59.3c3.6,0,7.2,1.5,9.7,4.5c4.5,5.4,3.7,13.3-1.6,17.8l-34.9,29.1c-4.7,3.9-11.5,3.9-16.2,0L7,81.6 c-5.4-4.5-6.1-12.4-1.6-17.8s12.4-6.1,17.8-1.6L50,84.5l26.8-22.3C79.2,60.2,82,59.3,84.9,59.3z" opacity="1"/>
+                        <path class="tofill" d="M84.9,11.4c3.6,0,7.2,1.5,9.7,4.5c4.5,5.5,3.7,13.3-1.6,17.8L58.1,62.8c-4.7,3.9-11.5,3.9-16.2,0L7,33.7 c-5.4-4.5-6.1-12.4-1.6-17.8s12.4-6.1,17.8-1.6L50,36.7l26.8-22.3C79.2,12.4,82,11.4,84.9,11.4z" opacity="0.5"/>
+                    </svg>
                 </div>
             </div>
             </div>`)
@@ -1857,32 +1687,27 @@ const bookshelf = {
                 .appendTo(CONFIG.DOM_ELEMENT.DROPZONE);
 
             function defineScrollBtns() {
-                const $booklist = $(".booklist");
-                const scrollTop = $booklist.scrollTop();
-                const scrollHeight = $booklist[0].scrollHeight;
-                const offsetHeight = $booklist[0].offsetHeight;
-
-                if (scrollTop > 0) {
+                if (this.scrollTop > 0) {
                     $("#scrollTop-btn")
                         .css("visibility", "visible")
                         .on("click", () => {
-                            // $booklist.scrollTop = 0;
-                            $booklist.stop(true, false);
-                            $booklist.animate({ scrollTop: 0 }, scrollHeight / 10);
+                            // this.scrollTop = 0;
+                            $(this).stop(true, false);
+                            $(this).animate({ scrollTop: 0 }, this.scrollHeight / 10);
                         });
                 } else {
                     $("#scrollTop-btn").css("visibility", "hidden");
                 }
-                if (scrollHeight - offsetHeight - scrollTop > 1) {
+                if (this.scrollHeight - this.offsetHeight - this.scrollTop > 1) {
                     $("#scrollBottom-btn")
                         .css("visibility", "visible")
                         .on("click", () => {
-                            $booklist.stop(true, false);
-                            $booklist.animate(
+                            $(this).stop(true, false);
+                            $(this).animate(
                                 {
-                                    scrollTop: scrollHeight - offsetHeight,
+                                    scrollTop: this.scrollHeight - this.offsetHeight,
                                 },
-                                scrollHeight / 10
+                                this.scrollHeight / 10
                             );
                         });
                 } else {
@@ -1891,12 +1716,12 @@ const bookshelf = {
             }
 
             $(".booklist").on("scroll", () => {
-                defineScrollBtns();
+                defineScrollBtns.call(this);
                 $(".dot-menu__checkbox").prop("checked", false);
                 $(".bookInfoMenu").remove();
             });
 
-            $(".booklist").on("contentchange", function () {
+            $(".booklist").bind("contentchange", function () {
                 // set bookshelf height
                 const bookWidth = $(".book").outerWidth(true);
                 const bookHeight = $(".book").outerHeight(true);
@@ -1974,16 +1799,13 @@ const bookshelf = {
                 }
 
                 if (this.scrollHeight > this.parentNode.clientHeight) {
-                    // console.log("overflown", this.scrollTop, this.scrollHeight - this.offsetHeight);
-                    defineScrollBtns();
+                    // console.log('overflown', this.scrollTop, this.scrollHeight-this.offsetHeight);
+                    defineScrollBtns.call(this);
                 } else {
-                    // console.log("not overflown");
+                    // console.log('not overflown');
                     $("#scrollTop-btn").css("visibility", "hidden");
                     $("#scrollBottom-btn").css("visibility", "hidden");
                 }
-
-                // Update filter bar
-                bookshelf._updateFilterBar();
             });
 
             $(window).on("resize", () => {
@@ -2005,16 +1827,6 @@ const bookshelf = {
                 document.getElementsByClassName("booklist")[0].scrollTop += e.deltaY;
             });
 
-            // Set tooltip for Dropzone
-            document.getElementsByClassName("bookshelf")[0].addEventListener("mouseenter", () => {
-                CONFIG.DOM_ELEMENT.DROPZONE.title = "";
-            });
-
-            // Reset tooltip for Dropzone
-            document.getElementsByClassName("bookshelf")[0].addEventListener("mouseleave", () => {
-                CONFIG.DOM_ELEMENT.DROPZONE.title = CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_dropZone;
-            });
-
             // console.log("Module <Bookshelf> enabled.");
             setTimeout(() => this.loop(), 1000);
         }
@@ -2027,7 +1839,7 @@ const bookshelf = {
      */
     disable() {
         if (this.enabled) {
-            FileLoadCallback.unregBefore(this._FILE_LOAD_CALLBACK_FUNC_);
+            FileLoadCallback.unregBefore(this.saveBook);
             this.hide(false);
             this.hideTriggerBtn(false);
             this.db = null;
@@ -2040,16 +1852,21 @@ const bookshelf = {
     /**
      * Initializes the bookshelf UI by creating the trigger button
      */
-    async init() {
-        const $button = $(
-            `<div id="STRe-bookshelf-btn" class="btn-icon hasTitle" title="${CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_goToBookshelf}">${ICONS.BOOKSHELF}</div>`
-        );
-
-        $button.on("click", async () => {
-            // setSvgPathLength($button.get(0));
-            await resetUI();
-        });
-        $button.prependTo($("#btnWrapper")).hide();
+    init() {
+        $(`<div id="STRe-bookshelf-btn" class="btn-icon hasTitle" title="${CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_goToBookshelf}">
+        <svg class="icon" viewBox="0 0 800 800" id="Flat" xmlns="http://www.w3.org/2000/svg">
+        <path class="tofill" d="M730,611.2l-129.4-483c-7.2-26.7-34.6-42.5-61.2-35.4l-96.6,25.9c-1.1,0.3-2.1,0.7-3.1,1c-9.4-12.4-24.1-19.7-39.7-19.7H300
+        c-8.8,0-17.4,2.3-25,6.8c-7.6-4.4-16.2-6.8-25-6.8H150c-27.6,0-50,22.4-50,50v500c0,27.6,22.4,50,50,50h100c8.8,0,17.4-2.3,25-6.8
+        c7.6,4.4,16.2,6.8,25,6.8h100c27.6,0,50-22.4,50-50V338.8l86.9,324.2c7.1,26.7,34.5,42.5,61.2,35.4c0,0,0,0,0,0l96.6-25.9
+        C721.3,665.2,737.2,637.8,730,611.2z M488.1,287.8l96.6-25.9l64.7,241.5l-96.6,25.9L488.1,287.8z M552.3,141.1l19.4,72.4l-96.6,25.9
+        L455.7,167L552.3,141.1z M400,150l0,375H300V150H400z M250,150v75H150v-75H250z M150,650V275h100v375H150z M400,650H300v-75h100
+        L400,650L400,650z M681.8,624.1L585.2,650l-19.4-72.4l96.6-25.9L681.8,624.1L681.8,624.1z"/>
+        <path class="tofill" d="M665.9,513.9l-122.7,32.8l-70.7-263.3l122.7-32.8L665.9,513.9z M262,262H136v400h126V262z" opacity="0.3" /></div>`)
+            .on("click", () => {
+                resetUI();
+            })
+            .prependTo($("#btnWrapper"))
+            .hide();
     },
 };
 
@@ -2057,30 +1874,18 @@ const bookshelf = {
  * Initializes the bookshelf module
  * @public
  */
-export async function initBookshelf(displayBooks = true) {
+export function initBookshelf(displayBooks = true) {
     // Enable bookshelf functionality
     if (CONFIG.RUNTIME_CONFIG.ENABLE_BOOKSHELF) {
-        await bookshelf.init();
-        await bookshelf.enable();
+        bookshelf.init();
+        bookshelf.enable();
 
         if (displayBooks) {
             // Now whether or not to show bookshelf depends on whether there is a book in bookshelf
-            await bookshelf.refreshBookList();
+            bookshelf.refreshBookList();
 
             // Open the last read book on startup
             bookshelf.reopenBook();
-        }
-    }
-}
-
-/**
- * Forces the filter bar to recalculate its width
- * @public
- */
-export function forceRecalculateFilterBar() {
-    if (CONFIG.RUNTIME_CONFIG.ENABLE_BOOKSHELF) {
-        if (bookshelf.enabled) {
-            bookshelf._updateFilterBar();
         }
     }
 }

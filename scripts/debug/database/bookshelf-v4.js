@@ -15,12 +15,12 @@
  * @requires modules/text/text-processor
  * @requires modules/file/fileload-callback
  * @requires modules/components/cover-generator
- * @requires modules/components/popup-manager
  * @requires utils/base
  * @requires utils/helpers-ui
  * @requires utils/helpers-file
  * @requires utils/helpers-bookshelf
  * @requires utils/helpers-reader
+ * @requires utils/helpers-popups
  */
 
 import * as CONFIG from "../../config/index.js";
@@ -29,15 +29,22 @@ import { DBManager } from "../database/db-manager.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { FileLoadCallback } from "../file/fileload-callback.js";
 import { getCoverGenerator } from "../components/cover-generator.js";
-import { PopupManager } from "../components/popup-manager.js";
 import {
     isVariableDefined,
     getSizePrecise,
     removeFileExtension,
     convertUTCTimestampToLocalString,
     formatBytes,
+    setSvgPathLength,
 } from "../../utils/base.js";
-import { showLoadingScreen, hideLoadingScreen, resetUI, resetVars } from "../../utils/helpers-ui.js";
+import {
+    showLoadingScreen,
+    hideLoadingScreen,
+    hideContent,
+    hideDropZone,
+    resetUI,
+    resetVars,
+} from "../../utils/helpers-ui.js";
 import { handleSelectedFile, handleProcessedBook } from "../../utils/helpers-file.js";
 import {
     setBookLastReadTimestamp,
@@ -47,6 +54,7 @@ import {
     getIsOnServer,
 } from "../../utils/helpers-bookshelf.js";
 import { getProgressText, removeHistory, getIsBookFinished } from "../../utils/helpers-reader.js";
+import { showConfirmationPopup } from "../../utils/helpers-popups.js";
 
 /**
  * @class BookshelfDB
@@ -54,15 +62,11 @@ import { getProgressText, removeHistory, getIsBookFinished } from "../../utils/h
  * @private
  */
 class BookshelfDB extends DBManager {
-    /**
-     * Object store names
-     * @type {Object}
-     * @private
-     */
-    #objectStoreNames = {
-        bookfiles: CONFIG.CONST_DB.DB_STORES[0].name,
-        bookProcessed: CONFIG.CONST_DB.DB_STORES[1].name,
+    static #OBJECT_STORE_NAMES = {
+        bookfiles: "bookfiles",
+        bookProcessed: "bookProcessed",
     };
+    #objectStoreNames = BookshelfDB.#OBJECT_STORE_NAMES;
 
     /**
      * Constructor for BookshelfDB
@@ -70,9 +74,12 @@ class BookshelfDB extends DBManager {
      */
     constructor() {
         super({
-            dbName: CONFIG.CONST_DB.DB_NAME,
-            dbVersion: CONFIG.CONST_DB.DB_VERSION,
-            objectStores: CONFIG.CONST_DB.DB_STORES,
+            dbName: "SimpleTextReader",
+            dbVersion: 2,
+            objectStores: [
+                { name: BookshelfDB.#OBJECT_STORE_NAMES.bookfiles, options: { keyPath: "name" } },
+                { name: BookshelfDB.#OBJECT_STORE_NAMES.bookProcessed, options: { keyPath: "name" } },
+            ],
             errorCallback: () => bookshelf.disable(),
             initCallback: async () => {
                 // await this.removeAllBooks();
@@ -268,14 +275,9 @@ class BookshelfDB extends DBManager {
         }
 
         try {
-            await this.ensureStoresAvailable([this.#objectStoreNames.bookfiles, this.#objectStoreNames.bookProcessed]);
-            // console.log("Required stores are available");
-
-            const allBooks = await this.getAll([this.#objectStoreNames.bookfiles], {
+            return await this.getAll([this.#objectStoreNames.bookfiles], {
                 useCursor: true,
             });
-            // console.log("Books:", books);
-            return allBooks;
         } catch (error) {
             console.error("Error getting all books:", error);
             return [];
@@ -376,8 +378,8 @@ class BookshelfDB extends DBManager {
      * @async
      * @throws {Error} When database initialization fails or transaction fails
      */
-    async upgradeBookshelfDB(force = false) {
-        // console.log("upgradeBookshelfDB: force =", force);
+    async upgradeDB(force = false) {
+        // console.log("upgradeDB: force =", force);
         const currentDBVersion = await this.getDBVersion();
         const configuredDBVersion = this.getConfiguredDBVersion();
 
@@ -394,10 +396,12 @@ class BookshelfDB extends DBManager {
         }
 
         try {
-            const allBooks = await this.getAllBooks();
-            for (const book of allBooks) {
+            const books = await this.getAllBooks();
+
+            for (const book of books) {
                 const { name } = book;
                 const processedBook = await this.get([this.#objectStoreNames.bookProcessed], name);
+
                 await this.put(book, {
                     stores: {
                         [this.#objectStoreNames.bookfiles]: () => ({
@@ -430,7 +434,7 @@ class BookshelfDB extends DBManager {
                 });
             }
 
-            if (allBooks.length > 0) {
+            if (books.length > 0) {
                 await this.printAllDatabases();
                 console.log("Database upgrade completed.");
             }
@@ -452,7 +456,7 @@ class BookshelfDB extends DBManager {
             throw new Error("Init local db error!");
         }
 
-        console.log("Printing all book-related database records...");
+        console.log("Printing all database records...");
 
         try {
             await this.printStoreRecords({
@@ -478,9 +482,9 @@ class BookshelfDB extends DBManager {
                 },
             });
 
-            console.log("Finished printing all book-related database records.");
+            console.log("Finished printing all database records.");
         } catch (error) {
-            console.error("Error printing book-related databases:", error);
+            console.error("Error printing databases:", error);
             throw error;
         }
     }
@@ -498,8 +502,6 @@ const bookshelf = {
     _coverGenerator: null,
     _FILENAME_: "STR-Filename",
     _CACHE_FLAG_: "STR-Cache-File",
-
-    _FILE_LOAD_CALLBACK_FUNC_: null,
 
     /**
      * Reopens the last read book on startup
@@ -530,6 +532,7 @@ const bookshelf = {
     async openBook(fname, forceRefresh = false) {
         if (this.enabled) {
             // console.log("Open book from cache: " + fname);
+            // showLoadingScreen();
             try {
                 // check if the book exists in db
                 if (!(await this.isBookExist(fname))) {
@@ -553,19 +556,11 @@ const bookshelf = {
                                 false
                             );
                         } catch (e) {
-                            PopupManager.showNotification({
-                                iconName: "ERROR",
-                                text: `${CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToOpen} "${fname}"`,
-                                iconColor: "error",
-                            });
+                            // alert("An error occurred!");
                             throw new Error(`openBook error: "${fname}"`);
                         }
                     } else {
-                        PopupManager.showNotification({
-                            iconName: "ERROR",
-                            text: `${CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToOpen} "${fname}"`,
-                            iconColor: "error",
-                        });
+                        // alert("An error occurred!");
                         throw new Error(`openBook error: "${fname}"`);
                     }
                 }
@@ -593,11 +588,7 @@ const bookshelf = {
                     setBookLastReadTimestamp(fname);
                     return true;
                 } else {
-                    PopupManager.showNotification({
-                        iconName: "ERROR",
-                        text: `${CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToOpen} "${fname}"`,
-                        iconColor: "error",
-                    });
+                    // alert("An error occurred!");
                     throw new Error(`openBook error: "${fname}"`);
                 }
             } catch (e) {
@@ -658,8 +649,7 @@ const bookshelf = {
         isOnServer = false,
         refreshBookshelf = true,
         hardRefresh = true,
-        sortBookshelf = true,
-        inFileLoadCallback = false
+        sortBookshelf = true
     ) {
         if (bookshelf.enabled) {
             if (file.type === "text/plain") {
@@ -676,19 +666,14 @@ const bookshelf = {
 
                         await bookshelf.db.putBook(file.name, file, isFromLocal, isOnServer);
                         if (!(await bookshelf.db.isBookExist(file.name))) {
-                            PopupManager.showNotification({
-                                iconName: "ERROR",
-                                text: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToSave,
-                                iconColor: "error",
-                            });
+                            // alert("Failed to save to local bookshelf (storage may be full)");
                             throw new Error(`saveBook error (localStorage full): "${file.name}"`);
                         }
 
                         // Refresh Bookshelf in DropZone
                         // await bookshelf.refreshBookList();
                         // console.log(`refreshBookshelf: ${refreshBookshelf}, HardRefresh: ${hardRefresh}`);
-                        if (refreshBookshelf)
-                            await resetUI(refreshBookshelf, hardRefresh, sortBookshelf, inFileLoadCallback);
+                        if (refreshBookshelf) await resetUI(refreshBookshelf, hardRefresh, sortBookshelf);
                     } catch (e) {
                         console.log(e);
                     }
@@ -1070,15 +1055,6 @@ const bookshelf = {
      * @param {boolean} [sortBookshelf=true] - Whether to sort the books
      */
     async refreshBookList(hardRefresh = false, sortBookshelf = true) {
-        // console.log(
-        //     "Refreshing book list...",
-        //     "hardRefresh:",
-        //     hardRefresh,
-        //     "sortBookshelf:",
-        //     sortBookshelf,
-        //     "enabled:",
-        //     this.enabled
-        // );
         if (this.enabled) {
             if (navigator.storage) {
                 const storageInfo = await navigator.storage.estimate();
@@ -1092,8 +1068,7 @@ const bookshelf = {
                 $("#bookshelfUsageText").hide();
             }
             try {
-                const allBooks = await this.db.getAllBooks();
-                for (const book of allBooks) {
+                for (const book of await this.db.getAllBooks()) {
                     const final_isFromLocal = book.isFromLocal ?? false;
                     const final_isOnServer = book.isOnServer ?? false;
                     const final_isEastern = await this._getBookLanguage(book);
@@ -1454,11 +1429,11 @@ const bookshelf = {
         removeAllBtn.on("click", () => {
             if (allBooks.length === 0) return;
 
-            PopupManager.showConfirmationPopup({
-                iconName: "DELETE_ALL_BOOKS",
-                title: CONFIG.RUNTIME_VARS.STYLE.ui_removeAllBooks_confirm_title,
-                text: CONFIG.RUNTIME_VARS.STYLE.ui_removeAllBooks_confirm_text,
-                onConfirm: () => {
+            showConfirmationPopup(
+                "DELETE_ALL_BOOKS",
+                CONFIG.RUNTIME_VARS.STYLE.ui_removeAllBooks_confirm_title,
+                CONFIG.RUNTIME_VARS.STYLE.ui_removeAllBooks_confirm_text,
+                () => {
                     // Remove all books
                     const promises = allBooks.map(
                         (book) =>
@@ -1474,8 +1449,8 @@ const bookshelf = {
                         CONFIG.VARS.ALL_BOOKS_INFO = {};
                         $(".booklist").trigger("contentchange");
                     });
-                },
-            });
+                }
+            );
         });
 
         // Add elements to containers
@@ -1582,9 +1557,10 @@ const bookshelf = {
 
     /**
      * Shows the bookshelf UI if enabled and contains books
+     * @async
      * @returns {Object} The bookshelf instance for chaining
      */
-    show() {
+    async show() {
         if (this.enabled) {
             if (isVariableDefined($(".bookshelf")) && $(".bookshelf .booklist").children().length > 0) {
                 $(".bookshelf").show();
@@ -1600,7 +1576,7 @@ const bookshelf = {
      * @param {boolean} [doNotRemove=true] - If false, removes the bookshelf element instead of hiding
      * @returns {Object} The bookshelf instance for chaining
      */
-    hide(doNotRemove = true) {
+    async hide(doNotRemove = true) {
         if (this.enabled) {
             this._resetDropzoneStyles();
             if (!doNotRemove) {
@@ -1646,29 +1622,19 @@ const bookshelf = {
      * Enables the bookshelf module and sets up event handlers
      * @returns {Object} The bookshelf instance for chaining
      */
-    async enable() {
+    enable() {
         if (!this.enabled) {
             this.db = new BookshelfDB();
-            await this.db.upgradeBookshelfDB();
-            this._FILE_LOAD_CALLBACK_FUNC_ = (file) =>
-                this.saveBook(
-                    file,
-                    true, // isFromLocal
-                    false, // isOnServer
-                    true, // refreshBookshelf
-                    true, // hardRefresh
-                    true, // sortBookshelf
-                    true // inFileLoadCallback
-                );
-            FileLoadCallback.regBefore(this._FILE_LOAD_CALLBACK_FUNC_);
+            this.db.upgradeDB();
+            FileLoadCallback.regBefore(this.saveBook);
             this.enabled = true;
 
             if (CONFIG.RUNTIME_CONFIG.UPGRADE_DB) {
-                await this.db.upgradeBookshelfDB(true);
+                this.db.upgradeDB(true);
             }
 
             if (CONFIG.RUNTIME_CONFIG.PRINT_DATABASE) {
-                await this.db.printAllDatabases();
+                this.db.printAllDatabases();
             }
 
             // Listen for refreshBookList event
@@ -1678,8 +1644,8 @@ const bookshelf = {
             });
 
             // Listen for settings change events
-            document.addEventListener("updateAllBookCovers", async () => {
-                await this.updateAllBookCovers();
+            document.addEventListener("updateAllBookCovers", () => {
+                this.updateAllBookCovers();
             });
 
             // Listen for showBookshelfTriggerBtn event
@@ -1690,16 +1656,6 @@ const bookshelf = {
             // Listen for hideBookshelfTriggerBtn event
             document.addEventListener("hideBookshelfTriggerBtn", () => {
                 this.hideTriggerBtn();
-            });
-
-            // Listen for showBookshelf event
-            document.addEventListener("showBookshelf", () => {
-                this.show();
-            });
-
-            // Listen for hideBookshelf event
-            document.addEventListener("hideBookshelf", () => {
-                this.hide();
             });
 
             // Listen for handleMultipleBooks event
@@ -1768,8 +1724,7 @@ const bookshelf = {
                         }
 
                         // Get all existing books
-                        const allBooks = await this.db.getAllBooks();
-                        for (const book of allBooks) {
+                        for (const book of await this.db.getAllBooks()) {
                             const final_isFromLocal = book.isFromLocal || false;
                             const final_isOnServer = book.isOnServer || false;
                             const new_file = {
@@ -1811,7 +1766,7 @@ const bookshelf = {
                         }
                         container.trigger("contentchange");
                     } catch (e) {
-                        console.log("Error in handleMultipleBooksWithoutLoading:", e);
+                        console.log("Error in handleMultipleFilesWithoutLoading:", e);
                     }
 
                     // If there is no book in bookshelf, hide the bookshelf
@@ -1831,6 +1786,7 @@ const bookshelf = {
 
             // Listen for saveProcessedBook event
             document.addEventListener("saveProcessedBook", async (event) => {
+                console.log("saveProcessedBook", event.detail.name, event.detail);
                 await bookshelf.db.updateProcessedBook(event.detail.name, event.detail);
             });
 
@@ -2027,7 +1983,7 @@ const bookshelf = {
      */
     disable() {
         if (this.enabled) {
-            FileLoadCallback.unregBefore(this._FILE_LOAD_CALLBACK_FUNC_);
+            FileLoadCallback.unregBefore(this.saveBook);
             this.hide(false);
             this.hideTriggerBtn(false);
             this.db = null;
@@ -2040,14 +1996,14 @@ const bookshelf = {
     /**
      * Initializes the bookshelf UI by creating the trigger button
      */
-    async init() {
+    init() {
         const $button = $(
             `<div id="STRe-bookshelf-btn" class="btn-icon hasTitle" title="${CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_goToBookshelf}">${ICONS.BOOKSHELF}</div>`
         );
 
-        $button.on("click", async () => {
+        $button.on("click", () => {
             // setSvgPathLength($button.get(0));
-            await resetUI();
+            resetUI();
         });
         $button.prependTo($("#btnWrapper")).hide();
     },
@@ -2057,15 +2013,15 @@ const bookshelf = {
  * Initializes the bookshelf module
  * @public
  */
-export async function initBookshelf(displayBooks = true) {
+export function initBookshelf(displayBooks = true) {
     // Enable bookshelf functionality
     if (CONFIG.RUNTIME_CONFIG.ENABLE_BOOKSHELF) {
-        await bookshelf.init();
-        await bookshelf.enable();
+        bookshelf.init();
+        bookshelf.enable();
 
         if (displayBooks) {
             // Now whether or not to show bookshelf depends on whether there is a book in bookshelf
-            await bookshelf.refreshBookList();
+            bookshelf.refreshBookList();
 
             // Open the last read book on startup
             bookshelf.reopenBook();

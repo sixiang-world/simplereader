@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+from datetime import datetime
 from itertools import product
 from pathlib import Path
 from shutil import copy2, copytree, rmtree
@@ -16,10 +17,50 @@ VERSION_FORMAT = ' (v{})'
 def update_version_in_files(new_version_str):
     """Update version number in all relevant files"""
     # Update version.json
-    version_file = Path(__file__).parent / 'version.json'
+    version_file = Path(__file__).parent.parent / 'version.json'
     with open(version_file, 'r+', encoding='utf-8') as f:
         data = json.load(f)
         data['version'] = new_version_str
+
+        # Ensure changelog section exists
+        if 'changelog' not in data:
+            data['changelog'] = {}
+
+        # If current version is not in changelog, add it
+        if new_version_str not in data['changelog']:
+            # Create new version entry
+            new_version_entry = {
+                'date': datetime.now().strftime('%Y-%m-%d'),
+                'changes': {
+                    'zh': [],
+                    'en': []
+                }
+            }
+            data['changelog'][new_version_str] = new_version_entry
+        else:
+            # Ensure existing version entry contains all necessary fields
+            version_entry = data['changelog'][new_version_str]
+            if 'date' not in version_entry:
+                version_entry['date'] = datetime.now().strftime('%Y-%m-%d')
+            if 'changes' not in version_entry:
+                version_entry['changes'] = {'zh': [], 'en': []}
+            elif not isinstance(version_entry['changes'], dict):
+                version_entry['changes'] = {'zh': [], 'en': []}
+            else:
+                if 'zh' not in version_entry['changes']:
+                    version_entry['changes']['zh'] = []
+                if 'en' not in version_entry['changes']:
+                    version_entry['changes']['en'] = []
+
+        # Sort changelog by version number in descending order
+        sorted_changelog = dict(sorted(
+            data['changelog'].items(),
+            key=lambda x: version_key(x[0]),
+            reverse=True
+        ))
+        data['changelog'] = sorted_changelog
+
+        # Write back to file
         f.seek(0)
         json.dump(data, f, indent=4, ensure_ascii=False)
         f.write('\n')
@@ -39,7 +80,7 @@ def update_version_in_files(new_version_str):
 
     # Update both README files with different formats
     for readme_file, (pattern, template) in readme_patterns.items():
-        readme_path = Path(__file__).parent / readme_file
+        readme_path = Path(__file__).parent.parent / readme_file
         if readme_path.exists():
             with open(readme_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -52,10 +93,15 @@ def update_version_in_files(new_version_str):
                 f.write(content)
 
 
+def version_key(version_str):
+    """Converts a version string to a comparable tuple"""
+    return tuple(map(int, version_str.split('.')))
+
+
 def get_version(browsers):
     """Get current version from version.json or manifests"""
     # First try to get version from version.json
-    version_file = Path(__file__).parent / 'version.json'
+    version_file = Path(__file__).parent.parent / 'version.json'
     if version_file.exists():
         with open(version_file, encoding='utf-8') as f:
             return json.load(f)['version']
@@ -63,11 +109,11 @@ def get_version(browsers):
     # Fallback to old method if version.json doesn't exist
     version_strs = []
     for browser in browsers:
-        with open(f'manifests/{browser}/manifest.json', encoding='utf-8') as f:
+        with open(Path(__file__).parent.parent / f'manifests/{browser}/manifest.json', encoding='utf-8') as f:
             manifest = json.load(f)
             version_strs.append(manifest['version'])
     assert all(x == version_strs[0]
-               for x in version_strs), 'Version numbers are not the same across all browsers and versions. Please fix this before publishing.'
+               for x in version_strs), 'Version numbers are not the same across all browsers and versions. Please fix this before building.'
 
     return version_strs[0]
 
@@ -82,9 +128,9 @@ def validate_version_str(version_str):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Tool to publish extension')
+    parser = argparse.ArgumentParser(description='Tool to build extension')
     parser.add_argument('-v', '--version', type=str, default='',
-                        help='Version of the extension to be published')
+                        help='Version of the extension to be built')
     args = parser.parse_args()
 
     # Define browsers and versions
@@ -103,7 +149,7 @@ if __name__ == '__main__':
 
     # Prepare dist directory
     dist_dir_name = 'dist'
-    dist_dir_root = Path(__file__).parent / dist_dir_name
+    dist_dir_root = Path(__file__).parent.parent / dist_dir_name
     if dist_dir_root.exists():
         rmtree(dist_dir_root)
 
@@ -113,7 +159,7 @@ if __name__ == '__main__':
         dist_dir.mkdir(parents=True, exist_ok=True)
 
         # modify the version field of manifest.json file
-        with open(f'manifests/{browser}/manifest.json', 'r+', encoding='utf-8') as f:
+        with open(Path(__file__).parent.parent / f'manifests/{browser}/manifest.json', 'r+', encoding='utf-8') as f:
             data = json.load(f)
             data['version'] = new_version_str
             f.seek(0)
@@ -121,16 +167,21 @@ if __name__ == '__main__':
             f.truncate()
 
         # copy the manifest.json file from manifests directory to the dist directory
-        copy2(f'manifests/{browser}/manifest.json', dist_dir)
+        copy2(Path(__file__).parent.parent /
+              f'manifests/{browser}/manifest.json', dist_dir)
 
         # copy other needed files to the dist directory
-        copytree('css', dist_dir / 'css', dirs_exist_ok=True)
-        copytree('fonts', dist_dir / 'fonts', dirs_exist_ok=True)
-        copytree('images', dist_dir / 'images', dirs_exist_ok=True)
-        copytree('scripts', dist_dir / 'scripts', dirs_exist_ok=True)
+        copytree(Path(__file__).parent.parent / 'css',
+                 dist_dir / 'css', dirs_exist_ok=True)
+        copytree(Path(__file__).parent.parent / 'fonts',
+                 dist_dir / 'fonts', dirs_exist_ok=True)
+        copytree(Path(__file__).parent.parent / 'images',
+                 dist_dir / 'images', dirs_exist_ok=True)
+        copytree(Path(__file__).parent.parent / 'scripts',
+                 dist_dir / 'scripts', dirs_exist_ok=True)
         rmtree(dist_dir / 'scripts' / 'debug')
-        copy2('index.html', dist_dir)
-        copy2('version.json', dist_dir)
+        copy2(Path(__file__).parent.parent / 'index.html', dist_dir)
+        copy2(Path(__file__).parent.parent / 'version.json', dist_dir)
 
         # remove font
         # os.remove(dist_dir / 'fonts' / 'FZSKBXKK.woff2')
@@ -143,4 +194,4 @@ if __name__ == '__main__':
 
         # zip the dist directory
         os.system(
-            f'cd {dist_dir_name}/{browser} && zip -0 -r -FS ../{browser}.zip ./* --exclude "*.git*" --exclude "*.DS_Store" && cd ../..')
+            f'cd {Path(__file__).parent.parent.resolve()}/{dist_dir_name}/{browser} && zip -0 -r -FS ../{browser}.zip ./* --exclude "*.git*" --exclude "*.DS_Store" && cd ../..')
