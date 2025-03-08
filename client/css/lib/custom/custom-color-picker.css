@@ -32,11 +32,13 @@
     border-radius: 10px;
     padding: 0.5em;
     box-shadow: 0 5px 20px #00000044;
+    -webkit-backdrop-filter: blur(3px);
     backdrop-filter: blur(3px);
     background: white;
     top: 0;
     left: 0;
     animation: 0.15s reveal-picker ease-out forwards;
+    -webkit-transform: translate(calc(var(--x) * 1px), calc(var(--y) * 1px));
     transform: translate(calc(var(--x) * 1px), calc(var(--y) * 1px));
 
     @media only screen and (max-device-width: 640px) {

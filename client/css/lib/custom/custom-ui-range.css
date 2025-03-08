@@ -5,8 +5,11 @@ label[dir="rtl"] .range-slider {
     min-width: 200px;
     /* border: 1px solid black; */
     overflow-y: unset !important;
+    --thumb-size: 15px;
     --ticks-height: 0px;
     --primary-color: var(--mainColor_active);
+    --thumb-color: var(--bgColor);
+    --progress-background: var(--fontInfoColor);
 }
 
 /* hide thumb value */
@@ -38,4 +41,17 @@ label[dir="rtl"] .range-slider {
     top: 10px;
     border-radius: 8px !important;
     padding: 2px;
+}
+
+/* Add a border to the thumb */
+.range-slider > input::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px var(--mainColor_active);
+}
+
+.range-slider > input::-moz-range-thumb {
+    box-shadow: 0 0 0 3px var(--mainColor_active);
+}
+
+.range-slider > input::-ms-thumb {
+    box-shadow: 0 0 0 3px var(--mainColor_active);
 }
