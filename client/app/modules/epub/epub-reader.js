@@ -111,6 +111,26 @@ export const EpubReader = {
         }
 
         try {
+            // Total timeout for the entire book opening process
+            const result = await Promise.race([
+                this._openBookInternal(input, fileName),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("Book opening timed out after 30s")), 30000)
+                ),
+            ]);
+            return result;
+        } catch (error) {
+            console.error("[EpubReader] Error opening book:", error);
+            this.closeBook();
+            throw error;
+        }
+    },
+
+    /**
+     * Internal book opening logic
+     * @private
+     */
+    async _openBookInternal(input, fileName) {
             // Destroy previous book if any
             await this.closeBook();
 
@@ -118,23 +138,25 @@ export const EpubReader = {
             this._showEpubContainer();
 
             // Create the Book instance
+            // Convert File to ArrayBuffer first (epub.js handles ArrayBuffer more reliably)
             let bookInput;
-            if (input instanceof ArrayBuffer) {
-                bookInput = input;
-            } else if (input instanceof File) {
-                bookInput = input;
+            if (input instanceof File) {
+                bookInput = await input.arrayBuffer();
+                console.log(`[EpubReader] Converted File to ArrayBuffer (${(bookInput.byteLength / 1024).toFixed(0)}KB)`);
             } else {
                 bookInput = input;
             }
 
+            console.log("[EpubReader] Creating ePub book...");
             this._book = ePub(bookInput);
             CONFIG.VARS.EPUB_BOOK = this._book;
             CONFIG.VARS.IS_EPUB = true;
             CONFIG.VARS.FILENAME = fileName;
             CONFIG.VARS.IS_BOOK_OPENED = true;
 
-            // Wait for the book to be ready
+            console.log("[EpubReader] Waiting for book.ready...");
             await this._book.ready;
+            console.log("[EpubReader] Book ready, loading metadata...");
 
             // Get metadata
             const metadata = await this._book.loaded.metadata;
@@ -153,6 +175,8 @@ export const EpubReader = {
             // Get navigation/TOC
             const navigation = await this._book.loaded.navigation;
             CONFIG.VARS.EPUB_TOC = navigation.toc || [];
+
+            console.log("[EpubReader] Navigation loaded, rendering book...");
 
             // Render the book
             const container = document.getElementById("epub-reader-container");
@@ -192,10 +216,18 @@ export const EpubReader = {
 
             // Generate location map for percentage calculation
             try {
-                await this._book.locations.generate(1024);
+                if (this._book.locations) {
+                    await Promise.race([
+                        this._book.locations.generate(1024),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 10000))
+                    ]);
+                    console.log("[EpubReader] Locations generated");
+                }
             } catch (e) {
-                console.warn("[EpubReader] Could not generate locations:", e);
+                console.warn("[EpubReader] Could not generate locations:", e.message || e);
             }
+
+            console.log("[EpubReader] Displaying first page...");
 
             // Display the first page or restore position
             const savedCfi = this._getSavedPosition(fileName);
@@ -241,12 +273,6 @@ export const EpubReader = {
             }
 
             console.log(`[EpubReader] Book opened: "${CONFIG.VARS.EPUB_TITLE}" by ${CONFIG.VARS.EPUB_AUTHOR}`);
-
-        } catch (error) {
-            console.error("[EpubReader] Error opening book:", error);
-            this.closeBook();
-            throw error;
-        }
     },
 
     /**
