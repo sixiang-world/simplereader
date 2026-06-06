@@ -146,6 +146,10 @@ export const EpubReader = {
         // Clean up existing listener
         this._teardownEpubInfiniteScroll();
 
+        // Track last auto-advance time to prevent rapid-fire jumping
+        let lastAdvanceTime = 0;
+        const ADVANCE_COOLDOWN = 2000; // 2 seconds between auto-advances
+
         // Check scroll position inside the EPUB iframe and auto-advance
         const checkScrollAndAdvance = () => {
             if (!CONFIG.VARS.IS_EPUB || !this._rendition) return;
@@ -169,8 +173,17 @@ export const EpubReader = {
                 const scrollHeight = iframeDoc.documentElement.scrollHeight || iframeDoc.body.scrollHeight;
                 const clientHeight = iframeDoc.documentElement.clientHeight || iframeDoc.body.clientHeight;
 
-                // If scrolled to near the bottom (within 150px), advance to next section
-                if (scrollTop + clientHeight >= scrollHeight - 150) {
+                // Only advance if:
+                // 1. Actually scrolled near the bottom (within 100px)
+                // 2. The page is tall enough to scroll (not a tiny chapter that fits in viewport)
+                // 3. Enough cooldown time has passed since last advance
+                const now = Date.now();
+                const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
+                const isPageScrollable = scrollHeight > clientHeight + 50;
+                const hasCooledDown = now - lastAdvanceTime > ADVANCE_COOLDOWN;
+
+                if (isNearBottom && isPageScrollable && hasCooledDown) {
+                    lastAdvanceTime = now;
                     this._rendition.next();
                 }
             } catch (e) {
@@ -601,9 +614,13 @@ export const EpubReader = {
     _applyTheme() {
         if (!this._rendition) return;
 
+        // Use the same background color as the TXT reader for visual consistency
+        const bgColorLight = getComputedStyle(document.documentElement).getPropertyValue("--bgColor")?.trim() || "#f4ead7";
+        const bgColorDark = getComputedStyle(document.documentElement).getPropertyValue("--darkMode_bgColor")?.trim() || "#1a1a2e";
+
         this._rendition.themes.register("light", {
             body: {
-                "background-color": "#ffffff !important",
+                "background-color": `${bgColorLight} !important`,
                 "color": "#333333 !important",
                 "padding": "0 !important",
             },
@@ -614,7 +631,7 @@ export const EpubReader = {
 
         this._rendition.themes.register("dark", {
             body: {
-                "background-color": "#1a1a2e !important",
+                "background-color": `${bgColorDark} !important`,
                 "color": "#e0e0e0 !important",
                 "padding": "0 !important",
             },
@@ -817,11 +834,21 @@ export const EpubReader = {
             epubSidebar.style.display = "block";
         }
 
-        // Hide the TXT reader sidebar content
-        const txtContent = document.getElementById("content");
-        const txtPagination = document.getElementById("pagination");
-        if (txtContent) txtContent.style.display = "none";
-        if (txtPagination) txtPagination.style.display = "none";
+        // Hide the TXT reader completely using visibility (same system as showContent/hideContent)
+        // so that restoring later is reliable
+        const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+        const toc = CONFIG.DOM_ELEMENT.TOC_CONTAINER;
+        const pagination = CONFIG.DOM_ELEMENT.PAGINATION_CONTAINER;
+        const progress = CONFIG.DOM_ELEMENT.PROGRESS_CONTAINER;
+
+        if (content) content.style.visibility = "hidden";
+        if (toc) toc.style.visibility = "hidden";
+        if (pagination) pagination.style.visibility = "hidden";
+        if (progress) progress.style.visibility = "hidden";
+
+        // Also hide the sidebar splitview elements
+        const tocSplitview = document.querySelector(".sidebar-splitview-outer");
+        if (tocSplitview) tocSplitview.style.display = "none";
 
         // Show EPUB pagination (hide prev/next buttons in scrolled mode)
         const epubPagination = document.getElementById("epub-pagination");
@@ -863,11 +890,21 @@ export const EpubReader = {
             epubSidebar.style.display = "none";
         }
 
-        // Show the TXT reader content
-        const txtContent = document.getElementById("content");
-        const txtPagination = document.getElementById("pagination");
-        if (txtContent) txtContent.style.display = "";
-        if (txtPagination) txtPagination.style.display = "";
+        // Restore the TXT reader sidebar splitview
+        const tocSplitview = document.querySelector(".sidebar-splitview-outer");
+        if (tocSplitview) tocSplitview.style.display = "";
+
+        // Restore TXT reader elements visibility
+        // These are controlled by visibility, not display
+        const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+        const toc = CONFIG.DOM_ELEMENT.TOC_CONTAINER;
+        const pagination = CONFIG.DOM_ELEMENT.PAGINATION_CONTAINER;
+        const progress = CONFIG.DOM_ELEMENT.PROGRESS_CONTAINER;
+
+        if (content) content.style.visibility = "visible";
+        if (toc) toc.style.visibility = "visible";
+        if (pagination) pagination.style.visibility = "visible";
+        if (progress) progress.style.visibility = "visible";
 
         // Hide EPUB pagination
         const epubPagination = document.getElementById("epub-pagination");

@@ -51,11 +51,12 @@
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
-    border-right: 1px solid var(--border-color, #e0e0e0);
-    background-color: var(--bg-color-toc, #fafafa);
+    border-right: 1px solid var(--borderColor, #e0e0e0);
+    background-color: var(--bgColor, #f4ead7);
     padding: 16px 8px;
     font-family: "ui", "LXGW WenKai Screen", "Noto Sans SC", sans-serif;
     transition: width 0.2s ease;
+    color: var(--textColor-primary, #333);
 }
 
 /* EPUB Reader Content Area */
@@ -64,17 +65,17 @@
     height: 100%;
     position: relative;
     overflow: hidden;
-    background-color: #ffffff;
+    background-color: var(--bgColor, #f4ead7);
 }
 
 /* Dark mode for EPUB container */
 [data-theme="dark"] #epub-reader-container {
-    background-color: #1a1a2e;
+    background-color: var(--darkMode_bgColor, #1a1a2e);
 }
 
 [data-theme="dark"] #epub-toc-sidebar {
-    background-color: #16213e;
-    border-right-color: #2a2a4a;
+    background-color: var(--darkMode_bgColor, #1a2a4a);
+    border-right-color: var(--borderColor, #2a2a4a);
 }
 
 /* ============================================
@@ -363,7 +364,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(255, 255, 255, 0.9);
+    background-color: var(--bgColor, rgba(244, 234, 215, 0.9));
     z-index: 50;
     align-items: center;
     justify-content: center;
