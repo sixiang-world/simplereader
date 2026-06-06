@@ -846,6 +846,17 @@ export const EpubReader = {
         if (pagination) pagination.style.visibility = "hidden";
         if (progress) progress.style.visibility = "hidden";
 
+        // Hide the dropzone — this is critical so that the TXT reader's
+        // document.onkeydown guard (dropzone.visibility === "hidden") lets
+        // keyboard events through. Without this, Escape and other shortcuts
+        // are blocked when EPUB is open.
+        const dropzone = CONFIG.DOM_ELEMENT.DROPZONE;
+        if (dropzone) dropzone.style.visibility = "hidden";
+        const dropzoneText = CONFIG.DOM_ELEMENT.DROPZONE_TEXT;
+        if (dropzoneText) dropzoneText.style.visibility = "hidden";
+        const dropzoneImg = CONFIG.DOM_ELEMENT.DROPZONE_IMG;
+        if (dropzoneImg) dropzoneImg.style.visibility = "hidden";
+
         // Also hide the sidebar splitview elements
         const tocSplitview = document.querySelector(".sidebar-splitview-outer");
         if (tocSplitview) tocSplitview.style.display = "none";
@@ -983,11 +994,9 @@ export const EpubReader = {
                     }
                     break;
                 case "Escape":
-                    if (CONFIG.CONST_CONFIG.SHORTCUTS.esc) {
-                        e.preventDefault();
-                        await this.closeBook();
-                        cbReg.go("resetUI", { refreshBookshelf: true });
-                    }
+                    // Escape is handled by the TXT reader's document.onkeydown
+                    // which calls this.closeBook() + resetUI() directly.
+                    // Do NOT handle it here to avoid double-firing.
                     break;
                 case "+":
                 case "=":

@@ -231,9 +231,18 @@ export function hideDropZone(showBookshelfTriggerBtn = true) {
  * @public
  */
 export function resetDropZoneState(force = false) {
-    if (CONFIG.DOM_ELEMENT.CONTENT_CONTAINER.innerHTML === "") {
+    // EPUB books render in an iframe, not in CONTENT_CONTAINER,
+    // so we must also check IS_EPUB to determine if content is shown.
+    const hasTxtContent = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER.innerHTML !== "";
+    const hasEpubContent = CONFIG.VARS.IS_EPUB;
+
+    if (!hasTxtContent && !hasEpubContent) {
         hideContent(force);
         showDropZone();
+    } else if (hasEpubContent) {
+        // EPUB is open — hide dropzone but don't show TXT content
+        // (EPUB manages its own visibility via _showEpubContainer/_hideEpubContainer)
+        hideDropZone();
     } else {
         hideDropZone();
         showContent(force);
@@ -304,6 +313,11 @@ export async function hideLoadingScreenWithMinimum(showBookshelfTriggerBtn = tru
  * @public
  */
 export function showContent(force = false) {
+    // When EPUB is open, the EPUB reader manages its own visibility.
+    // Calling showContent() would make the TXT reader visible underneath
+    // the EPUB container, which is incorrect.
+    if (CONFIG.VARS.IS_EPUB) return;
+
     if (force) {
         CONFIG.DOM_ELEMENT.CONTENT_CONTAINER.style.display = "block";
         CONFIG.DOM_ELEMENT.TOC_CONTAINER.style.display = "block";

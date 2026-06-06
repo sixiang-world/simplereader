@@ -1223,20 +1223,26 @@ export function initReader() {
                 CONFIG.CONST_CONFIG.SHORTCUTS.page_up ? handleNavigation(e, () => reader.gotoPrevChapter()) : null,
             PageDown: (e) =>
                 CONFIG.CONST_CONFIG.SHORTCUTS.page_down ? handleNavigation(e, () => reader.gotoNextChapter()) : null,
-            Escape: (e) => {
+            Escape: async (e) => {
                 if (CONFIG.CONST_CONFIG.SHORTCUTS.esc) {
                     e.preventDefault();
-                    // If EPUB is open, let the EPUB reader's own keydown handler
-                    // take care of closeBook + resetUI. Avoid double-firing.
                     if (CONFIG.VARS.IS_EPUB) {
-                        return;
+                        // Close EPUB book and reset UI
+                        await EpubReader.closeBook();
+                        cbReg.go("resetUI", {
+                            refreshBookshelf: true,
+                            hardRefresh: true,
+                            sortBookshelf: true,
+                            inFileProcessingCallback: false,
+                        });
+                    } else {
+                        cbReg.go("resetUI", {
+                            refreshBookshelf: true,
+                            hardRefresh: true,
+                            sortBookshelf: true,
+                            inFileProcessingCallback: false,
+                        });
                     }
-                    cbReg.go("resetUI", {
-                        refreshBookshelf: true,
-                        hardRefresh: true,
-                        sortBookshelf: true,
-                        inFileProcessingCallback: false,
-                    });
                 }
             },
         };

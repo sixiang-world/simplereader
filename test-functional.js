@@ -70,7 +70,8 @@ async function waitForAppReady() {
 // Reset to dropzone state
 async function resetToDropzone() {
     // Press Escape until dropzone is visible or max 3 tries
-    // Use dispatchEvent because page.keyboard.press may send to iframe instead of document
+    // Must call document.onkeydown() directly because dispatchEvent
+    // does NOT trigger property-based handlers (document.onkeydown = ...)
     for (let i = 0; i < 3; i++) {
         const dzVisible = await page.evaluate(() => {
             const dz = document.getElementById("dropZone");
@@ -79,7 +80,9 @@ async function resetToDropzone() {
         if (dzVisible) return;
         await page.evaluate(() => {
             const event = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, cancelable: true });
-            document.dispatchEvent(event);
+            if (typeof document.onkeydown === 'function') {
+                document.onkeydown(event);
+            }
         });
         await wait(1500);
     }
@@ -420,37 +423,50 @@ async function test_5_epub_navigation() {
 async function test_6_epub_txt_switch() {
     results.push("\n── Test 6: EPUB→TXT switch ──");
 
-    // Close EPUB by directly calling resetUI through the callback registry
-    // (keyboard events may not reach document due to iframe focus)
-    await page.evaluate(() => {
-        // Manually hide EPUB UI and reset
-        const epubWrapper = document.getElementById("epub-reader-wrapper");
-        if (epubWrapper) epubWrapper.style.display = "none";
-        const epubSidebar = document.getElementById("epub-toc-sidebar");
-        if (epubSidebar) epubSidebar.style.display = "none";
-        const epubPagination = document.getElementById("epub-pagination");
-        if (epubPagination) epubPagination.style.display = "none";
-        const tocSplitview = document.querySelector(".sidebar-splitview-outer");
-        if (tocSplitview) tocSplitview.style.display = "";
-        // Restore TXT elements visibility
-        const content = document.getElementById("content");
-        if (content) content.style.visibility = "visible";
-        const tocContent = document.getElementById("toc-content");
-        if (tocContent) tocContent.style.visibility = "visible";
-        const pagination = document.getElementById("pagination");
-        if (pagination) pagination.style.visibility = "visible";
-        const progress = document.getElementById("progress");
-        if (progress) progress.style.visibility = "visible";
+    // First verify EPUB is actually open
+    const epubState = await page.evaluate(() => {
+        const w = document.getElementById("epub-reader-wrapper");
+        const dz = document.getElementById("dropZone");
+        return {
+            epubDisplay: w ? w.style.display : "not_found",
+            dzVis: dz ? dz.style.visibility : "not_found",
+        };
     });
-    await wait(1000);
 
-    // Trigger the app's resetUI flow
+    if (epubState.epubDisplay !== "flex") {
+        // EPUB isn't open, need to open one
+        await resetToDropzone();
+        await injectEpubCreator();
+        const epubArray = await createEpubInBrowser(
+            "Switch Test Book", "Test Author",
+            [{ title: "Chapter 1", content: ["Content for switch test chapter one.", "Content for switch test chapter two."] }]
+        );
+        if (Array.isArray(epubArray) && epubArray.length > 0) {
+            await uploadFile("switch-test.epub", "application/epub+zip", Buffer.from(epubArray));
+            await wait(6000);
+        }
+    }
+
+    // Close EPUB by calling document.onkeydown directly with an Escape event.
+    // Must use document.onkeydown() instead of document.dispatchEvent() because
+    // dispatchEvent does NOT trigger property-based handlers (onkeydown = fn).
+    // The TXT reader's document.onkeydown handler checks IS_EPUB,
+    // calls EpubReader.closeBook() + resetUI().
     await page.evaluate(() => {
-        if (typeof window.reader !== "undefined") {
-            // Simulate what the Escape key would do
-            // The closeBook callback is registered in bookshelf module
+        const event = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, cancelable: true });
+        if (typeof document.onkeydown === 'function') {
+            document.onkeydown(event);
         }
     });
+    await wait(3000); // Wait for async closeBook + resetUI
+
+    // Verify EPUB wrapper is hidden after Escape
+    const epubHiddenAfterEscape = await page.evaluate(() => {
+        const w = document.getElementById("epub-reader-wrapper");
+        if (!w) return true;
+        return getComputedStyle(w).display === "none";
+    });
+    assert(epubHiddenAfterEscape, "EPUB wrapper hidden after Escape key");
 
     await resetToDropzone();
 
@@ -470,13 +486,13 @@ async function test_6_epub_txt_switch() {
     });
     assert(txtVisible, "TXT content visible after EPUB→TXT switch");
 
-    // EPUB wrapper should be hidden after Escape properly closes EPUB
-    const epubHidden = await page.evaluate(() => {
+    // EPUB wrapper should remain hidden
+    const epubStillHidden = await page.evaluate(() => {
         const w = document.getElementById("epub-reader-wrapper");
         if (!w) return true;
         return getComputedStyle(w).display === "none";
     });
-    assert(epubHidden, "EPUB wrapper hidden after Escape (closeBook fires before resetUI)");
+    assert(epubStillHidden, "EPUB wrapper stays hidden after opening TXT file");
 
     // Sidebar splitview should have display restored
     const sidebarSplitview = await page.evaluate(() => {
