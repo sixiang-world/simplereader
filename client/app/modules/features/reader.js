@@ -749,7 +749,145 @@ export const reader = {
             this._initializePageScroll();
         } else {
             this._destroyPageScroll();
+            // If switching off infinite scroll while a book is open, reset to normal view
+            if (CONFIG.VARS.IS_BOOK_OPENED && !CONFIG.VARS.IS_EPUB) {
+                this.showCurrentPageContent();
+                this.generatePagination();
+            }
         }
+    },
+
+    /**
+     * Appends the next page's content below the current content (waterfall/infinite scroll)
+     * @returns {boolean} True if content was appended, false if no more pages
+     * @private
+     */
+    _appendNextPageContent() {
+        if (CONFIG.VARS.CURRENT_PAGE >= CONFIG.VARS.TOTAL_PAGES) {
+            return false;
+        }
+
+        CONFIG.VARS.CURRENT_PAGE++;
+        const contentChunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
+        const maxLines = contentChunks.length;
+        const startIndex = CONFIG.VARS.PAGE_BREAKS[CONFIG.VARS.CURRENT_PAGE - 1] || 0;
+        const endIndex = Math.min(CONFIG.VARS.PAGE_BREAKS[CONFIG.VARS.CURRENT_PAGE] || maxLines, maxLines);
+
+        if (startIndex === endIndex) return false;
+
+        // Add a page separator
+        const separator = document.createElement("div");
+        separator.className = "infinite-scroll-page-separator";
+        separator.dataset.page = CONFIG.VARS.CURRENT_PAGE;
+        CONFIG.DOM_ELEMENT.CONTENT_CONTAINER.appendChild(separator);
+
+        // Append content line by line
+        for (let j = startIndex; j < endIndex; j++) {
+            const currentLine = contentChunks[j];
+            if (typeof currentLine === "object") {
+                const [processedContent, lineType] = TextProcessor.createDOM(currentLine);
+                if (lineType === "e" && processedContent.innerHTML.trim() === "") {
+                    continue;
+                }
+                CONFIG.DOM_ELEMENT.CONTENT_CONTAINER.appendChild(processedContent);
+            } else {
+                if (currentLine.trim()) {
+                    const [processedContent, lineType] = TextProcessor.processAndCreateDOM(
+                        currentLine,
+                        j,
+                        j < CONFIG.VARS.TITLE_PAGE_LINE_NUMBER_OFFSET || j === maxLines - 1
+                    );
+                    if (lineType === "e" && processedContent.innerHTML.trim() === "") {
+                        continue;
+                    }
+                    CONFIG.DOM_ELEMENT.CONTENT_CONTAINER.appendChild(processedContent);
+                }
+            }
+        }
+
+        // Set up footnotes
+        getFootnotes();
+
+        // Update pagination display
+        this.generatePagination();
+
+        return true;
+    },
+
+    /**
+     * Prepend the previous page's content above the current content (waterfall/infinite scroll)
+     * @returns {boolean} True if content was prepended, false if no more pages
+     * @private
+     */
+    _prependPrevPageContent() {
+        if (CONFIG.VARS.CURRENT_PAGE <= 1) {
+            return false;
+        }
+
+        CONFIG.VARS.CURRENT_PAGE--;
+        const contentChunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
+        const maxLines = contentChunks.length;
+        const startIndex = CONFIG.VARS.PAGE_BREAKS[CONFIG.VARS.CURRENT_PAGE - 1] || 0;
+        const endIndex = Math.min(CONFIG.VARS.PAGE_BREAKS[CONFIG.VARS.CURRENT_PAGE] || maxLines, maxLines);
+
+        if (startIndex === endIndex) return false;
+
+        // Record scroll position relative to bottom
+        const scrollHeightBefore = document.documentElement.scrollHeight;
+        const scrollYBefore = getScrollY();
+
+        // Add a page separator at the top
+        const separator = document.createElement("div");
+        separator.className = "infinite-scroll-page-separator";
+        separator.dataset.page = CONFIG.VARS.CURRENT_PAGE;
+
+        // Prepend content (insert before first child)
+        const contentContainer = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+        const firstChild = contentContainer.firstChild;
+        if (firstChild) {
+            contentContainer.insertBefore(separator, firstChild);
+        } else {
+            contentContainer.appendChild(separator);
+        }
+
+        // Build fragment and insert before separator
+        const fragment = document.createDocumentFragment();
+        for (let j = startIndex; j < endIndex; j++) {
+            const currentLine = contentChunks[j];
+            if (typeof currentLine === "object") {
+                const [processedContent, lineType] = TextProcessor.createDOM(currentLine);
+                if (lineType === "e" && processedContent.innerHTML.trim() === "") {
+                    continue;
+                }
+                fragment.appendChild(processedContent);
+            } else {
+                if (currentLine.trim()) {
+                    const [processedContent, lineType] = TextProcessor.processAndCreateDOM(
+                        currentLine,
+                        j,
+                        j < CONFIG.VARS.TITLE_PAGE_LINE_NUMBER_OFFSET || j === maxLines - 1
+                    );
+                    if (lineType === "e" && processedContent.innerHTML.trim() === "") {
+                        continue;
+                    }
+                    fragment.appendChild(processedContent);
+                }
+            }
+        }
+        contentContainer.insertBefore(fragment, separator);
+
+        // Set up footnotes
+        getFootnotes();
+
+        // Update pagination display
+        this.generatePagination();
+
+        // Restore scroll position so user stays at the same content
+        const scrollHeightAfter = document.documentElement.scrollHeight;
+        const heightDiff = scrollHeightAfter - scrollHeightBefore;
+        window.scrollTo({ top: scrollYBefore + heightDiff, behavior: "instant" });
+
+        return true;
     },
 
     /**
@@ -841,11 +979,24 @@ export const reader = {
             // Set the page changing flag
             isPageChanging = true;
 
-            // Disable scrolling
-            disableScroll();
-
             // Reset the deltaY history
             lastDeltaYs = [];
+
+            // In infinite scroll mode, append/prepend content instead of replacing
+            if (CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE) {
+                requestAnimationFrame(() => {
+                    if (isAtBottom) {
+                        this._appendNextPageContent();
+                    } else {
+                        this._prependPrevPageContent();
+                    }
+                    isPageChanging = false;
+                });
+                return;
+            }
+
+            // Disable scrolling
+            disableScroll();
 
             // Animate the page turn
             requestAnimationFrame(() => {

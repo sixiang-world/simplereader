@@ -103,6 +103,9 @@ export const EpubReader = {
         const currentFileName = CONFIG.VARS.FILENAME;
         const bookData = this._bookInputData;
 
+        // Tear down old infinite scroll listener
+        this._teardownEpubInfiniteScroll();
+
         // Destroy current rendition
         if (this._rendition) {
             try { this._rendition.destroy(); } catch (e) { /* ignore */ }
@@ -125,6 +128,71 @@ export const EpubReader = {
                     console.warn("[EpubReader] Could not restore position after flow change:", e);
                 }
             }
+        }
+
+        // Update pagination visibility after toggle
+        this._updatePaginationVisibility();
+    },
+
+    /**
+     * Set up infinite scroll auto-advance for EPUB scrolled-doc mode.
+     * When the user scrolls to the bottom of the current section,
+     * automatically advance to the next section (chapter) — waterfall effect.
+     * @private
+     */
+    _setupEpubInfiniteScroll() {
+        if (!CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE || !this._rendition) return;
+
+        // Clean up existing listener
+        this._teardownEpubInfiniteScroll();
+
+        // Check scroll position inside the EPUB iframe and auto-advance
+        const checkScrollAndAdvance = () => {
+            if (!CONFIG.VARS.IS_EPUB || !this._rendition) return;
+            if (!CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE) {
+                this._teardownEpubInfiniteScroll();
+                return;
+            }
+
+            const container = document.getElementById("epub-reader-container");
+            if (!container) return;
+
+            // Find the iframe inside the container
+            const iframe = container.querySelector("iframe");
+            if (!iframe) return;
+
+            try {
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                if (!iframeDoc) return;
+
+                const scrollTop = iframeDoc.documentElement.scrollTop || iframeDoc.body.scrollTop;
+                const scrollHeight = iframeDoc.documentElement.scrollHeight || iframeDoc.body.scrollHeight;
+                const clientHeight = iframeDoc.documentElement.clientHeight || iframeDoc.body.clientHeight;
+
+                // If scrolled to near the bottom (within 150px), advance to next section
+                if (scrollTop + clientHeight >= scrollHeight - 150) {
+                    this._rendition.next();
+                }
+            } catch (e) {
+                // Cross-origin iframe — can't access scroll position
+                // In this case, epub.js handles scrolled-doc flow natively
+            }
+        };
+
+        // Poll scroll position at intervals (more reliable than events for iframes)
+        this._infiniteScrollInterval = setInterval(checkScrollAndAdvance, 500);
+
+        console.log("[EpubReader] Infinite scroll auto-advance enabled");
+    },
+
+    /**
+     * Tear down infinite scroll auto-advance
+     * @private
+     */
+    _teardownEpubInfiniteScroll() {
+        if (this._infiniteScrollInterval) {
+            clearInterval(this._infiniteScrollInterval);
+            this._infiniteScrollInterval = null;
         }
     },
 
@@ -345,6 +413,9 @@ export const EpubReader = {
         }
 
         console.log(`[EpubReader] Book opened: "${CONFIG.VARS.EPUB_TITLE}" by ${CONFIG.VARS.EPUB_AUTHOR}`);
+
+        // Set up infinite scroll auto-advance if enabled
+        this._setupEpubInfiniteScroll();
     },
 
     /**
@@ -416,6 +487,10 @@ export const EpubReader = {
 
         this._currentCfi = "";
         this._bookInputData = null;
+
+        // Tear down infinite scroll
+        this._teardownEpubInfiniteScroll();
+
         this._hideEpubContainer();
 
         // Clear TOC
