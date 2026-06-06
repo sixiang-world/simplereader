@@ -281,8 +281,14 @@ export class FileHandler {
                     showContent();
 
                     // Save EPUB book to bookshelf/database
+                    // Use FileReader instead of File.arrayBuffer() for browser compatibility
                     try {
-                        const epubArrayBuffer = await epubFile.arrayBuffer();
+                        const epubArrayBuffer = await new Promise((resolve, reject) => {
+                            const fileReader = new FileReader();
+                            fileReader.onload = () => resolve(fileReader.result);
+                            fileReader.onerror = () => reject(new Error("Failed to read EPUB file"));
+                            fileReader.readAsArrayBuffer(epubFile);
+                        });
                         cbReg.go("saveProcessedBook", {
                             name: epubFile.name,
                             is_epub: true,

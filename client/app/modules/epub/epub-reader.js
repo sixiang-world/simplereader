@@ -90,7 +90,6 @@ export const EpubReader = {
         }
         this._initialized = true;
         this._setupKeyboardNavigation();
-        this._setupResizeHandler();
         console.log("[EpubReader] Initialized");
     },
 
@@ -131,169 +130,171 @@ export const EpubReader = {
      * @private
      */
     async _openBookInternal(input, fileName) {
-            // Destroy previous book if any
-            await this.closeBook();
+        // Destroy previous book if any
+        await this.closeBook();
 
-            // Show the EPUB container, hide the TXT reader
-            this._showEpubContainer();
+        // Show the EPUB container, hide the TXT reader
+        this._showEpubContainer();
 
-            // Create the Book instance
-            // Read File as ArrayBuffer using FileReader for compatibility
-            let bookInput;
-            if (input instanceof File) {
-                bookInput = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result);
-                    reader.onerror = () => reject(new Error("Failed to read file"));
-                    reader.readAsArrayBuffer(input);
-                });
-                console.log(`[EpubReader] Read File via FileReader (${(bookInput.byteLength / 1024).toFixed(1)}KB)`);
-            } else {
-                bookInput = input;
+        // Create the Book instance
+        // Read File as ArrayBuffer using FileReader for compatibility
+        let bookInput;
+        if (input instanceof File) {
+            bookInput = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error("Failed to read file"));
+                reader.readAsArrayBuffer(input);
+            });
+            console.log(`[EpubReader] Read File via FileReader (${(bookInput.byteLength / 1024).toFixed(1)}KB)`);
+        } else {
+            bookInput = input;
+        }
+
+        console.log("[EpubReader] Creating ePub book...");
+        this._book = ePub(bookInput);
+        CONFIG.VARS.EPUB_BOOK = this._book;
+        CONFIG.VARS.IS_EPUB = true;
+        CONFIG.VARS.FILENAME = fileName;
+        CONFIG.VARS.IS_BOOK_OPENED = true;
+
+        console.log("[EpubReader] Waiting for book.ready...");
+        await this._book.ready;
+        console.log("[EpubReader] Book ready, loading metadata...");
+
+        // Get metadata
+        const metadata = await this._book.loaded.metadata;
+        CONFIG.VARS.EPUB_TITLE = metadata.title || fileName.replace(/\.epub$/i, "");
+        CONFIG.VARS.EPUB_AUTHOR = metadata.creator || "";
+        CONFIG.VARS.BOOK_AND_AUTHOR = {
+            bookName: CONFIG.VARS.EPUB_TITLE,
+            author: CONFIG.VARS.EPUB_AUTHOR,
+            bookNameRE: CONFIG.VARS.EPUB_TITLE,
+            authorRE: CONFIG.VARS.EPUB_AUTHOR,
+        };
+
+        // Set document title
+        document.title = CONFIG.VARS.EPUB_TITLE;
+
+        // Get navigation/TOC
+        const navigation = await this._book.loaded.navigation;
+        CONFIG.VARS.EPUB_TOC = navigation.toc || [];
+
+        console.log("[EpubReader] Navigation loaded, rendering book...");
+
+        // Render the book
+        const container = document.getElementById("epub-reader-container");
+        if (!container) {
+            console.error("[EpubReader] Container element not found");
+            return;
+        }
+
+        this._rendition = this._book.renderTo(container, {
+            width: "100%",
+            height: "100%",
+            spread: "none",
+            flow: "paginated",
+        });
+
+        CONFIG.VARS.EPUB_RENDITION = this._rendition;
+
+        // Detect current theme from document
+        const currentTheme = document.documentElement.getAttribute("data-theme");
+        this._currentTheme = currentTheme === "dark" ? "dark" : "light";
+
+        // Apply current theme
+        this._applyTheme();
+
+        // Set up location tracking BEFORE display to catch the initial page
+        this._rendition.on("relocated", (location) => {
+            this._onLocationChanged(location);
+        });
+
+        // Set up click handlers for internal links
+        this._rendition.on("click", (e) => {
+            // Hide any open popups or settings when clicking in the reader
+            if (CONFIG.VARS.IS_SETTINGS_MENU_SHOWN) {
+                cbReg.go("toggleSettingsMenu");
             }
+        });
 
-            console.log("[EpubReader] Creating ePub book...");
-            this._book = ePub(bookInput);
-            CONFIG.VARS.EPUB_BOOK = this._book;
-            CONFIG.VARS.IS_EPUB = true;
-            CONFIG.VARS.FILENAME = fileName;
-            CONFIG.VARS.IS_BOOK_OPENED = true;
-
-            console.log("[EpubReader] Waiting for book.ready...");
-            await this._book.ready;
-            console.log("[EpubReader] Book ready, loading metadata...");
-
-            // Get metadata
-            const metadata = await this._book.loaded.metadata;
-            CONFIG.VARS.EPUB_TITLE = metadata.title || fileName.replace(/\.epub$/i, "");
-            CONFIG.VARS.EPUB_AUTHOR = metadata.creator || "";
-            CONFIG.VARS.BOOK_AND_AUTHOR = {
-                bookName: CONFIG.VARS.EPUB_TITLE,
-                author: CONFIG.VARS.EPUB_AUTHOR,
-                bookNameRE: CONFIG.VARS.EPUB_TITLE,
-                authorRE: CONFIG.VARS.EPUB_AUTHOR,
-            };
-
-            // Set document title
-            document.title = CONFIG.VARS.EPUB_TITLE;
-
-            // Get navigation/TOC
-            const navigation = await this._book.loaded.navigation;
-            CONFIG.VARS.EPUB_TOC = navigation.toc || [];
-
-            console.log("[EpubReader] Navigation loaded, rendering book...");
-
-            // Render the book
-            const container = document.getElementById("epub-reader-container");
-            if (!container) {
-                console.error("[EpubReader] Container element not found");
-                return;
+        // Generate location map for percentage calculation
+        try {
+            if (this._book.locations) {
+                await Promise.race([
+                    this._book.locations.generate(1024),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 10000))
+                ]);
+                console.log("[EpubReader] Locations generated");
             }
+        } catch (e) {
+            console.warn("[EpubReader] Could not generate locations:", e.message || e);
+        }
 
-            this._rendition = this._book.renderTo(container, {
-                width: "100%",
-                height: "100%",
-                spread: "none",
-                flow: "paginated",
-            });
+        console.log("[EpubReader] Displaying first page...");
 
-            CONFIG.VARS.EPUB_RENDITION = this._rendition;
-
-            // Detect current theme from document
-            const currentTheme = document.documentElement.getAttribute("data-theme");
-            this._currentTheme = currentTheme === "dark" ? "dark" : "light";
-
-            // Apply current theme
-            this._applyTheme();
-
-            // Set up location tracking BEFORE display to catch the initial page
-            this._rendition.on("relocated", (location) => {
-                this._onLocationChanged(location);
-            });
-
-            // Set up click handlers for internal links
-            this._rendition.on("click", (e) => {
-                // Hide any open popups or settings when clicking in the reader
-                if (CONFIG.VARS.IS_SETTINGS_MENU_SHOWN) {
-                    cbReg.go("toggleSettingsMenu");
-                }
-            });
-
-            // Generate location map for percentage calculation
+        // Display the first page or restore position
+        const savedCfi = this._getSavedPosition(fileName);
+        if (savedCfi) {
             try {
-                if (this._book.locations) {
-                    await Promise.race([
-                        this._book.locations.generate(1024),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 10000))
-                    ]);
-                    console.log("[EpubReader] Locations generated");
-                }
+                await this._rendition.display(savedCfi);
             } catch (e) {
-                console.warn("[EpubReader] Could not generate locations:", e.message || e);
-            }
-
-            console.log("[EpubReader] Displaying first page...");
-
-            // Display the first page or restore position
-            const savedCfi = this._getSavedPosition(fileName);
-            if (savedCfi) {
-                try {
-                    await this._rendition.display(savedCfi);
-                } catch (e) {
-                    console.warn("[EpubReader] Failed to restore position, starting from beginning:", e);
-                    await this._rendition.display();
-                }
-            } else {
+                console.warn("[EpubReader] Failed to restore position, starting from beginning:", e);
                 await this._rendition.display();
             }
+        } else {
+            await this._rendition.display();
+        }
 
-            // Generate TOC
-            this._renderTOC();
+        // Generate TOC
+        this._renderTOC();
 
-            // Update progress display
-            this._updateProgressDisplay();
+        // Update progress display
+        this._updateProgressDisplay();
 
-            // Save to bookshelf (IndexedDB)
-            try {
-                cbReg.go("saveProcessedBook", {
-                    name: fileName,
-                    is_epub: true,
-                    is_eastern_lan: CONFIG.VARS.IS_EASTERN_LAN,
-                    encoding: "utf-8",
-                    bookAndAuthor: CONFIG.VARS.BOOK_AND_AUTHOR,
-                    title_page_line_number_offset: 0,
-                    seal_rotate_en: "0deg",
-                    seal_left: 0,
-                    file_content_chunks: [],
-                    all_titles: [],
-                    all_titles_ind: {},
-                    footnotes: [],
-                    footnote_processed_counter: 0,
-                    page_breaks: [],
-                    total_pages: 0,
-                    epubCfi: this._currentCfi || "",
-                });
-            } catch (e) {
-                console.warn("[EpubReader] Could not save to bookshelf:", e);
-            }
+        // Save to bookshelf (IndexedDB)
+        try {
+            cbReg.go("saveProcessedBook", {
+                name: fileName,
+                is_epub: true,
+                is_eastern_lan: CONFIG.VARS.IS_EASTERN_LAN,
+                encoding: "utf-8",
+                bookAndAuthor: CONFIG.VARS.BOOK_AND_AUTHOR,
+                title_page_line_number_offset: 0,
+                seal_rotate_en: "0deg",
+                seal_left: 0,
+                file_content_chunks: [],
+                all_titles: [],
+                all_titles_ind: {},
+                footnotes: [],
+                footnote_processed_counter: 0,
+                page_breaks: [],
+                total_pages: 0,
+                epubCfi: this._currentCfi || "",
+            });
+        } catch (e) {
+            console.warn("[EpubReader] Could not save to bookshelf:", e);
+        }
 
-            console.log(`[EpubReader] Book opened: "${CONFIG.VARS.EPUB_TITLE}" by ${CONFIG.VARS.EPUB_AUTHOR}`);
+        console.log(`[EpubReader] Book opened: "${CONFIG.VARS.EPUB_TITLE}" by ${CONFIG.VARS.EPUB_AUTHOR}`);
     },
 
     /**
      * Open an EPUB book from an ArrayBuffer (for bookshelf restore)
      * @param {ArrayBuffer} arrayBuffer - The EPUB file data
      * @param {string} fileName - The filename
-     * @param {Object} metadata - Book metadata
+     * @param {Object} metadata - Book metadata (epubCfi takes priority over localStorage position)
      * @public
      */
     async openBookFromBuffer(arrayBuffer, fileName, metadata = {}) {
         await this.openBook(arrayBuffer, fileName);
 
-        // Restore saved position if available
+        // Restore saved position from metadata if available (takes priority over localStorage)
         if (metadata.epubCfi) {
             try {
                 await this._rendition.display(metadata.epubCfi);
+                // Also update localStorage to keep them in sync
+                this._savePosition(fileName, metadata.epubCfi);
             } catch (e) {
                 console.warn("[EpubReader] Could not restore saved position:", e);
             }
@@ -793,23 +794,38 @@ export const EpubReader = {
         });
 
         // Mouse wheel navigation (scrolling over the EPUB container)
+        // epub.js renders content inside an iframe, so wheel events from the
+        // iframe's document are dispatched on the parent document instead.
+        // We listen on the document level and check if the EPUB reader is active,
+        // rather than relying on e.target which won't match iframe content.
         let wheelTimeout = null;
         document.addEventListener("wheel", (e) => {
             if (!CONFIG.VARS.IS_EPUB || !this._rendition) return;
             // Don't handle wheel if target is inside TOC sidebar
-            if (e.target.closest("#epub-toc-sidebar")) return;
+            if (e.target.closest && e.target.closest("#epub-toc-sidebar")) return;
+            // Don't handle wheel if target is outside the EPUB reader area
+            const container = document.getElementById("epub-reader-container");
+            if (!container) return;
+
+            // Check if the wheel event is within the EPUB reader area.
+            // iframe content's wheel events bubble to the parent document with
+            // e.target being the iframe element or the container itself.
+            const isInReader = container.contains(e.target) || e.target === container;
+            // Also check by position: if the EPUB reader wrapper is visible and
+            // the event coordinates fall within it, treat as reader wheel event.
+            // This catches iframe-originated wheel events where e.target is wrong.
+            const wrapper = document.getElementById("epub-reader-wrapper");
+            let isInReaderArea = isInReader;
+            if (!isInReaderArea && wrapper && wrapper.style.display !== "none") {
+                const rect = wrapper.getBoundingClientRect();
+                isInReaderArea = e.clientX >= rect.left && e.clientX <= rect.right &&
+                                e.clientY >= rect.top && e.clientY <= rect.bottom;
+            }
+            if (!isInReaderArea) return;
 
             // Throttle wheel events
             if (wheelTimeout) return;
             wheelTimeout = setTimeout(() => { wheelTimeout = null; }, 300);
-
-            const container = document.getElementById("epub-reader-container");
-            if (!container) return;
-
-            // Check if the wheel target is inside the EPUB iframe
-            // epub.js renders content inside an iframe within the container
-            const isInReader = container.contains(e.target) || e.target === container;
-            if (!isInReader) return;
 
             e.preventDefault();
 
@@ -819,22 +835,6 @@ export const EpubReader = {
                 this.prevPage();
             }
         }, { passive: false });
-    },
-
-    /**
-     * Set up resize handler for the rendition
-     * @private
-     */
-    _setupResizeHandler() {
-        let resizeTimeout;
-        window.addEventListener("resize", () => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                if (this._rendition) {
-                    // Resize is handled automatically by epub.js
-                }
-            }, 250);
-        });
     },
 
     /**
@@ -854,18 +854,12 @@ export const EpubReader = {
 
     /**
      * Get the total number of locations (pages)
-     * @returns {Promise<number>}
+     * @returns {number}
      * @public
      */
-    async getTotalLocations() {
-        if (!this._book) return 0;
-        try {
-            const locations = await this._book.locations.generate(1024);
-            return this._book.locations.length();
-        } catch (e) {
-            console.warn("[EpubReader] Could not generate locations:", e);
-            return 0;
-        }
+    getTotalLocations() {
+        if (!this._book || !this._book.locations) return 0;
+        return this._book.locations.length();
     },
 };
 
