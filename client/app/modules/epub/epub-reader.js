@@ -951,7 +951,7 @@ export const EpubReader = {
      */
     _setupKeyboardNavigation() {
         // Keyboard navigation
-        document.addEventListener("keydown", (e) => {
+        document.addEventListener("keydown", async (e) => {
             if (!CONFIG.VARS.IS_EPUB || !this._rendition) return;
 
             // Don't handle if focused on input
@@ -985,7 +985,7 @@ export const EpubReader = {
                 case "Escape":
                     if (CONFIG.CONST_CONFIG.SHORTCUTS.esc) {
                         e.preventDefault();
-                        this.closeBook();
+                        await this.closeBook();
                         cbReg.go("resetUI", { refreshBookshelf: true });
                     }
                     break;

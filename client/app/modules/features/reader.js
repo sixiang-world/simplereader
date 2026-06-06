@@ -1226,6 +1226,11 @@ export function initReader() {
             Escape: (e) => {
                 if (CONFIG.CONST_CONFIG.SHORTCUTS.esc) {
                     e.preventDefault();
+                    // If EPUB is open, let the EPUB reader's own keydown handler
+                    // take care of closeBook + resetUI. Avoid double-firing.
+                    if (CONFIG.VARS.IS_EPUB) {
+                        return;
+                    }
                     cbReg.go("resetUI", {
                         refreshBookshelf: true,
                         hardRefresh: true,

@@ -383,6 +383,17 @@ export async function resetUI(
 
     resetVars();
     cbReg.go("closeBook");
+
+    // Clean up EPUB reader UI if it was left open
+    const epubWrapper = document.getElementById("epub-reader-wrapper");
+    if (epubWrapper) epubWrapper.style.display = "none";
+    const epubSidebar = document.getElementById("epub-toc-sidebar");
+    if (epubSidebar) epubSidebar.style.display = "none";
+    const epubPagination = document.getElementById("epub-pagination");
+    if (epubPagination) epubPagination.style.display = "none";
+    // Restore TXT sidebar splitview
+    const tocSplitview = document.querySelector(".sidebar-splitview-outer");
+    if (tocSplitview) tocSplitview.style.display = "";
     cbReg.go("updateUILanguage", {
         lang: CONFIG.RUNTIME_VARS.WEB_LANG,
         saveToLocalStorage: true,
