@@ -4,6 +4,31 @@
  */
 
 /* ============================================
+   EPUB Bookshelf Badge
+   ============================================ */
+.epub-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background-color: rgba(26, 115, 232, 0.9);
+    color: #fff;
+    font-size: 0.65em;
+    font-weight: 700;
+    font-family: "ui", "LXGW WenKai Screen", "Noto Sans SC", sans-serif;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+    pointer-events: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .epub-badge {
+    background-color: rgba(108, 158, 247, 0.9);
+}
+
+/* ============================================
    EPUB Reader Wrapper - Main Container
    ============================================ */
 #epub-reader-wrapper {

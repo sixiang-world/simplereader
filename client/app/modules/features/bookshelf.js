@@ -1093,9 +1093,11 @@ const bookshelf = {
         } else {
             htmlTag = "div";
         }
+        const isEpub = bookInfo.name.toLowerCase().endsWith(".epub");
         const book = $(
             `<div class="book" data-filename="${bookInfo.name}">
                 <div class="cover-container">
+                    ${isEpub ? '<div class="epub-badge">EPUB</div>' : ''}
                     <div class="cover-hidden-text-container">
                         <span class="cover-hidden-text">${bookInfo.name}</span>
                         <span class="cover-hidden-text bookName">${currentBookNameAndAuthor.bookName}</span>

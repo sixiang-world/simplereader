@@ -19,6 +19,7 @@ import * as CONFIG from "../../config/index.js";
 import { ICONS } from "../../config/icons.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 import { TextProcessor } from "../text/text-processor.js";
+import { EpubReader } from "../epub/epub-reader.js";
 import { getFootnotes } from "./footnotes.js";
 import { MessageIndicator } from "../components/message-indicator.js";
 import {
@@ -1023,7 +1024,12 @@ export function initReader() {
      */
     window.isKeyboardNavigation = false;
     cbReg.add("toggleInfiniteScroll", () => {
+        // Handle TXT reader infinite scroll
         reader.toggleInfiniteScroll();
+        // Handle EPUB reader infinite scroll
+        if (CONFIG.VARS.IS_EPUB) {
+            EpubReader.toggleInfiniteScroll();
+        }
     });
 
     /**

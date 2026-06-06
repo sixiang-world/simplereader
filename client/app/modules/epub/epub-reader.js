@@ -22,6 +22,21 @@ import * as CONFIG from "../../config/index.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 
 /**
+ * Helper: Read a File as ArrayBuffer using FileReader (browser compatible)
+ * @param {File} file - The file to read
+ * @returns {Promise<ArrayBuffer>}
+ * @private
+ */
+function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+/**
  * EPUB Reader module
  * @public
  * @namespace
@@ -68,6 +83,51 @@ export const EpubReader = {
      * @private
      */
     _fontSize: 1.2,
+
+    /**
+     * Toggle infinite scroll mode for EPUB reader
+     * Re-renders the book with the appropriate flow mode
+     * @public
+     */
+    async toggleInfiniteScroll() {
+        if (!this.isBookOpen() || !this._book) return;
+
+        const isInfiniteScrollMode = CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE;
+        const targetFlow = isInfiniteScrollMode ? "scrolled-doc" : "paginated";
+
+        console.log(`[EpubReader] Switching flow to: ${targetFlow}`);
+
+        // Save current position
+        const currentCfi = this._currentCfi;
+        const currentFileName = CONFIG.VARS.FILENAME;
+        const currentTheme = this._currentTheme;
+        const currentFontSize = this._fontSize;
+        const bookData = this._bookInputData;
+
+        // Destroy current rendition
+        if (this._rendition) {
+            try { this._rendition.destroy(); } catch (e) { /* ignore */ }
+            this._rendition = null;
+        }
+        if (this._book) {
+            try { this._book.destroy(); } catch (e) { /* ignore */ }
+            this._book = null;
+        }
+
+        // Re-open the book with new flow mode
+        if (bookData && currentFileName) {
+            await this.openBook(bookData, currentFileName);
+
+            // Restore position if we had one
+            if (currentCfi && this._rendition) {
+                try {
+                    await this._rendition.display(currentCfi);
+                } catch (e) {
+                    console.warn("[EpubReader] Could not restore position after flow change:", e);
+                }
+            }
+        }
+    },
 
     /**
      * Check if epub.js is available
@@ -140,16 +200,14 @@ export const EpubReader = {
         // Read File as ArrayBuffer using FileReader for compatibility
         let bookInput;
         if (input instanceof File) {
-            bookInput = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = () => reject(new Error("Failed to read file"));
-                reader.readAsArrayBuffer(input);
-            });
+            bookInput = await readFileAsArrayBuffer(input);
             console.log(`[EpubReader] Read File via FileReader (${(bookInput.byteLength / 1024).toFixed(1)}KB)`);
         } else {
             bookInput = input;
         }
+
+        // Store the raw data for bookshelf save (needed when opening from File)
+        this._bookInputData = bookInput;
 
         console.log("[EpubReader] Creating ePub book...");
         this._book = ePub(bookInput);
@@ -189,12 +247,18 @@ export const EpubReader = {
             return;
         }
 
+        // Use scrolled-doc flow for infinite scroll mode, paginated otherwise
+        const isInfiniteScrollMode = CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE;
+        const flowMode = isInfiniteScrollMode ? "scrolled-doc" : "paginated";
+
         this._rendition = this._book.renderTo(container, {
             width: "100%",
             height: "100%",
             spread: "none",
-            flow: "paginated",
+            flow: flowMode,
         });
+
+        console.log(`[EpubReader] Render mode: ${flowMode}${isInfiniteScrollMode ? " (infinite scroll)" : ""}`);
 
         CONFIG.VARS.EPUB_RENDITION = this._rendition;
 
@@ -270,6 +334,7 @@ export const EpubReader = {
                 footnote_processed_counter: 0,
                 page_breaks: [],
                 total_pages: 0,
+                data: this._bookInputData || undefined,
                 epubCfi: this._currentCfi || "",
             });
         } catch (e) {
@@ -309,6 +374,19 @@ export const EpubReader = {
         // Save current position before closing
         if (this._rendition && CONFIG.VARS.FILENAME) {
             this._savePosition(CONFIG.VARS.FILENAME, this._currentCfi);
+
+            // Also sync position to IndexedDB for bookshelf restore
+            if (this._currentCfi) {
+                try {
+                    cbReg.go("saveProcessedBook", {
+                        name: CONFIG.VARS.FILENAME,
+                        is_epub: true,
+                        epubCfi: this._currentCfi,
+                    });
+                } catch (e) {
+                    // Ignore - book may not be in DB yet
+                }
+            }
         }
 
         if (this._rendition) {
@@ -334,6 +412,7 @@ export const EpubReader = {
         CONFIG.VARS.IS_EPUB = false;
 
         this._currentCfi = "";
+        this._bookInputData = null;
         this._hideEpubContainer();
 
         // Clear TOC
@@ -666,10 +745,28 @@ export const EpubReader = {
         if (txtContent) txtContent.style.display = "none";
         if (txtPagination) txtPagination.style.display = "none";
 
-        // Show EPUB pagination
+        // Show EPUB pagination (hide prev/next buttons in scrolled mode)
         const epubPagination = document.getElementById("epub-pagination");
         if (epubPagination) {
             epubPagination.style.display = "flex";
+        }
+        this._updatePaginationVisibility();
+    },
+
+    /**
+     * Update pagination button visibility based on flow mode
+     * In scrolled (infinite scroll) mode, hide prev/next buttons
+     * @private
+     */
+    _updatePaginationVisibility() {
+        const isInfiniteScrollMode = CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE;
+        const prevBtn = document.getElementById("epub-prev-btn");
+        const nextBtn = document.getElementById("epub-next-btn");
+        if (prevBtn) {
+            prevBtn.style.display = isInfiniteScrollMode ? "none" : "flex";
+        }
+        if (nextBtn) {
+            nextBtn.style.display = isInfiniteScrollMode ? "none" : "flex";
         }
     },
 
