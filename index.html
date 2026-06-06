@@ -66,6 +66,7 @@
         <link rel="stylesheet" type="text/css" href="./client/css/reader-splitview.css" crossorigin="anonymous" />
         <link rel="stylesheet" type="text/css" href="./client/css/reader.css" crossorigin="anonymous" />
         <link rel="stylesheet" type="text/css" href="./client/css/footnotes.css" crossorigin="anonymous" />
+        <link rel="stylesheet" type="text/css" href="./client/css/epub-reader.css" crossorigin="anonymous" />
         <link rel="stylesheet" type="text/css" href="./client/css/settings.css" crossorigin="anonymous" />
 
         <!-- Manifest -->
@@ -262,6 +263,65 @@
             <div class="sidebar-splitview-dragTooltip" hidden></div>
         </div>
 
+        <!-- EPUB Reader Container -->
+        <div id="epub-reader-wrapper">
+            <!-- EPUB TOC Sidebar -->
+            <div id="epub-toc-sidebar">
+                <div class="epub-toc-header">目录</div>
+                <div id="epub-toc-list"></div>
+                <!-- EPUB Reading progress -->
+                <div id="epub-sidebar-progress" class="uifont prevent-select">
+                    <span id="epub-progress-title"></span>
+                    <br />
+                    <span id="epub-progress-content"></span>
+                </div>
+            </div>
+
+            <!-- EPUB Content Area -->
+            <div id="epub-reader-container">
+                <!-- Loading overlay -->
+                <div id="epub-loading-overlay">
+                    <div style="text-align: center;">
+                        <div class="epub-loading-spinner"></div>
+                        <div class="epub-loading-text">Loading EPUB...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- EPUB Sidebar Toggle Button -->
+        <button id="epub-sidebar-toggle" title="Toggle TOC">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12h18M3 6h18M3 18h18" />
+            </svg>
+        </button>
+
+        <!-- EPUB Pagination Controls -->
+        <div id="epub-pagination" class="uifont prevent-select">
+            <button class="epub-nav-btn" id="epub-prev-btn" title="Previous Page">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6" />
+                </svg>
+            </button>
+
+            <div id="epub-font-controls">
+                <button class="epub-font-btn" id="epub-font-decrease" title="Decrease Font Size">A-</button>
+                <button class="epub-font-btn" id="epub-font-increase" title="Increase Font Size">A+</button>
+            </div>
+
+            <div class="epub-progress-track" id="epub-progress-track">
+                <div class="epub-progress-fill" id="epub-progress-fill" style="width: 0%"></div>
+            </div>
+
+            <span id="epub-progress-percentage">0%</span>
+
+            <button class="epub-nav-btn" id="epub-next-btn" title="Next Page">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6" />
+                </svg>
+            </button>
+        </div>
+
         <!-- Button group -->
         <div id="main-btn-wrapper" class="main-btn-group">
             <!-- Dark mode toggle -->
@@ -313,6 +373,7 @@
         <script type="text/javascript" src="./client/app/lib/sweetalert2.js" crossorigin="anonymous"></script>
         <script type="text/javascript" src="./client/app/lib/hyperlist.js" crossorigin="anonymous"></script>
         <script type="text/javascript" src="./client/app/lib/ipad-cursor.js" crossorigin="anonymous"></script>
+        <script type="text/javascript" src="./client/app/lib/epub.min.js" crossorigin="anonymous"></script>
 
         <!-- Main entry point -->
         <script type="module" src="./client/app/app.js"></script>

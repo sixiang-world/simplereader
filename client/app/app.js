@@ -24,6 +24,8 @@ import { initBookshelf } from "./modules/features/bookshelf.js";
 import { initFontpool } from "./modules/features/fontpool.js";
 import { initSettings } from "./modules/features/settings.js";
 import { initReader } from "./modules/features/reader.js";
+import { initEpubReader } from "./modules/epub/epub-reader.js";
+import { EpubReader } from "./modules/epub/epub-reader.js";
 import { FileHandler } from "./modules/file/file-handler.js";
 import { SidebarSplitView } from "./modules/components/sidebar-splitview.js";
 import {
@@ -138,6 +140,9 @@ import {
     if (window.consoleTime) console.time("[time][background] Initialize Reader");
     initReader();
     if (window.consoleTime) console.timeEnd("[time][background] Initialize Reader");
+    if (window.consoleTime) console.time("[time][background] Initialize EPUB Reader");
+    initEpubReader();
+    if (window.consoleTime) console.timeEnd("[time][background] Initialize EPUB Reader");
     if (window.consoleTime) console.time("[time][background] Initialize Settings");
     initSettings();
     if (window.consoleTime) console.timeEnd("[time][background] Initialize Settings");
@@ -184,6 +189,7 @@ onReady(() => {
     setupDarkModeToggleListener();
     setupDropzoneListeners();
     setupUIEventListeners();
+    setupEpubControls();
     if (window.consoleTime) console.timeEnd("[time] Setup Event Listeners");
 
     /**
@@ -583,6 +589,69 @@ function setupUIEventListeners() {
 }
 
 /**
+ * Set up event listeners for EPUB reader controls
+ */
+function setupEpubControls() {
+    // Previous page button
+    const prevBtn = document.getElementById("epub-prev-btn");
+    if (prevBtn) {
+        prevBtn.addEventListener("click", () => EpubReader.prevPage());
+    }
+
+    // Next page button
+    const nextBtn = document.getElementById("epub-next-btn");
+    if (nextBtn) {
+        nextBtn.addEventListener("click", () => EpubReader.nextPage());
+    }
+
+    // Font size controls
+    const fontDecrease = document.getElementById("epub-font-decrease");
+    if (fontDecrease) {
+        fontDecrease.addEventListener("click", () => EpubReader.decreaseFontSize());
+    }
+
+    const fontIncrease = document.getElementById("epub-font-increase");
+    if (fontIncrease) {
+        fontIncrease.addEventListener("click", () => EpubReader.increaseFontSize());
+    }
+
+    // Progress bar click to jump
+    const progressTrack = document.getElementById("epub-progress-track");
+    if (progressTrack) {
+        progressTrack.addEventListener("click", (e) => {
+            const rect = progressTrack.getBoundingClientRect();
+            const percentage = (e.clientX - rect.left) / rect.width;
+            if (EpubReader._book && EpubReader._book.locations) {
+                const cfi = EpubReader._book.locations.cfiFromPercentage(percentage);
+                if (cfi) {
+                    EpubReader.gotoCfi(cfi);
+                }
+            }
+        });
+    }
+
+    // Sidebar toggle for mobile
+    const sidebarToggle = document.getElementById("epub-sidebar-toggle");
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener("click", () => {
+            const sidebar = document.getElementById("epub-toc-sidebar");
+            if (sidebar) {
+                sidebar.classList.toggle("epub-sidebar-open");
+            }
+        });
+    }
+
+    // Listen for dark mode changes to update EPUB reader
+    const darkModeToggle = CONFIG.DOM_ELEMENT.DARK_MODE_TOGGLE;
+    if (darkModeToggle) {
+        const originalHandler = darkModeToggle.onchange;
+        darkModeToggle.addEventListener("change", (e) => {
+            EpubReader.setDarkMode(e.target.checked);
+        });
+    }
+}
+
+/**
  * Opens a file selector dialog for choosing text files
  * @param {Event} e - The triggering event
  */
@@ -592,7 +661,7 @@ function openFileSelector(e) {
     // Define the file selector
     const fileSelector = document.createElement("input");
     fileSelector.type = "file";
-    fileSelector.accept = CONFIG.CONST_FONT.SUPPORTED_FONT_EXT.concat(CONFIG.CONST_FILE.SUPPORTED_FILE_EXT).join(",");
+    fileSelector.accept = CONFIG.CONST_FONT.SUPPORTED_FONT_EXT.concat(CONFIG.CONST_FILE.SUPPORTED_FILE_EXT).concat([CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT]).join(",");
     fileSelector.multiple = true;
 
     // Activate overlay before opening file dialog

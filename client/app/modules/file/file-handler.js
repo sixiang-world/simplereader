@@ -66,6 +66,7 @@ import {
     setTitle,
 } from "../../utils/helpers-reader.js";
 import { validateFontFile } from "../../utils/helpers-fonts.js";
+import { EpubReader } from "../epub/epub-reader.js";
 
 /**
  * @class FileHandler
@@ -141,7 +142,16 @@ export class FileHandler {
         // Processing input files
         const allFiles = Array.from(fileList);
         let txtFiles = allFiles.filter((file) => file.type === CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE);
-        const otherFiles = allFiles.filter((file) => file.type !== CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE);
+        // Separate EPUB files from other files
+        const epubFiles = allFiles.filter((file) =>
+            CONFIG.CONST_FILE.SUPPORTED_EPUB_MIME_TYPES.includes(file.type) ||
+            file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT)
+        );
+        const otherFiles = allFiles.filter((file) =>
+            file.type !== CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE &&
+            !CONFIG.CONST_FILE.SUPPORTED_EPUB_MIME_TYPES.includes(file.type) &&
+            !file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT)
+        );
         // const fontFiles = allFiles.filter((file) => CONFIG.CONST_FONT.SUPPORTED_FONT_TYPES.includes(file.type));
 
         // Validate font files
@@ -235,6 +245,95 @@ export class FileHandler {
             });
         }
 
+        // Handle EPUB files
+        if (epubFiles.length > 0) {
+            // Handle EPUB file size limit
+            const largeEpubFiles = epubFiles.filter((file) => file.size > CONFIG.CONST_FILE.MAX_EPUB_FILE_SIZE);
+            const validEpubFiles = epubFiles.filter((file) => file.size <= CONFIG.CONST_FILE.MAX_EPUB_FILE_SIZE);
+
+            if (largeEpubFiles.length > 0) {
+                PopupManager.showNotification({
+                    iconName: "WRONG_FILE_TYPE",
+                    iconColor: "error",
+                    text: constructNotificationMessageFromArray(
+                        CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_fileSizeLimit,
+                        largeEpubFiles.map((file) => file.name),
+                        {
+                            language: getCurrentDisplayLanguage(),
+                            maxItems: 3,
+                            messageSuffix: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_andMore,
+                        }
+                    ),
+                });
+            }
+
+            // Open the first valid EPUB file
+            if (validEpubFiles.length > 0) {
+                try {
+                    resetVars();
+                    const epubFile = validEpubFiles[0];
+                    setIsFromLocal(epubFile.name, true);
+                    setBookLastReadTimestamp(epubFile.name);
+
+                    await EpubReader.openBook(epubFile, epubFile.name);
+                    hideDropZone(false);
+                    hideLoadingScreen(false);
+                    showContent();
+
+                    // Save EPUB book to bookshelf/database
+                    try {
+                        const epubArrayBuffer = await epubFile.arrayBuffer();
+                        cbReg.go("saveProcessedBook", {
+                            name: epubFile.name,
+                            is_epub: true,
+                            is_eastern_lan: CONFIG.VARS.IS_EASTERN_LAN,
+                            encoding: "utf-8",
+                            bookAndAuthor: CONFIG.VARS.BOOK_AND_AUTHOR,
+                            title_page_line_number_offset: 0,
+                            seal_rotate_en: "0deg",
+                            seal_left: 0,
+                            file_content_chunks: [],
+                            all_titles: [],
+                            all_titles_ind: {},
+                            footnotes: [],
+                            footnote_processed_counter: 0,
+                            page_breaks: [],
+                            total_pages: 0,
+                            data: epubArrayBuffer,
+                            epubCfi: "",
+                        });
+                    } catch (saveError) {
+                        console.warn("Could not save EPUB to bookshelf:", saveError);
+                    }
+
+                    PopupManager.showNotification({
+                        iconName: "BOOK",
+                        text: constructNotificationMessageFromArray(
+                            CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_bookAdded,
+                            [epubFile.name],
+                            {
+                                language: getCurrentDisplayLanguage(),
+                                maxItems: 3,
+                                messageSuffix: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_andMore,
+                            }
+                        ),
+                    });
+
+                    return;
+                } catch (error) {
+                    console.error("Error opening EPUB file:", error);
+                    PopupManager.showNotification({
+                        iconName: "WRONG_FILE_TYPE",
+                        iconColor: "error",
+                        text: `Failed to open EPUB: ${error.message}`,
+                    });
+                    resetDropZoneState();
+                    hideLoadingScreen();
+                    return;
+                }
+            }
+        }
+
         // Handle text file size limit
         const largeTxtFiles = txtFiles.filter((file) => file.size > CONFIG.CONST_FILE.MAX_FILE_SIZE);
         if (largeTxtFiles.length > 0) {
@@ -257,7 +356,7 @@ export class FileHandler {
         }
 
         // Check if there are no valid files
-        if (txtFiles.length === 0 && fontFiles.length === 0 && fileList.length > 0) {
+        if (txtFiles.length === 0 && fontFiles.length === 0 && epubFiles.length === 0 && fileList.length > 0) {
             // Hide loading screen
             resetDropZoneState();
             hideLoadingScreen();
@@ -442,6 +541,34 @@ export class FileHandler {
         }
 
         /** Start processing */
+        // Check if this is an EPUB file
+        const isEpubFile = fileList.length > 0 && (
+            CONFIG.CONST_FILE.SUPPORTED_EPUB_MIME_TYPES.includes(fileList[0].type) ||
+            fileList[0].name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT)
+        );
+
+        if (isEpubFile) {
+            // Route EPUB files to the EPUB reader
+            try {
+                resetVars();
+                await EpubReader.openBook(fileList[0], fileList[0].name);
+                hideDropZone(false);
+                hideLoadingScreen(false);
+                showContent();
+                return;
+            } catch (error) {
+                console.error("Error opening EPUB file:", error);
+                PopupManager.showNotification({
+                    iconName: "WRONG_FILE_TYPE",
+                    iconColor: "error",
+                    text: `Failed to open EPUB: ${error.message}`,
+                });
+                resetDropZoneState();
+                hideLoadingScreen();
+                return;
+            }
+        }
+
         if (!fileList.length || fileList[0].type !== CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE) {
             PopupManager.showNotification({
                 iconName: "WRONG_FILE_TYPE",
@@ -670,6 +797,39 @@ export class FileHandler {
      */
     static async handleProcessedBook(book) {
         // console.log("Processed book: ", book);
+
+        // Check if this is an EPUB book
+        if (book && book.is_epub) {
+            // EPUB book - open with EpubReader
+            try {
+                hideDropZone();
+                hideContent();
+                showLoadingScreen();
+
+                resetVars();
+
+                // For EPUB, we need to re-read the file from the database
+                // and pass it to EpubReader
+                if (book.data) {
+                    await EpubReader.openBook(book.data, book.name);
+                } else if (book.epubCfi) {
+                    // If we only have a saved CFI but no data, we need the raw file
+                    // This case shouldn't normally happen - the bookshelf should store the raw file
+                    console.warn("[EpubReader] EPUB book data not available for restore");
+                }
+
+                hideDropZone(false);
+                hideLoadingScreen(false);
+                showContent();
+                return;
+            } catch (error) {
+                console.error("Error opening EPUB from bookshelf:", error);
+                resetDropZoneState();
+                hideLoadingScreen();
+                return;
+            }
+        }
+
         if (book && book?.processed) {
             // Show loading screen
             hideDropZone();

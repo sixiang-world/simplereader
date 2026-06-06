@@ -12,10 +12,16 @@
  */
 
 /**
- * Supported file extensions
+ * Supported file extensions for text files
  * @type {string}
  */
 const SUPPORTED_FILE_EXT = ".txt";
+
+/**
+ * Supported EPUB file extension
+ * @type {string}
+ */
+const SUPPORTED_EPUB_EXT = ".epub";
 
 /**
  * Supported font extensions
@@ -96,9 +102,13 @@ export const CONST_FILE = Object.freeze({
     LOOKUP_SAMPLE_SMALL: 4096,
     LOOKUP_SAMPLE: 65536,
     MAX_FILE_SIZE: 1024 * 1024 * 128, // 128MB
+    MAX_EPUB_FILE_SIZE: 1024 * 1024 * 256, // 256MB for EPUB
     SUPPORTED_FILE_EXT,
-    EXT_REGEX: new RegExp(`(${SUPPORTED_FILE_EXT}|${SUPPORTED_FONT_EXT.join("|")})$`, "i"),
+    SUPPORTED_EPUB_EXT,
+    EXT_REGEX: new RegExp(`(${SUPPORTED_FILE_EXT}|${SUPPORTED_EPUB_EXT}|${SUPPORTED_FONT_EXT.join("|")})$`, "i"),
     SUPPORTED_FILE_TYPE: "text/plain",
+    SUPPORTED_EPUB_TYPE: "application/epub+zip",
+    SUPPORTED_EPUB_MIME_TYPES: ["application/epub+zip", "application/zip", "application/x-zip-compressed"],
     AUTHOR_TOKEN_ZH: "作者",
     AUTHOR_TOKEN_EN: " by ",
     BOOKNAME_TOKEN_ZH: "书名",

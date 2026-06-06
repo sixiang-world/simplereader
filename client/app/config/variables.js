@@ -103,6 +103,24 @@ class AppVariables {
         this.SETTINGS_INITIALIZED = false;
         /** @type {boolean} Whether custom fonts are loaded */
         this.CUSTOM_FONTS_LOADED = false;
+
+        // EPUB-related variables
+        /** @type {boolean} Whether current book is EPUB format */
+        this.IS_EPUB = false;
+        /** @type {Object|null} EPUB.js Book instance */
+        this.EPUB_BOOK = null;
+        /** @type {Object|null} EPUB.js Rendition instance */
+        this.EPUB_RENDITION = null;
+        /** @type {string} EPUB current CFI location */
+        this.EPUB_CURRENT_CFI = "";
+        /** @type {number} EPUB current location percentage */
+        this.EPUB_PERCENTAGE = 0;
+        /** @type {Array} EPUB table of contents */
+        this.EPUB_TOC = [];
+        /** @type {string} EPUB book title from metadata */
+        this.EPUB_TITLE = "";
+        /** @type {string} EPUB book author from metadata */
+        this.EPUB_AUTHOR = "";
     }
 
     /**
@@ -135,6 +153,19 @@ class AppVariables {
         this.TITLE_PAGE_LINE_NUMBER_OFFSET = 0;
         this.IS_PROCESSING = false;
         this.IS_BOOK_OPENED = false;
+
+        // Reset EPUB-related variables
+        this.IS_EPUB = false;
+        if (this.EPUB_BOOK) {
+            this.EPUB_BOOK.destroy();
+        }
+        this.EPUB_BOOK = null;
+        this.EPUB_RENDITION = null;
+        this.EPUB_CURRENT_CFI = "";
+        this.EPUB_PERCENTAGE = 0;
+        this.EPUB_TOC = [];
+        this.EPUB_TITLE = "";
+        this.EPUB_AUTHOR = "";
     }
 }
 
