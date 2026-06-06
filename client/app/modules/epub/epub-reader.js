@@ -138,11 +138,16 @@ export const EpubReader = {
             this._showEpubContainer();
 
             // Create the Book instance
-            // Convert File to ArrayBuffer first (epub.js handles ArrayBuffer more reliably)
+            // Read File as ArrayBuffer using FileReader for compatibility
             let bookInput;
             if (input instanceof File) {
-                bookInput = await input.arrayBuffer();
-                console.log(`[EpubReader] Converted File to ArrayBuffer (${(bookInput.byteLength / 1024).toFixed(0)}KB)`);
+                bookInput = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(new Error("Failed to read file"));
+                    reader.readAsArrayBuffer(input);
+                });
+                console.log(`[EpubReader] Read File via FileReader (${(bookInput.byteLength / 1024).toFixed(1)}KB)`);
             } else {
                 bookInput = input;
             }
