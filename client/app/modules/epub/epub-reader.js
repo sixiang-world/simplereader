@@ -100,8 +100,6 @@ export const EpubReader = {
         // Save current position
         const currentCfi = this._currentCfi;
         const currentFileName = CONFIG.VARS.FILENAME;
-        const currentTheme = this._currentTheme;
-        const currentFontSize = this._fontSize;
         const bookData = this._bookInputData;
 
         // Destroy current rendition
@@ -891,13 +889,13 @@ export const EpubReader = {
         });
 
         // Mouse wheel navigation (scrolling over the EPUB container)
-        // epub.js renders content inside an iframe, so wheel events from the
-        // iframe's document are dispatched on the parent document instead.
-        // We listen on the document level and check if the EPUB reader is active,
-        // rather than relying on e.target which won't match iframe content.
+        // Only applies in paginated mode — in scrolled-doc mode, the browser
+        // handles native scrolling and we must NOT intercept wheel events.
         let wheelTimeout = null;
         document.addEventListener("wheel", (e) => {
             if (!CONFIG.VARS.IS_EPUB || !this._rendition) return;
+            // Don't intercept wheel in scrolled-doc mode (infinite scroll)
+            if (CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE) return;
             // Don't handle wheel if target is inside TOC sidebar
             if (e.target.closest && e.target.closest("#epub-toc-sidebar")) return;
             // Don't handle wheel if target is outside the EPUB reader area

@@ -120,8 +120,14 @@ class BookshelfDB extends DBManager {
         // Get the language of the book
         let isEastern = data.isEastern ?? null;
         let encoding = data.encoding ?? null;
-        if (isEastern === null || encoding === null) {
+        // For EPUB files, skip language detection (binary format, not text)
+        const isEpub = data instanceof ArrayBuffer || (data?.type && CONFIG.CONST_FILE.SUPPORTED_EPUB_MIME_TYPES.includes(data.type)) || (typeof name === "string" && name.toLowerCase().endsWith(".epub"));
+        if (!isEpub && (isEastern === null || encoding === null)) {
             ({ isEastern, encoding } = await TextProcessor.getLanguageAndEncodingFromBook(data));
+        }
+        if (isEpub) {
+            isEastern = false;
+            encoding = "utf-8";
         }
 
         try {
@@ -848,7 +854,9 @@ const bookshelf = {
             // console.log("saveBook: ", file);
             // console.log("file.type: ", file.type);
             // console.log("CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE: ", CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE);
-            if (file.type === CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE) {
+            if (file.type === CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE ||
+                CONFIG.CONST_FILE.SUPPORTED_EPUB_MIME_TYPES.includes(file.type) ||
+                file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT)) {
                 if (file[this._CACHE_FLAG_]) {
                     // console.log("Openning cache-book, so not save.");
                 } else {
@@ -2394,6 +2402,19 @@ const bookshelf = {
 
             // Listen for saveProcessedBook event
             cbReg.add("saveProcessedBook", async (e) => {
+                // For EPUB books, ensure the book exists in DB first
+                // (EPUB files don't go through the normal fileBefore→saveBook→putBook flow)
+                if (e.is_epub) {
+                    const exists = await this.db.isBookExist(e.name);
+                    if (!exists) {
+                        try {
+                            await this.db.putBook(e.name, e.data || new ArrayBuffer(0), true, false);
+                        } catch (putError) {
+                            console.warn("[Bookshelf] Could not put EPUB book to DB:", putError);
+                            return;
+                        }
+                    }
+                }
                 await this.db.updateProcessedBook(e.name, e);
             });
 

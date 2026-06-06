@@ -95,6 +95,65 @@ export class FileHandler {
     static #processingComplete = false;
 
     /**
+     * Save an EPUB book to the bookshelf/database
+     * Reads the file via FileReader and saves metadata + raw data
+     * @param {File} epubFile - The EPUB File object
+     * @private
+     */
+    static async #saveEpubToBookshelf(epubFile) {
+        try {
+            // Use FileReader instead of File.arrayBuffer() for browser compatibility
+            const epubArrayBuffer = await new Promise((resolve, reject) => {
+                const fileReader = new FileReader();
+                fileReader.onload = () => resolve(fileReader.result);
+                fileReader.onerror = () => reject(new Error("Failed to read EPUB file"));
+                fileReader.readAsArrayBuffer(epubFile);
+            });
+            cbReg.go("saveProcessedBook", {
+                name: epubFile.name,
+                is_epub: true,
+                is_eastern_lan: CONFIG.VARS.IS_EASTERN_LAN,
+                encoding: "utf-8",
+                bookAndAuthor: CONFIG.VARS.BOOK_AND_AUTHOR,
+                title_page_line_number_offset: 0,
+                seal_rotate_en: "0deg",
+                seal_left: 0,
+                file_content_chunks: [],
+                all_titles: [],
+                all_titles_ind: {},
+                footnotes: [],
+                footnote_processed_counter: 0,
+                page_breaks: [],
+                total_pages: 0,
+                data: epubArrayBuffer,
+                epubCfi: EpubReader.getCurrentCfi() || "",
+            });
+        } catch (saveError) {
+            console.warn("Could not save EPUB to bookshelf:", saveError);
+        }
+    }
+
+    /**
+     * Show notification for book added
+     * @param {string} fileName - The file name to show in notification
+     * @private
+     */
+    static #showBookAddedNotification(fileName) {
+        PopupManager.showNotification({
+            iconName: "BOOK",
+            text: constructNotificationMessageFromArray(
+                CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_bookAdded,
+                [fileName],
+                {
+                    language: getCurrentDisplayLanguage(),
+                    maxItems: 3,
+                    messageSuffix: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_andMore,
+                }
+            ),
+        });
+    }
+
+    /**
      * Mark database save complete
      */
     static markDBSaveComplete() {
@@ -281,49 +340,9 @@ export class FileHandler {
                     showContent();
 
                     // Save EPUB book to bookshelf/database
-                    // Use FileReader instead of File.arrayBuffer() for browser compatibility
-                    try {
-                        const epubArrayBuffer = await new Promise((resolve, reject) => {
-                            const fileReader = new FileReader();
-                            fileReader.onload = () => resolve(fileReader.result);
-                            fileReader.onerror = () => reject(new Error("Failed to read EPUB file"));
-                            fileReader.readAsArrayBuffer(epubFile);
-                        });
-                        cbReg.go("saveProcessedBook", {
-                            name: epubFile.name,
-                            is_epub: true,
-                            is_eastern_lan: CONFIG.VARS.IS_EASTERN_LAN,
-                            encoding: "utf-8",
-                            bookAndAuthor: CONFIG.VARS.BOOK_AND_AUTHOR,
-                            title_page_line_number_offset: 0,
-                            seal_rotate_en: "0deg",
-                            seal_left: 0,
-                            file_content_chunks: [],
-                            all_titles: [],
-                            all_titles_ind: {},
-                            footnotes: [],
-                            footnote_processed_counter: 0,
-                            page_breaks: [],
-                            total_pages: 0,
-                            data: epubArrayBuffer,
-                            epubCfi: "",
-                        });
-                    } catch (saveError) {
-                        console.warn("Could not save EPUB to bookshelf:", saveError);
-                    }
+                    await this.#saveEpubToBookshelf(epubFile);
 
-                    PopupManager.showNotification({
-                        iconName: "BOOK",
-                        text: constructNotificationMessageFromArray(
-                            CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_bookAdded,
-                            [epubFile.name],
-                            {
-                                language: getCurrentDisplayLanguage(),
-                                maxItems: 3,
-                                messageSuffix: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_andMore,
-                            }
-                        ),
-                    });
+                    this.#showBookAddedNotification(epubFile.name);
 
                     return;
                 } catch (error) {
@@ -566,50 +585,10 @@ export class FileHandler {
                 hideLoadingScreen(false);
                 showContent();
 
-                // Save EPUB book to bookshelf/database (same as handleMultipleFiles path)
-                // Use FileReader instead of File.arrayBuffer() for browser compatibility
-                try {
-                    const epubArrayBuffer = await new Promise((resolve, reject) => {
-                        const fileReader = new FileReader();
-                        fileReader.onload = () => resolve(fileReader.result);
-                        fileReader.onerror = () => reject(new Error("Failed to read EPUB file"));
-                        fileReader.readAsArrayBuffer(epubFile);
-                    });
-                    cbReg.go("saveProcessedBook", {
-                        name: epubFile.name,
-                        is_epub: true,
-                        is_eastern_lan: CONFIG.VARS.IS_EASTERN_LAN,
-                        encoding: "utf-8",
-                        bookAndAuthor: CONFIG.VARS.BOOK_AND_AUTHOR,
-                        title_page_line_number_offset: 0,
-                        seal_rotate_en: "0deg",
-                        seal_left: 0,
-                        file_content_chunks: [],
-                        all_titles: [],
-                        all_titles_ind: {},
-                        footnotes: [],
-                        footnote_processed_counter: 0,
-                        page_breaks: [],
-                        total_pages: 0,
-                        data: epubArrayBuffer,
-                        epubCfi: EpubReader.getCurrentCfi() || "",
-                    });
-                } catch (saveError) {
-                    console.warn("Could not save EPUB to bookshelf:", saveError);
-                }
+                // Save EPUB book to bookshelf/database
+                await this.#saveEpubToBookshelf(epubFile);
 
-                PopupManager.showNotification({
-                    iconName: "BOOK",
-                    text: constructNotificationMessageFromArray(
-                        CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_bookAdded,
-                        [epubFile.name],
-                        {
-                            language: getCurrentDisplayLanguage(),
-                            maxItems: 3,
-                            messageSuffix: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_andMore,
-                        }
-                    ),
-                });
+                this.#showBookAddedNotification(epubFile.name);
 
                 return;
             } catch (error) {
