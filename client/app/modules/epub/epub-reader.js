@@ -177,6 +177,26 @@ export const EpubReader = {
             // Apply current theme
             this._applyTheme();
 
+            // Set up location tracking BEFORE display to catch the initial page
+            this._rendition.on("relocated", (location) => {
+                this._onLocationChanged(location);
+            });
+
+            // Set up click handlers for internal links
+            this._rendition.on("click", (e) => {
+                // Hide any open popups or settings when clicking in the reader
+                if (CONFIG.VARS.IS_SETTINGS_MENU_SHOWN) {
+                    cbReg.go("toggleSettingsMenu");
+                }
+            });
+
+            // Generate location map for percentage calculation
+            try {
+                await this._book.locations.generate(1024);
+            } catch (e) {
+                console.warn("[EpubReader] Could not generate locations:", e);
+            }
+
             // Display the first page or restore position
             const savedCfi = this._getSavedPosition(fileName);
             if (savedCfi) {
@@ -190,24 +210,35 @@ export const EpubReader = {
                 await this._rendition.display();
             }
 
-            // Set up location tracking
-            this._rendition.on("relocated", (location) => {
-                this._onLocationChanged(location);
-            });
-
-            // Set up click handlers for internal links
-            this._rendition.on("click", (e) => {
-                // Hide any open popups or settings when clicking in the reader
-                if (CONFIG.VARS.IS_SETTINGS_MENU_SHOWN) {
-                    cbReg.go("toggleSettingsMenu");
-                }
-            });
-
             // Generate TOC
             this._renderTOC();
 
             // Update progress display
             this._updateProgressDisplay();
+
+            // Save to bookshelf (IndexedDB)
+            try {
+                cbReg.go("saveProcessedBook", {
+                    name: fileName,
+                    is_epub: true,
+                    is_eastern_lan: CONFIG.VARS.IS_EASTERN_LAN,
+                    encoding: "utf-8",
+                    bookAndAuthor: CONFIG.VARS.BOOK_AND_AUTHOR,
+                    title_page_line_number_offset: 0,
+                    seal_rotate_en: "0deg",
+                    seal_left: 0,
+                    file_content_chunks: [],
+                    all_titles: [],
+                    all_titles_ind: {},
+                    footnotes: [],
+                    footnote_processed_counter: 0,
+                    page_breaks: [],
+                    total_pages: 0,
+                    epubCfi: this._currentCfi || "",
+                });
+            } catch (e) {
+                console.warn("[EpubReader] Could not save to bookshelf:", e);
+            }
 
             console.log(`[EpubReader] Book opened: "${CONFIG.VARS.EPUB_TITLE}" by ${CONFIG.VARS.EPUB_AUTHOR}`);
 
@@ -449,8 +480,8 @@ export const EpubReader = {
         if (location && location.start) {
             this._currentCfi = location.start.cfi;
             CONFIG.VARS.EPUB_CURRENT_CFI = this._currentCfi;
-            CONFIG.VARS.EPUB_PERCENTAGE = location.start.percentage
-                ? Math.round(location.start.percentage * 100)
+            CONFIG.VARS.EPUB_PERCENTAGE = location.start.percentage != null
+                ? Math.round(Math.max(0, Math.min(1, location.start.percentage)) * 100)
                 : 0;
 
             // Save position
@@ -675,6 +706,7 @@ export const EpubReader = {
      * @private
      */
     _setupKeyboardNavigation() {
+        // Keyboard navigation
         document.addEventListener("keydown", (e) => {
             if (!CONFIG.VARS.IS_EPUB || !this._rendition) return;
 
@@ -728,6 +760,34 @@ export const EpubReader = {
                     break;
             }
         });
+
+        // Mouse wheel navigation (scrolling over the EPUB container)
+        let wheelTimeout = null;
+        document.addEventListener("wheel", (e) => {
+            if (!CONFIG.VARS.IS_EPUB || !this._rendition) return;
+            // Don't handle wheel if target is inside TOC sidebar
+            if (e.target.closest("#epub-toc-sidebar")) return;
+
+            // Throttle wheel events
+            if (wheelTimeout) return;
+            wheelTimeout = setTimeout(() => { wheelTimeout = null; }, 300);
+
+            const container = document.getElementById("epub-reader-container");
+            if (!container) return;
+
+            // Check if the wheel target is inside the EPUB iframe
+            // epub.js renders content inside an iframe within the container
+            const isInReader = container.contains(e.target) || e.target === container;
+            if (!isInReader) return;
+
+            e.preventDefault();
+
+            if (e.deltaY > 0) {
+                this.nextPage();
+            } else if (e.deltaY < 0) {
+                this.prevPage();
+            }
+        }, { passive: false });
     },
 
     /**
