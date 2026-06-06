@@ -20,6 +20,7 @@
 
 import * as CONFIG from "../../config/index.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
+import { TextProcessor } from "../text/text-processor.js";
 
 /**
  * Helper: Read a File as ArrayBuffer using FileReader (browser compatible)
@@ -231,6 +232,10 @@ export const EpubReader = {
 
         // Set document title
         document.title = CONFIG.VARS.EPUB_TITLE;
+
+        // EPUB files are always UTF-8; detect Eastern language from metadata
+        CONFIG.VARS.ENCODING = "utf-8";
+        CONFIG.VARS.IS_EASTERN_LAN = TextProcessor.getLanguage(CONFIG.VARS.EPUB_TITLE + " " + CONFIG.VARS.EPUB_AUTHOR);
 
         // Get navigation/TOC
         const navigation = await this._book.loaded.navigation;

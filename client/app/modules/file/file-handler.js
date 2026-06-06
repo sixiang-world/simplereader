@@ -847,6 +847,16 @@ export class FileHandler {
                 // and pass it to EpubReader
                 if (book.data) {
                     await EpubReader.openBook(book.data, book.name);
+
+                    // Restore saved epubCfi position from DB
+                    // (localStorage may be cleared on different browser/device)
+                    if (book.epubCfi && EpubReader.isBookOpen()) {
+                        try {
+                            await EpubReader.gotoCfi(book.epubCfi);
+                        } catch (e) {
+                            console.warn("[EpubReader] Could not restore epubCfi from DB:", e);
+                        }
+                    }
                 } else if (book.epubCfi) {
                     // If we only have a saved CFI but no data, we need the raw file
                     // This case shouldn't normally happen - the bookshelf should store the raw file
