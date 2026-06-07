@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SimpleTextReader (易笺) — a pure TXT file reader providing an elegant reading experience. Runs as a browser extension (Chrome/Firefox/Edge), PWA, or self-hosted Docker container. Current version: 1.6.9.4.
+SimpleTextReader (易笺) — a pure TXT file reader providing an elegant reading experience. Runs as a browser extension (Chrome/Firefox/Edge), PWA, or self-hosted Docker container. Current version: 1.6.9.5.
 
 ## Commands
 
