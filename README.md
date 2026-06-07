@@ -159,17 +159,17 @@
 
 **注：如果需要直接访问拖入浏览器中的本地 txt 文件（`file://*.txt`）（相当于以前的无界面模式），需要在扩展管理界面中打开`允许访问文件 URL`**
 
-### Chrome 插件
+### Chrome 插件（原版 henryxrl）
 
-- [易笺 (v1.6.9.4)](https://chrome.google.com/webstore/detail/%E6%98%93%E7%AC%BA/dbanahlbopbjpgdkecmclbbonhpohcaf)
+- [易笺 (v1.6.9.5)](https://chrome.google.com/webstore/detail/%E6%98%93%E7%AC%BA/dbanahlbopbjpgdkecmclbbonhpohcaf)
 
-### 火狐插件
+### 火狐插件（原版 henryxrl）
 
-- [易笺 (v1.6.9.4)](https://addons.mozilla.org/zh-CN/firefox/addon/yijian/)
+- [易笺 (v1.6.9.5)](https://addons.mozilla.org/zh-CN/firefox/addon/yijian/)
 
-### Edge 插件
+### Edge 插件（原版 henryxrl）
 
-- [易笺 (v1.6.9.4)](https://microsoftedge.microsoft.com/addons/detail/pabihehbdhldbdliffaddllmjlknmpak)
+- [易笺 (v1.6.9.5)](https://microsoftedge.microsoft.com/addons/detail/pabihehbdhldbdliffaddllmjlknmpak)
 
 ### Docker
 
@@ -259,7 +259,7 @@ henryxrl/simpletextreader:latest
         <img src="assets/6_custom_fonts_zh.png" width="49%" alt="Bookshelf2" />
     </div>
 
-9. 支持网络字体（需联网使用，v1.6.9.4）。目前支持以下字体：
+9. 支持网络字体（需联网使用，v1.6.9.5）。目前支持以下字体：
 
     - 黄令东齐伋复刻体
 
