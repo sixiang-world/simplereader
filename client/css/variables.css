@@ -200,6 +200,16 @@
     --ui_infinite_scroll_mode_en: "Infinite Scrolling";
     --ui_infinite_scroll_mode_note_zh: "在页面顶部或底部继续滚动即可翻页";
     --ui_infinite_scroll_mode_note_en: "Scroll further at the top or bottom to turn the page.";
+    --ui_reader_mode_zh: "阅读模式";
+    --ui_reader_mode_en: "Reader Mode";
+    --ui_continuous_scroll_mode_zh: "连续滚动";
+    --ui_continuous_scroll_mode_en: "Continuous Scroll";
+    --ui_continuous_scroll_mode_note_zh: "多页内容连续显示，无需翻页";
+    --ui_continuous_scroll_mode_note_en: "Display multiple pages continuously without page breaks.";
+    --ui_show_line_numbers_zh: "显示行号";
+    --ui_show_line_numbers_en: "Show Line Numbers";
+    --ui_separator_reading_mode_zh: "阅读模式";
+    --ui_separator_reading_mode_en: "Reading Mode";
     --ui_show_toc_zh: "显示目录区域";
     --ui_show_toc_en: "Show TOC Area";
     --ui_show_toc_note_zh: "目录区域包括目录下方的书名和阅读进度";
@@ -653,6 +663,11 @@
     --ui_auto_open_last_book: var(--ui_auto_open_last_book_zh);
     --ui_infinite_scroll_mode: var(--ui_infinite_scroll_mode_zh);
     --ui_infinite_scroll_mode_note: var(--ui_infinite_scroll_mode_note_zh);
+    --ui_reader_mode: var(--ui_reader_mode_zh);
+    --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_zh);
+    --ui_continuous_scroll_mode_note: var(--ui_continuous_scroll_mode_note_zh);
+    --ui_show_line_numbers: var(--ui_show_line_numbers_zh);
+    --ui_separator_reading_mode: var(--ui_separator_reading_mode_zh);
     --ui_show_toc: var(--ui_show_toc_zh);
     --ui_show_toc_note: var(--ui_show_toc_note_zh);
     --ui_toc_width: var(--ui_toc_width_zh);
@@ -801,6 +816,11 @@
     --ui_auto_open_last_book: var(--ui_auto_open_last_book_en);
     --ui_infinite_scroll_mode: var(--ui_infinite_scroll_mode_en);
     --ui_infinite_scroll_mode_note: var(--ui_infinite_scroll_mode_note_en);
+    --ui_reader_mode: var(--ui_reader_mode_en);
+    --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_en);
+    --ui_continuous_scroll_mode_note: var(--ui_continuous_scroll_mode_note_en);
+    --ui_show_line_numbers: var(--ui_show_line_numbers_en);
+    --ui_separator_reading_mode: var(--ui_separator_reading_mode_en);
     --ui_show_toc: var(--ui_show_toc_en);
     --ui_show_toc_note: var(--ui_show_toc_note_en);
     --ui_toc_width: var(--ui_toc_width_en);
@@ -1015,6 +1035,21 @@
 }
 #tooltip-setting_infinite_scroll_mode::before {
     content: var(--ui_infinite_scroll_mode_note);
+}
+#settingLabel-setting_reader_mode::before {
+    content: var(--ui_reader_mode);
+}
+#settingLabel-setting_continuous_scroll_mode::before {
+    content: var(--ui_continuous_scroll_mode);
+}
+#tooltip-setting_continuous_scroll_mode::before {
+    content: var(--ui_continuous_scroll_mode_note);
+}
+#settingLabel-setting_show_line_numbers::before {
+    content: var(--ui_show_line_numbers);
+}
+#settingLabel-setting_separator_reading_mode::before {
+    content: var(--ui_separator_reading_mode);
 }
 #settingLabel-setting_show_toc::before {
     content: var(--ui_show_toc);

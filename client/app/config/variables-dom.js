@@ -116,6 +116,8 @@ export const RUNTIME_VARS = {
  * @property {HTMLElement} PROGRESS_CONTAINER - Progress container (getter)
  * @property {HTMLElement} PROGRESS_TITLE - Progress title element (getter)
  * @property {HTMLElement} PROGRESS_CONTENT - Progress content element (getter)
+ * @property {HTMLElement} PROGRESS_BAR_CONTAINER - Progress bar container element (getter)
+ * @property {HTMLInputElement} PROGRESS_BAR - Progress bar range input element (getter)
  * @property {HTMLElement} FOOTNOTE_CONTAINER - Footnote container (getter)
  * @property {HTMLElement} MAIN_BTN_WRAPPER - Main button wrapper (getter)
  * @property {HTMLElement} DARK_MODE_ACTUAL_BUTTON - Dark mode toggle button (getter)
@@ -188,6 +190,12 @@ export const DOM_ELEMENT = Object.freeze({
     },
     get PROGRESS_CONTENT() {
         return document.getElementById("progress-content");
+    },
+    get PROGRESS_BAR_CONTAINER() {
+        return document.getElementById("progress-bar-container");
+    },
+    get PROGRESS_BAR() {
+        return document.getElementById("progress-bar");
     },
     get FOOTNOTE_CONTAINER() {
         return document.getElementById("footnote-content");

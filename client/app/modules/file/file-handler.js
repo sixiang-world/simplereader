@@ -503,6 +503,21 @@ export class FileHandler {
             CONFIG.VARS.BOOK_AND_AUTHOR = processor.bookMetadata;
             CONFIG.VARS.FILENAME = file.name && fileList[0].name;
             CONFIG.VARS.TITLE_PAGE_LINE_NUMBER_OFFSET = processor.title_page_line_number_offset;
+
+            // Detect log mode
+            const readerMode = CONFIG.CONST_CONFIG.READER_MODE;
+            const logFilenameRE = CONFIG.CONST_CONFIG.LOG_FILENAME_RE;
+            if (readerMode === "log") {
+                CONFIG.VARS.IS_LOG_MODE = true;
+            } else if (readerMode === "auto" && logFilenameRE && logFilenameRE.test(CONFIG.VARS.FILENAME)) {
+                CONFIG.VARS.IS_LOG_MODE = true;
+            } else {
+                CONFIG.VARS.IS_LOG_MODE = false;
+            }
+            processor.logMode = CONFIG.VARS.IS_LOG_MODE;
+            if (CONFIG.VARS.IS_LOG_MODE) {
+                console.log("Log mode detected for:", CONFIG.VARS.FILENAME);
+            }
             CONFIG.RUNTIME_VARS.STYLE.seal_rotate_en = processor.seal_rotate_en;
             CONFIG.RUNTIME_VARS.STYLE.seal_left = processor.seal_left;
             setTitle(CONFIG.VARS.BOOK_AND_AUTHOR.bookName);
