@@ -159,17 +159,17 @@ Big thanks to [CataeroGong](https://github.com/cataerogong) for his amazing help
 
 **Note: To view the local text files (`file://*.txt`) directly dragged into the browser (no-ui mode), please enable "Allow access to file URLs" in the extension management page.**
 
-### Chrome
+### Chrome（original by henryxrl）
 
-- [SimpleTextReader (v1.6.9.4)](https://chrome.google.com/webstore/detail/%E6%98%93%E7%AC%BA/dbanahlbopbjpgdkecmclbbonhpohcaf)
+- [SimpleTextReader (v1.6.9.5)](https://chrome.google.com/webstore/detail/%E6%98%93%E7%AC%BA/dbanahlbopbjpgdkecmclbbonhpohcaf)
 
-### Firefox
+### Firefox（original by henryxrl）
 
-- [SimpleTextReader (v1.6.9.4)](https://addons.mozilla.org/en-US/firefox/addon/yijian/)
+- [SimpleTextReader (v1.6.9.5)](https://addons.mozilla.org/en-US/firefox/addon/yijian/)
 
-### Edge
+### Edge（original by henryxrl）
 
-- [SimpleTextReader (v1.6.9.4)](https://microsoftedge.microsoft.com/addons/detail/pabihehbdhldbdliffaddllmjlknmpak)
+- [SimpleTextReader (v1.6.9.5)](https://microsoftedge.microsoft.com/addons/detail/pabihehbdhldbdliffaddllmjlknmpak)
 
 ### Docker
 
@@ -259,7 +259,7 @@ To use URL parameters, append `?param` to the end of the URL. To use multiple pa
         <img src="assets/6_custom_fonts_en.png" width="49%" alt="Bookshelf2" />
     </div>
 
-9. Support for web fonts (requires internet connection, v1.6.9.4). The following fonts are currently supported:
+9. Support for web fonts (requires internet connection, v1.6.9.5). The following fonts are currently supported:
 
     - QIJIC
 

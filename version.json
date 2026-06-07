@@ -1,6 +1,31 @@
 {
-    "version": "1.6.9.4",
+    "version": "1.6.9.5",
     "changelog": {
+        "1.6.9.5": {
+            "date": "2026-06-08",
+            "changes": {
+                "zh": [
+                    "新增 **无限滚动模式** — 滑动窗口渲染器，滚动时动态加载/卸载页面",
+                    "新增 **全文搜索** — 支持正则搜索、前后导航、关键词高亮（快捷键 F）",
+                    "新增 **快速跳转** — 按行号或百分比跳转（快捷键 G）",
+                    "新增 **日志模式** — 跳过标题检测和排版优化，自动识别 .log 文件",
+                    "新增 **阅读进度条** — 侧边栏内垂直滑动条，支持快速定位",
+                    "新增 **行号显示** — 可切换的行号显示（设置中开启）",
+                    "新增 **阅读模式设置** — 自动/书籍/日志三种模式，页/流两种翻页模式",
+                    "其他多项 **代码优化** 和 **问题修复**"
+                ],
+                "en": [
+                    "Added **continuous scroll mode** — sliding-window renderer that loads/unloads pages as the user scrolls",
+                    "Added **full text search** — regex-enabled search with forward/backward navigation and match highlighting (F key)",
+                    "Added **quick jump** — jump by line number or percentage (G key)",
+                    "Added **log mode** — skips title detection and text optimization, auto-detects .log files",
+                    "Added **progress bar** — vertical slider in the sidebar for quick navigation",
+                    "Added **line number display** — toggleable line numbers via settings",
+                    "Added **reader mode settings** — auto/book/log modes, page/flow pagination modes",
+                    "Various other **code optimizations** and **bug fixes**"
+                ]
+            }
+        },
         "1.6.9.4": {
             "date": "2025-07-15",
             "changes": {
