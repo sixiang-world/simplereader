@@ -223,6 +223,12 @@ export const flowReader = {
             const currentLine = chunks[j];
             if (!currentLine) continue;
 
+            // Safety: skip lines whose element already exists in the DOM
+            // Prevents duplicates from sliding-window edge cases (e.g., when
+            // preloadContent and wheel events overlap at content boundaries)
+            const existingEl = CONFIG.DOM_ELEMENT.GET_LINE(j);
+            if (existingEl && content.contains(existingEl)) continue;
+
             try {
                 if (typeof currentLine === "object") {
                     const [processedContent, lineType] = TextProcessor.createDOM(currentLine);
@@ -332,9 +338,11 @@ export const flowReader = {
             }
         }
 
-        // If last line is visible, return it; otherwise return first visible
-        const maxLine = CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1;
-        return (lastVisible >= maxLine) ? lastVisible : firstVisible;
+        // In flow mode, always return the last visible line (bottom of viewport)
+        // to accurately track reading position. Using firstVisible causes the
+        // sliding window to incorrectly think we're at earlier content and
+        // triggers unnecessary full reloads or edge-case re-renders.
+        return lastVisible || firstVisible;
     },
 
     // ===== Private helpers =====
