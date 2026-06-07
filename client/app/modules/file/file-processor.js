@@ -41,6 +41,8 @@ export class FileProcessor extends FileProcessorCore {
         this.file = file;
         this.initialChunk = this.file.slice(0, this.initialChunkSize);
         this.worker = createWorker("client/app/modules/file/file-processor-worker.js", import.meta.url);
+        /** @type {boolean} Whether to process in log mode (skip title/footnote/optimize) */
+        this.logMode = false;
     }
 
     /**
@@ -85,6 +87,17 @@ export class FileProcessor extends FileProcessorCore {
      * @public
      */
     async processInitialChunk() {
+        // Log mode: skip title page and end page generation
+        if (this.logMode) {
+            this.title_page_line_number_offset = 0;
+            return await this.#processInitialChunk({
+                titlePageLines: null,
+                titlePageTitles: null,
+                endPageLines: null,
+                endPageTitles: null,
+            });
+        }
+
         // Generate title page
         const titlePageResult = await this.#generateTitlePage();
         let endPageResult = null;
@@ -108,6 +121,16 @@ export class FileProcessor extends FileProcessorCore {
      * @public
      */
     async processRemainingContent() {
+        // Log mode: skip title/end page generation
+        if (this.logMode) {
+            return await this.#processRemainingContent({
+                titlePageLines: null,
+                titlePageTitles: null,
+                endPageLines: null,
+                endPageTitles: null,
+            });
+        }
+
         // Generate title page and end page
         const titlePageResult = await this.#generateTitlePage();
         const endPageResult = await this.#generateEndPage();
@@ -169,6 +192,7 @@ export class FileProcessor extends FileProcessorCore {
             extraContent,
             title_page_line_number_offset: this.title_page_line_number_offset,
             pageBreakOnTitle: CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE,
+            logMode: this.logMode,
         });
 
         // Merge processing results

@@ -153,6 +153,35 @@ const SETTINGS_SCHEMA = [
         default: CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE_DEFAULT,
         persist: true,
     },
+    {
+        key: "reader_mode",
+        type: "select",
+        tab: "reader",
+        label: "setting_reader_mode",
+        bind: "CONFIG.CONST_CONFIG.READER_MODE",
+        default: CONFIG.CONST_CONFIG.READER_MODE_DEFAULT,
+        options: ["auto", "book", "log"],
+        optionLabels: ["自动", "书籍", "日志"],
+        persist: true,
+    },
+    {
+        key: "continuous_scroll_mode",
+        type: "checkbox",
+        tab: "reader",
+        label: "setting_continuous_scroll_mode",
+        bind: "CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE",
+        default: CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE_DEFAULT,
+        persist: true,
+    },
+    {
+        key: "show_line_numbers",
+        type: "checkbox",
+        tab: "reader",
+        label: "setting_show_line_numbers",
+        bind: "CONFIG.CONST_CONFIG.SHOW_LINE_NUMBERS",
+        default: CONFIG.CONST_CONFIG.SHOW_LINE_NUMBERS_DEFAULT,
+        persist: true,
+    },
 
     // ==== Theme Tab (Light) ====
     {
@@ -558,8 +587,13 @@ const MENU_SCHEMA = [
                 items: ["main_content_width", "show_content_boundary_lines"],
             },
             {
-                section: "setting_separator_pagination",
+                section: "setting_separator_reading_mode",
                 order: 3,
+                items: ["reader_mode", "continuous_scroll_mode", "show_line_numbers"],
+            },
+            {
+                section: "setting_separator_pagination",
+                order: 4,
                 items: ["pagination_bottom", "pagination_opacity"],
             },
         ],
@@ -1827,6 +1861,15 @@ const settings = {
 
         // Apply infinite scroll mode
         cbReg.go("toggleInfiniteScroll");
+
+        // Apply continuous scroll (flow) mode
+        cbReg.go("toggleContinuousScroll");
+
+        // Apply show line numbers
+        cbReg.go("toggleShowLineNumbers");
+
+        // Apply reader mode (book/log/auto)
+        cbReg.go("applyReaderMode");
 
         // Apply TOC area visibility
         cbReg.go("toggleTOCArea");

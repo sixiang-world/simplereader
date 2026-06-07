@@ -23,6 +23,14 @@ export class TextProcessorDOM {
     static createFromStructure(structure) {
         const { type, tag, content, lineNumber, elementType, dropCap, className } = structure;
 
+        // Helper to set data-line-num on an element
+        const setLineNum = (el) => {
+            if (lineNumber !== undefined && lineNumber !== null) {
+                el.setAttribute("data-line-num", lineNumber);
+            }
+            return el;
+        };
+
         switch (type) {
             case "title": {
                 const wrapper = document.createElement("div");
@@ -35,7 +43,7 @@ export class TextProcessorDOM {
                 this.#addTitleClickHandler(tempAnchor);
                 tempElement.innerHTML = "";
                 tempElement.appendChild(tempAnchor);
-                return [tempElement, elementType];
+                return [setLineNum(tempElement), elementType];
             }
 
             case "heading": {
@@ -47,7 +55,7 @@ export class TextProcessorDOM {
                 const tempH2 = document.createElement("h2");
                 tempH2.id = `line${lineNumber}`;
                 tempH2.appendChild(tempAnchor);
-                return [tempH2, elementType];
+                return [setLineNum(tempH2), elementType];
             }
 
             case "paragraph": {
@@ -66,7 +74,7 @@ export class TextProcessorDOM {
                 } else {
                     tempP.innerHTML = content;
                 }
-                return [tempP, elementType];
+                return [setLineNum(tempP), elementType];
             }
 
             case "empty":
@@ -74,7 +82,7 @@ export class TextProcessorDOM {
                 const tempSpan = document.createElement("span");
                 tempSpan.id = `line${lineNumber}`;
                 tempSpan.innerHTML = content;
-                return [tempSpan, elementType];
+                return [setLineNum(tempSpan), elementType];
             }
         }
     }

@@ -1,0 +1,294 @@
+/**
+ * Flow mode (continuous scroll), line numbers, log mode, progress bar, and dialog styles
+ * Ported from simplereader-enhance and adapted for cnb's sidebar-splitview layout
+ */
+
+/* ===== Progress Bar (vertical slider) ===== */
+.progress-bar {
+    position: relative;
+    width: 100%;
+    height: 8em;
+    margin-top: 0.5em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    /* ui-range param */
+    --min: 0;
+    --max: 100;
+    --step: 0.1;
+    --suffix: "%";
+    --show-min-max: none;
+    --value-font: 0.8rem var(--fontFamily_ui);
+    --prefix: "";
+    --thumb-color: var(--fontInfoColor);
+    --primary-color: var(--borderColor);
+    --progress-background: var(--borderColor);
+}
+
+.progress-bar > input[type="range"] {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    width: 1.2em;
+    height: 100%;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+.progress-bar > input[type="range"]::-webkit-slider-runnable-track {
+    width: 4px;
+    background: var(--progress-background, var(--borderColor));
+    border-radius: 2px;
+}
+
+.progress-bar > input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--thumb-color, var(--fontInfoColor));
+    margin-left: -4px;
+    cursor: pointer;
+}
+
+.progress-bar > input[type="range"]::-moz-range-track {
+    width: 4px;
+    background: var(--progress-background, var(--borderColor));
+    border-radius: 2px;
+    border: none;
+}
+
+.progress-bar > input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--thumb-color, var(--fontInfoColor));
+    border: none;
+    cursor: pointer;
+}
+
+/* Flow mode: highlight progress bar */
+[data-page-mode="flow"] .progress-bar {
+    --primary-color: var(--mainColor_active);
+    --progress-background: var(--mainColor_inactive);
+    --thumb-color: var(--mainColor_active);
+}
+
+/* Hide pagination in log mode (always uses continuous scroll) */
+[data-reader-mode="log"] #pagination {
+    display: none !important;
+}
+
+/* ===== Show line numbers ===== */
+[data-show-line-num="true"] #content > :is(div, h1, h2, p, span)::before {
+    content: "<" attr(data-line-num) ">";
+    position: absolute;
+    left: 2px;
+    text-indent: 0;
+    transform: translateY(-1.2em);
+    font-family: var(--fontFamily_ui);
+    font-size: 0.8rem;
+    color: var(--fontInfoColor);
+}
+
+/* Ensure content children are positioned for ::before */
+[data-show-line-num="true"] #content > :is(div, h1, h2, p, span) {
+    position: relative;
+}
+
+/* ===== Reader mode: log ===== */
+[data-reader-mode="log"] #content > :is(h1, h2, p, span) {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 1rem;
+    text-align: left;
+    text-indent: 0;
+    min-height: 0.1rem;
+    line-height: 1.5;
+}
+
+/* Hide TOC in log mode */
+[data-reader-mode="log"] .sidebar-splitview-sidebar {
+    display: none !important;
+}
+
+[data-reader-mode="log"] .sidebar-splitview-gap {
+    display: none !important;
+}
+
+[data-reader-mode="log"] .sidebar-splitview-content {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* Hide pagination in log mode (always uses flow) */
+[data-reader-mode="log"] #pagination {
+    display: none !important;
+}
+
+/* ===== Search Dialog ===== */
+#searchDlg {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 2em;
+    z-index: 1000;
+    background: var(--bgColor, white);
+    border: 1px solid var(--borderColor);
+    border-radius: 8px;
+    padding: 1em 1.5em;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    min-width: 300px;
+    font-family: var(--fontFamily_ui);
+}
+
+#searchDlg .search-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9em;
+    color: var(--fontColor);
+    font-weight: bold;
+}
+
+#searchDlg .search-header .close-btn {
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-size: 1.2em;
+    color: var(--fontInfoColor);
+    padding: 0 0.2em;
+}
+
+#searchDlg .search-header .close-btn:hover {
+    color: var(--fontColor);
+}
+
+#searchDlg .search-body {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+}
+
+#searchDlg .search-txt {
+    flex: 1;
+    padding: 0.4em 0.6em;
+    border: 1px solid var(--borderColor);
+    border-radius: 4px;
+    font-family: var(--fontFamily_ui);
+    font-size: 0.9em;
+    background: var(--bgColor, white);
+    color: var(--fontColor);
+    outline: none;
+}
+
+#searchDlg .search-txt:focus {
+    border-color: var(--mainColor_active);
+}
+
+#searchDlg .search-btn {
+    padding: 0.4em 0.8em;
+    border: 1px solid var(--borderColor);
+    border-radius: 4px;
+    background: var(--bgColor, white);
+    color: var(--fontColor);
+    cursor: pointer;
+    font-family: var(--fontFamily_ui);
+    font-size: 0.9em;
+}
+
+#searchDlg .search-btn:hover {
+    background: var(--mainColor_active);
+    color: white;
+    border-color: var(--mainColor_active);
+}
+
+/* Search highlight */
+#content mark {
+    background-color: aqua;
+    color: inherit;
+}
+
+/* ===== Go Line Dialog ===== */
+#goLineDlg {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 2em;
+    z-index: 1000;
+    background: var(--bgColor, white);
+    border: 1px solid var(--borderColor);
+    border-radius: 8px;
+    padding: 1em 1.5em;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    min-width: 280px;
+    font-family: var(--fontFamily_ui);
+}
+
+#goLineDlg .goline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9em;
+    color: var(--fontColor);
+    font-weight: bold;
+}
+
+#goLineDlg .goline-header .close-btn {
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-size: 1.2em;
+    color: var(--fontInfoColor);
+    padding: 0 0.2em;
+}
+
+#goLineDlg .goline-header .close-btn:hover {
+    color: var(--fontColor);
+}
+
+#goLineDlg .goline-body {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+}
+
+#goLineDlg .goline-txt {
+    flex: 1;
+    padding: 0.4em 0.6em;
+    border: 1px solid var(--borderColor);
+    border-radius: 4px;
+    font-family: var(--fontFamily_ui);
+    font-size: 0.9em;
+    background: var(--bgColor, white);
+    color: var(--fontColor);
+    outline: none;
+}
+
+#goLineDlg .goline-txt:focus {
+    border-color: var(--mainColor_active);
+}
+
+#goLineDlg .goline-btn {
+    padding: 0.4em 0.8em;
+    border: 1px solid var(--borderColor);
+    border-radius: 4px;
+    background: var(--bgColor, white);
+    color: var(--fontColor);
+    cursor: pointer;
+    font-family: var(--fontFamily_ui);
+    font-size: 0.9em;
+}
+
+#goLineDlg .goline-btn:hover {
+    background: var(--mainColor_active);
+    color: white;
+    border-color: var(--mainColor_active);
+}
