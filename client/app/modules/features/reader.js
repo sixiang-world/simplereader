@@ -38,6 +38,9 @@ import {
     showShortenedTitle,
     getCurrentTitleLineNumber,
 } from "../../utils/helpers-reader.js";
+import { flowReader } from "./flow-reader.js";
+import { search } from "./search.js";
+import { goLine } from "./go-line.js";
 
 /**
  * Reader module for handling document title, progress tracking, table of contents, and pagination.
@@ -59,6 +62,13 @@ export const reader = {
      * @private
      */
     SCROLL_EVENT_LISTENER: null,
+
+    /**
+     * Flow mode (continuous scroll) reader reference
+     * @type {Object}
+     * @public
+     */
+    flow: flowReader,
 
     /**
      * Initializes the table of contents (TOC)
@@ -225,12 +235,11 @@ export const reader = {
      */
     showCurrentPageContent() {
         try {
-            // // Update column layout based on screen aspect ratio
-            // this._updateColumnLayout();
-
-            // // Add window size change listener
-            // window.removeEventListener("resize", this._updateColumnLayout.bind(this));
-            // window.addEventListener("resize", this._updateColumnLayout.bind(this));
+            // Flow mode: delegate to flowReader
+            if (flowReader.isActive()) {
+                flowReader.enter(); // re-renders with sliding window
+                return;
+            }
 
             const contentChunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
             const maxLines = contentChunks.length;
@@ -526,6 +535,14 @@ export const reader = {
      * @public
      */
     gotoPage(page, scrollTo = "top") {
+        // Flow mode: convert page navigation to line navigation
+        if (flowReader.isActive()) {
+            const targetLine = CONFIG.VARS.PAGE_BREAKS[page - 1] || 0;
+            flowReader.gotoLine(targetLine, false);
+            GetScrollPositions(true, true);
+            return;
+        }
+
         CONFIG.VARS.CURRENT_PAGE = isNaN(page)
             ? CONFIG.VARS.CURRENT_PAGE
             : Math.max(1, Math.min(page, CONFIG.VARS.TOTAL_PAGES));
@@ -588,6 +605,17 @@ export const reader = {
      * @public
      */
     async gotoLine(lineNumber, isTitle = true) {
+        // Flow mode: delegate to flowReader
+        if (flowReader.isActive()) {
+            flowReader.gotoLine(lineNumber, isTitle);
+            if (isTitle) {
+                await setChapterTitleActive(lineNumber);
+                CONFIG.VARS.GOTO_TITLE_CLICKED = true;
+            }
+            setHistory(CONFIG.VARS.FILENAME, lineNumber);
+            return 0;
+        }
+
         // Find the page number to jump to
         // console.log(`lineNumber: ${lineNumber}, isTitle: ${isTitle}`);
 
@@ -1007,6 +1035,11 @@ export function initReader() {
                 if (isElementInContainer(target, CONTENT_CONTAINER)) {
                     if (!CONFIG.VARS.INIT) {
                         GetScrollPositions();
+                        // Flow mode: trigger sliding window preload on scroll
+                        if (flowReader.isActive()) {
+                            const curLine = flowReader.getCurrentLineNumber();
+                            flowReader.preloadContent(curLine);
+                        }
                     }
                 }
                 return;
@@ -1024,6 +1057,61 @@ export function initReader() {
     window.isKeyboardNavigation = false;
     cbReg.add("toggleInfiniteScroll", () => {
         reader.toggleInfiniteScroll();
+    });
+
+    /**
+     * Handle continuous scroll (flow) mode toggle
+     */
+    cbReg.add("toggleContinuousScroll", () => {
+        if (CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE) {
+            flowReader.enter();
+            reader.generatePagination();
+        } else {
+            const result = flowReader.exit();
+            if (result) {
+                reader.gotoPage(result.targetPage);
+            }
+        }
+    });
+
+    /**
+     * Handle flow mode page change — regenerate pagination
+     */
+    cbReg.add("flowPageChanged", (newPage) => {
+        reader.generatePagination();
+    });
+
+    /**
+     * Handle show line numbers toggle
+     */
+    cbReg.add("toggleShowLineNumbers", () => {
+        const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+        if (CONFIG.CONST_CONFIG.SHOW_LINE_NUMBERS) {
+            content.setAttribute("data-show-line-num", "true");
+        } else {
+            content.removeAttribute("data-show-line-num");
+        }
+    });
+
+    /**
+     * Handle reader mode change (book/log/auto)
+     */
+    cbReg.add("applyReaderMode", () => {
+        const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+        if (CONFIG.VARS.IS_LOG_MODE) {
+            content.setAttribute("data-reader-mode", "log");
+            // Log mode forces continuous scroll and line numbers
+            if (!CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE) {
+                CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE = true;
+                flowReader.enter();
+            }
+            if (!CONFIG.CONST_CONFIG.SHOW_LINE_NUMBERS) {
+                CONFIG.CONST_CONFIG.SHOW_LINE_NUMBERS = true;
+                content.setAttribute("data-show-line-num", "true");
+            }
+        } else {
+            content.removeAttribute("data-reader-mode");
+        }
     });
 
     /**
@@ -1058,10 +1146,14 @@ export function initReader() {
         };
 
         const navigationMap = {
-            ArrowLeft: (e) =>
-                CONFIG.CONST_CONFIG.SHORTCUTS.arrow_left ? handleNavigation(e, () => reader.gotoPrevPage(true)) : null,
-            ArrowRight: (e) =>
-                CONFIG.CONST_CONFIG.SHORTCUTS.arrow_right ? handleNavigation(e, () => reader.gotoNextPage()) : null,
+            ArrowLeft: (e) => {
+                if (flowReader.isActive()) return; // No page turns in flow mode
+                return CONFIG.CONST_CONFIG.SHORTCUTS.arrow_left ? handleNavigation(e, () => reader.gotoPrevPage(true)) : null;
+            },
+            ArrowRight: (e) => {
+                if (flowReader.isActive()) return; // No page turns in flow mode
+                return CONFIG.CONST_CONFIG.SHORTCUTS.arrow_right ? handleNavigation(e, () => reader.gotoNextPage()) : null;
+            },
             PageUp: (e) =>
                 CONFIG.CONST_CONFIG.SHORTCUTS.page_up ? handleNavigation(e, () => reader.gotoPrevChapter()) : null,
             PageDown: (e) =>
@@ -1077,6 +1169,14 @@ export function initReader() {
                     });
                 }
             },
+            f: (e) => {
+                e.preventDefault();
+                search.showDialog();
+            },
+            g: (e) => {
+                e.preventDefault();
+                goLine.showDialog();
+            },
         };
 
         const action = navigationMap[e.key];
@@ -1084,6 +1184,30 @@ export function initReader() {
             await action(e);
         }
     };
+
+    /**
+     * Handle progress bar slider input
+     */
+    const progressBar = CONFIG.DOM_ELEMENT.PROGRESS_BAR;
+    if (progressBar) {
+        progressBar.addEventListener("input", (e) => {
+            const value = parseFloat(e.target.value);
+            const totalLines = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
+            if (totalLines <= 0) return;
+
+            if (flowReader.isActive()) {
+                // Flow mode: navigate to line by percentage
+                const targetLine = Math.round((value / 100) * (totalLines - 1));
+                flowReader.gotoLine(targetLine, false);
+            } else {
+                // Page mode: scroll to percentage position
+                const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+                const scrollTarget = (value / 100) * (content.scrollHeight - content.clientHeight);
+                content.scrollTo({ top: scrollTarget, behavior: "instant" });
+            }
+            GetScrollPositions();
+        });
+    }
 
     /**
      * Handle TOC hover events for title display

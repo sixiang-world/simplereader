@@ -86,6 +86,18 @@ class AppVariables {
         /** @type {boolean} Whether the last page only contains end page */
         this.IS_LAST_PAGE_ONLY_END_PAGE = false;
 
+        // Flow mode (continuous scroll) variables
+        /** @type {number} Flow mode preloaded range start line */
+        this.FLOW_PRELOAD_BEGIN = 0;
+        /** @type {number} Flow mode preloaded range end line */
+        this.FLOW_PRELOAD_END = 0;
+        /** @type {number} Flow mode current visible line number */
+        this.FLOW_CURRENT_LINE = 0;
+
+        // Reader mode variables
+        /** @type {boolean} Whether current file uses log-mode rendering */
+        this.IS_LOG_MODE = false;
+
         // Status flags
         /** @type {boolean} Initialization flag */
         this.INIT = true;
@@ -127,6 +139,14 @@ class AppVariables {
         // Reset pagination-related variables
         this.CURRENT_PAGE = 1;
         this.TOTAL_PAGES = 0;
+
+        // Reset flow mode variables
+        this.FLOW_PRELOAD_BEGIN = 0;
+        this.FLOW_PRELOAD_END = 0;
+        this.FLOW_CURRENT_LINE = 0;
+
+        // Reset reader mode variables
+        this.IS_LOG_MODE = false;
 
         // Reset status flags
         this.INIT = true;

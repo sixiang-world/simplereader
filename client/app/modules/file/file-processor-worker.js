@@ -31,6 +31,7 @@ self.onmessage = async function (e) {
         title_page_line_number_offset = 0,
         pageBreakOnTitle = false,
         styles = null,
+        logMode = false,
     } = e.data;
     // console.group("Worker message");
     // console.log("operation: ", operation);
@@ -89,6 +90,7 @@ self.onmessage = async function (e) {
                     CONFIG,
                     encoding,
                     isInitialChunk: true,
+                    logMode,
                 });
 
                 self.postMessage({
@@ -112,6 +114,7 @@ self.onmessage = async function (e) {
                     CONFIG,
                     encoding,
                     isInitialChunk: false,
+                    logMode,
                     // progressCallback: (progress) => {
                     //     self.postMessage({
                     //         type: "processingProgress",

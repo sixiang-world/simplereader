@@ -173,6 +173,29 @@ export function GetScrollPositions(toSetHistory = true, gotoPageClicked = false)
     setProgressText(CONFIG.VARS.FILENAME, `${totalPercentage.toFixed(1).replace(".0", "")}%`);
     setIsBookFinished(CONFIG.VARS.FILENAME, isLastLineVisible);
 
+    // Update progress bar slider
+    const progressBar = CONFIG.DOM_ELEMENT.PROGRESS_BAR;
+    if (progressBar) {
+        progressBar.value = totalPercentage;
+    }
+
+    // Flow mode: update CURRENT_PAGE based on scroll position
+    if (CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE) {
+        const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
+        let newPage = 1;
+        for (let i = pageBreaks.length - 1; i >= 0; i--) {
+            if (curLineNumber >= pageBreaks[i]) {
+                newPage = i + 1;
+                break;
+            }
+        }
+        if (newPage !== CONFIG.VARS.CURRENT_PAGE) {
+            CONFIG.VARS.CURRENT_PAGE = newPage;
+            // Notify reader to regenerate pagination
+            cbReg.go("flowPageChanged", newPage);
+        }
+    }
+
     CONFIG.VARS.GOTO_TITLE_CLICKED = false;
 }
 
@@ -183,10 +206,20 @@ export function GetScrollPositions(toSetHistory = true, gotoPageClicked = false)
  * @returns {number} The reading progress percentage
  */
 function calculateReadingProgress(curLineNumber) {
+    const contentLength = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
+
+    // Flow mode: simple line-based progress
+    if (CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE && contentLength > 0) {
+        let totalPercentage = (curLineNumber / (contentLength - 1)) * 100;
+        if (curLineNumber === 0 && getScrollY() <= 5) {
+            totalPercentage = 0;
+        }
+        return totalPercentage;
+    }
+
     // Get the current page's start and end positions from break points
     const breakPoints = CONFIG.VARS.PAGE_BREAKS;
     const currentPage = CONFIG.VARS.CURRENT_PAGE;
-    const contentLength = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
 
     // Get the current page's start and end positions from break points
     const currentPageStart = breakPoints[currentPage - 1] || 0;

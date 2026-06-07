@@ -141,6 +141,7 @@ export class FileProcessorCore {
             forcePatternDetection = false,
             patternDetectionOptions = {},
             progressCallback = null,
+            logMode = false,
         } = {}
     ) {
         /**
@@ -232,6 +233,30 @@ export class FileProcessorCore {
             const tempLine = lines[i].trim();
 
             /**
+             * Log mode: skip title/footnote/optimize processing, store raw text
+             */
+            if (logMode) {
+                result.currentLineNumber++;
+                result.htmlLines.push({
+                    type: "paragraph",
+                    tag: "p",
+                    content: tempLine,
+                    charCount: tempLine.length,
+                    lineNumber: i + title_page_line_number_offset,
+                    elementType: "p",
+                });
+                if (i % 100 === 0 || i === totalLines - 1) {
+                    progressCallback?.({
+                        stage: "processing",
+                        totalLines,
+                        processedLines: i + 1,
+                        percentage: Math.round(((i + 1) / totalLines) * 100),
+                    });
+                }
+                continue;
+            }
+
+            /**
              * Process title
              */
             const [tempTitle, tempTitleGroup, tempNamedGroups, tempIsCustomOnly] = TextProcessorCore.getTitle(tempLine);
@@ -310,21 +335,21 @@ export class FileProcessorCore {
         }
 
         /**
-         * Calculate page breaks
+         * Calculate page breaks (skip in log mode — uses continuous scroll)
          */
-        // progressCallback?.({
-        //     stage: "pagination",
-        //     status: "start",
-        // });
-
-        const calculator = new PaginationCalculator(result.htmlLines, result.titles, {
-            ...CONFIG?.CONST_PAGINATION,
-            PAGE_BREAK_ON_TITLE: pageBreakOnTitle,
-            IS_EASTERN_LAN: CONFIG?.VARS?.IS_EASTERN_LAN,
-            BOOK_AND_AUTHOR: CONFIG?.VARS?.BOOK_AND_AUTHOR,
-            COMPLETE_BOOK: !isInitialChunk,
-        });
-        result.pageBreaks = calculator.calculate();
+        if (!logMode) {
+            const calculator = new PaginationCalculator(result.htmlLines, result.titles, {
+                ...CONFIG?.CONST_PAGINATION,
+                PAGE_BREAK_ON_TITLE: pageBreakOnTitle,
+                IS_EASTERN_LAN: CONFIG?.VARS?.IS_EASTERN_LAN,
+                BOOK_AND_AUTHOR: CONFIG?.VARS?.BOOK_AND_AUTHOR,
+                COMPLETE_BOOK: !isInitialChunk,
+            });
+            result.pageBreaks = calculator.calculate();
+        } else {
+            // Log mode: each line is its own "page" (single page containing all lines)
+            result.pageBreaks = [0];
+        }
 
         progressCallback?.({
             stage: "complete",
