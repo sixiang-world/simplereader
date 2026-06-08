@@ -202,10 +202,8 @@
     --ui_infinite_scroll_mode_note_en: "Scroll further at the top or bottom to turn the page.";
     --ui_reader_mode_zh: "阅读模式";
     --ui_reader_mode_en: "Reader Mode";
-    --ui_continuous_scroll_mode_zh: "连续滚动";
+    --ui_continuous_scroll_mode_zh: "自动拼接";
     --ui_continuous_scroll_mode_en: "Continuous Scroll";
-    --ui_continuous_scroll_mode_note_zh: "多页内容连续显示，无需翻页";
-    --ui_continuous_scroll_mode_note_en: "Display multiple pages continuously without page breaks.";
     --ui_show_line_numbers_zh: "显示行号";
     --ui_show_line_numbers_en: "Show Line Numbers";
     --ui_separator_reading_mode_zh: "阅读模式";
@@ -665,7 +663,6 @@
     --ui_infinite_scroll_mode_note: var(--ui_infinite_scroll_mode_note_zh);
     --ui_reader_mode: var(--ui_reader_mode_zh);
     --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_zh);
-    --ui_continuous_scroll_mode_note: var(--ui_continuous_scroll_mode_note_zh);
     --ui_show_line_numbers: var(--ui_show_line_numbers_zh);
     --ui_separator_reading_mode: var(--ui_separator_reading_mode_zh);
     --ui_show_toc: var(--ui_show_toc_zh);
@@ -818,7 +815,6 @@
     --ui_infinite_scroll_mode_note: var(--ui_infinite_scroll_mode_note_en);
     --ui_reader_mode: var(--ui_reader_mode_en);
     --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_en);
-    --ui_continuous_scroll_mode_note: var(--ui_continuous_scroll_mode_note_en);
     --ui_show_line_numbers: var(--ui_show_line_numbers_en);
     --ui_separator_reading_mode: var(--ui_separator_reading_mode_en);
     --ui_show_toc: var(--ui_show_toc_en);
@@ -1041,9 +1037,6 @@
 }
 #settingLabel-setting_continuous_scroll_mode::before {
     content: var(--ui_continuous_scroll_mode);
-}
-#tooltip-setting_continuous_scroll_mode::before {
-    content: var(--ui_continuous_scroll_mode_note);
 }
 #settingLabel-setting_show_line_numbers::before {
     content: var(--ui_show_line_numbers);

@@ -156,7 +156,7 @@ const SETTINGS_SCHEMA = [
     {
         key: "reader_mode",
         type: "select",
-        tab: "reader",
+        tab: "general",
         label: "setting_reader_mode",
         bind: "CONFIG.CONST_CONFIG.READER_MODE",
         default: CONFIG.CONST_CONFIG.READER_MODE_DEFAULT,
@@ -167,7 +167,7 @@ const SETTINGS_SCHEMA = [
     {
         key: "continuous_scroll_mode",
         type: "checkbox",
-        tab: "reader",
+        tab: "general",
         label: "setting_continuous_scroll_mode",
         bind: "CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE",
         default: CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE_DEFAULT,
@@ -176,7 +176,7 @@ const SETTINGS_SCHEMA = [
     {
         key: "show_line_numbers",
         type: "checkbox",
-        tab: "reader",
+        tab: "general",
         label: "setting_show_line_numbers",
         bind: "CONFIG.CONST_CONFIG.SHOW_LINE_NUMBERS",
         default: CONFIG.CONST_CONFIG.SHOW_LINE_NUMBERS_DEFAULT,
@@ -586,11 +586,7 @@ const MENU_SCHEMA = [
                 order: 2,
                 items: ["main_content_width", "show_content_boundary_lines"],
             },
-            {
-                section: "setting_separator_reading_mode",
-                order: 3,
-                items: ["reader_mode", "continuous_scroll_mode", "show_line_numbers"],
-            },
+
             {
                 section: "setting_separator_pagination",
                 order: 4,
@@ -611,6 +607,11 @@ const MENU_SCHEMA = [
                 section: "setting_separator_behavior",
                 order: 2,
                 items: ["auto_open_last_book", "infinite_scroll_mode"],
+            },
+            {
+                section: "setting_separator_reading_mode",
+                order: 3,
+                items: ["reader_mode", "continuous_scroll_mode", "show_line_numbers"],
             },
         ],
     },
@@ -1067,11 +1068,12 @@ class SettingsMenu {
                         el = createCheckboxItem(
                             def.label,
                             this.settingsObj.values[def.key],
-                            this.settingsObj.saveSettings.bind(this.settingsObj)
+                            this.settingsObj.saveSettings.bind(this.settingsObj),
+                            def.note || false
                         );
                         break;
                     case "select":
-                        el = createSelectorItem(def.label, def.options, def.optionLabels);
+                        el = createSelectorItem(def.label, def.options, def.optionLabels, def.note || false);
                         break;
                     case "select-font":
                         const fontSelectorArray = createFontSelectorItem(def.label);

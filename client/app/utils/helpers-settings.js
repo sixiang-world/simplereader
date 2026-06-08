@@ -68,7 +68,7 @@ export function setCSS(sel, prop, val, def) {
  * @returns {HTMLElement} Created selector element
  * @public
  */
-export function createSelectorItem(id, values, texts) {
+export function createSelectorItem(id, values, texts, note = false) {
     const settingItem = document.createElement("div");
     settingItem.setAttribute("class", "settingItem-wrapper");
 
@@ -77,6 +77,13 @@ export function createSelectorItem(id, values, texts) {
     settingItemText.setAttribute("id", `settingLabel-${id}`);
     settingItemText.onselectstart = () => false;
     settingItemText.onmousedown = () => false;
+
+    if (note) {
+        const desc = document.createElement("div");
+        desc.setAttribute("class", "settingItem-desc");
+        desc.setAttribute("id", `tooltip-${id}`);
+        settingItemText.appendChild(desc);
+    }
 
     const settingItemInput = document.createElement("select");
     settingItemInput.setAttribute("id", id);
@@ -703,11 +710,10 @@ export function createRangeItem(id, value, rangeConfig, func, note = false) {
     settingItemText.onmousedown = () => false;
 
     if (note) {
-        settingItemText.innerHTML = `<span class='tooltip-icon'>${CONFIG.RUNTIME_VARS.STYLE.ui_setting_note_indicator}</span>`;
-        const tooltip = document.createElement("div");
-        tooltip.setAttribute("class", "tooltip");
-        tooltip.setAttribute("id", `tooltip-${id}`);
-        settingItemText.appendChild(tooltip);
+        const desc = document.createElement("div");
+        desc.setAttribute("class", "settingItem-desc");
+        desc.setAttribute("id", `tooltip-${id}`);
+        settingItemText.appendChild(desc);
     }
 
     const settingItemInput = document.createElement("div");
@@ -776,11 +782,10 @@ export function createColorItem(id, value, savedValues, func, note = false) {
     };
 
     if (note) {
-        settingItemText.innerHTML = `<span class='tooltip-icon'>${CONFIG.RUNTIME_VARS.STYLE.ui_setting_note_indicator}</span>`;
-        const tooltip = document.createElement("div");
-        tooltip.setAttribute("class", "tooltip");
-        tooltip.setAttribute("id", `tooltip-${id}`);
-        settingItemText.appendChild(tooltip);
+        const desc = document.createElement("div");
+        desc.setAttribute("class", "settingItem-desc");
+        desc.setAttribute("id", `tooltip-${id}`);
+        settingItemText.appendChild(desc);
     }
 
     let settingItemInput = document.createElement("input");
@@ -821,11 +826,10 @@ export function createCheckboxItem(id, value, func, note = false) {
     settingItemText.onmousedown = () => false;
 
     if (note) {
-        settingItemText.innerHTML = `<span class='tooltip-icon'>${CONFIG.RUNTIME_VARS.STYLE.ui_setting_note_indicator}</span>`;
-        const tooltip = document.createElement("div");
-        tooltip.setAttribute("class", "tooltip");
-        tooltip.setAttribute("id", `tooltip-${id}`);
-        settingItemText.appendChild(tooltip);
+        const desc = document.createElement("div");
+        desc.setAttribute("class", "settingItem-desc");
+        desc.setAttribute("id", `tooltip-${id}`);
+        settingItemText.appendChild(desc);
     }
 
     const settingItemInput = document.createElement("label");
