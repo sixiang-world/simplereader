@@ -775,6 +775,7 @@ const bookshelf = {
                     resetVars();
                     if (
                         !book_processed ||
+                        fetchedBook?.is_epub ||
                         CONFIG.RUNTIME_CONFIG.ALWAYS_PROCESS ||
                         book_pageBreakOnTitle !== CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE ||
                         forceRefresh
