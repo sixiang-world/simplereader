@@ -83,23 +83,12 @@
 
 /* ===== Show line numbers ===== */
 #content[data-show-line-num="true"] > :is(div, h1, h2, p, span)::before {
-    content: "<" attr(data-line-num) ">";
-    float: left;
-    width: 3em;
-    margin-left: -3.5em;
-    text-align: right;
-    padding-right: 0.5em;
+    content: "<" attr(data-line-num) "> ";
     font-family: var(--fontFamily_ui);
     font-size: 0.78rem;
     color: var(--fontInfoColor);
     line-height: inherit;
-}
-
-/* Clear float after each element to prevent layout issues */
-#content[data-show-line-num="true"] > :is(div, h1, h2, p, span)::after {
-    content: "";
-    display: block;
-    clear: left;
+    white-space: nowrap;
 }
 
 /* ===== Reader mode: log ===== */
