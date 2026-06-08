@@ -208,13 +208,13 @@
     --ui_infinite_scroll_mode_en: "Infinite Scrolling";
     --ui_infinite_scroll_mode_note_zh: "在页面顶部或底部继续滚动即可翻页";
     --ui_infinite_scroll_mode_note_en: "Scroll further at the top or bottom to turn the page.";
-    --ui_reader_mode_zh: "阅读模式";
+    --ui_reader_mode_zh: "排版模式";
     --ui_reader_mode_en: "Reader Mode";
     --ui_continuous_scroll_mode_zh: "自动拼接";
     --ui_continuous_scroll_mode_en: "Continuous Scroll";
     --ui_show_line_numbers_zh: "显示行号";
     --ui_show_line_numbers_en: "Show Line Numbers";
-    --ui_separator_reading_mode_zh: "阅读模式";
+    --ui_separator_reading_mode_zh: "排版模式";
     --ui_separator_reading_mode_en: "Reading Mode";
     --ui_show_toc_zh: "显示目录区域";
     --ui_show_toc_en: "Show TOC Area";
