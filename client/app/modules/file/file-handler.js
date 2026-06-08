@@ -887,10 +887,13 @@ export class FileHandler {
 
             reader.generatePagination();
             console.log("[EPUB-handle] generatePagination done");
+            console.log("[EPUB-handle] updatePaginationCalculations...");
             updatePaginationCalculations(false);
+            console.log("[EPUB-handle] GetScrollPositions...");
             GetScrollPositions(false);
 
-            // Save to bookshelf DB
+            // Save to bookshelf DB (fire-and-forget, error is handled internally)
+            console.log("[EPUB-handle] saveProcessedBook (fire & forget)...");
             cbReg.go("saveProcessedBook", {
                 name: file.name,
                 is_epub: true,
@@ -915,13 +918,18 @@ export class FileHandler {
             FileHandler.markDBSaveComplete();
 
             // Retrieve reading history
+            console.log("[EPUB-handle] Retrieving reading history...");
             await getHistoryAndSetChapterTitleActive(reader.gotoLine.bind(reader));
+            console.log("[EPUB-handle] History retrieved");
 
             // Finalize UI
+            console.log("[EPUB-handle] Hiding loading screen...");
             hideDropZone(false);
             hideLoadingScreen(false);
             showContent();
+            console.log("[EPUB-handle] UI finalized, triggering fileAfter...");
             await cbReg.go("fileAfter");
+            console.log("[EPUB-handle] Done.");
 
             const elapsed = (performance.now() - metrics.startTime) / 1000;
             console.log(`[EPUB] Book opened in ${elapsed.toFixed(3)}s: "${bookName}" by ${author}`);
