@@ -823,9 +823,37 @@ export class FileHandler {
             CONFIG.VARS.FOOTNOTES = [];
             CONFIG.VARS.FOOTNOTE_PROCESSED_COUNTER = 0;
 
-            // Set pagination: single page (entire book continuous)
-            CONFIG.VARS.PAGE_BREAKS = [0];
-            CONFIG.VARS.TOTAL_PAGES = 1;
+            // Set pagination based on EPUB spine (chapter) boundaries
+            const MAX_LINES_PER_PAGE = 100;
+            const spineBreaks = result.spineBreaks || [0];
+            const totalLines = result.htmlLines.length;
+
+            // Refine: add sub-breaks for long spine items
+            const pageBreaks = [0];
+            for (let i = 1; i < spineBreaks.length; i++) {
+                const start = spineBreaks[i - 1];
+                const end = spineBreaks[i];
+                const length = end - start;
+
+                if (length > MAX_LINES_PER_PAGE) {
+                    // Add intermediate breaks
+                    for (let offset = MAX_LINES_PER_PAGE; offset < length; offset += MAX_LINES_PER_PAGE) {
+                        pageBreaks.push(start + offset);
+                    }
+                }
+                pageBreaks.push(end);
+            }
+            // Handle last spine item
+            const lastSpineStart = spineBreaks[spineBreaks.length - 1];
+            const lastSpineLength = totalLines - lastSpineStart;
+            if (lastSpineLength > MAX_LINES_PER_PAGE) {
+                for (let offset = MAX_LINES_PER_PAGE; offset < lastSpineLength; offset += MAX_LINES_PER_PAGE) {
+                    pageBreaks.push(lastSpineStart + offset);
+                }
+            }
+
+            CONFIG.VARS.PAGE_BREAKS = pageBreaks;
+            CONFIG.VARS.TOTAL_PAGES = pageBreaks.length;
 
             // Set title
             setTitle(bookName);
@@ -863,8 +891,8 @@ export class FileHandler {
                 all_titles_ind: result.titlesInd,
                 footnotes: [],
                 footnote_processed_counter: 0,
-                page_breaks: [0],
-                total_pages: 1,
+                page_breaks: pageBreaks,
+                total_pages: pageBreaks.length,
                 data: file,
             });
 

@@ -39,7 +39,7 @@ export class EpubConverter {
         const tocEntries = await this.#parseToc(zip, manifest, opfPath);
 
         // 5. Process spine items in order
-        const { htmlLines, titles } = await this.#processSpine(zip, spine, manifest, opfPath);
+        const { htmlLines, titles, spineBreaks } = await this.#processSpine(zip, spine, manifest, opfPath);
 
         // 6. Build titlesInd
         const titlesInd = {};
@@ -50,7 +50,7 @@ export class EpubConverter {
         const elapsed = performance.now() - t0;
         this.#logger.log(`EPUB conversion done in ${elapsed.toFixed(0)}ms: ${htmlLines.length} lines, ${titles.length} titles`);
 
-        return { htmlLines, titles, titlesInd, metadata };
+        return { htmlLines, titles, titlesInd, metadata, spineBreaks };
     }
 
     // ──────────────────────────────────────────────
@@ -228,6 +228,7 @@ export class EpubConverter {
     static async #processSpine(zip, spine, manifest, opfPath) {
         const htmlLines = [];
         const titles = [];
+        const spineBreaks = [0]; // First page always starts at 0
         let lineNumber = 0;
         for (const item of spine) {
             const filePath = this.#resolveHref(item.href, opfPath);
@@ -242,6 +243,11 @@ export class EpubConverter {
                 continue;
             }
 
+            // Record spine boundary (skip index 0 since spineBreaks already starts with 0)
+            if (lineNumber > 0) {
+                spineBreaks.push(lineNumber);
+            }
+
             const xhtml = await file.async("text");
             const result = this.#processXhtml(xhtml, lineNumber);
 
@@ -250,7 +256,7 @@ export class EpubConverter {
             lineNumber += result.elements.length;
         }
 
-        return { htmlLines, titles };
+        return { htmlLines, titles, spineBreaks };
     }
 
     /**
