@@ -21,12 +21,13 @@
             ]
         },
         {
-            "title": "排版模式",
+            "title": "日志模式",
             "folded": false,
             "content": [
-                "##自动（推荐）##：根据文件类型自动选择。检测到 **.log** 后缀自动用日志模式，其余文件用书本模式",
-                "##书本模式##：标准分页阅读，自动检测 **[]** 标记生成目录，支持跳转章节、脚注引用，适合小说、文档等结构化的 TXT 文件",
-                "##日志模式##：跳过标题检测，不做文本优化和分页，原样展示内容。适合查看 **.log** 日志文件或纯记录文本"
+                "##什么是日志模式##：等宽字体显示，隐藏目录，左对齐，不做任何过滤和替换。适合查看 **.log** 文件或纯记录文本",
+                "##如何开启##：前往设置 → 综合设置 → 开启「日志模式」开关",
+                "##自动检测##：文件名包含 **log** 字样的文件（如 server_log.txt）打开时自动启用日志模式",
+                "##注意##：开启日志模式后会自动启用自动拼接和行号显示"
             ]
         },
         {
@@ -90,12 +91,13 @@
             ]
         },
         {
-            "title": "Reader Mode",
+            "title": "Log Mode",
             "folded": false,
             "content": [
-                "##Auto (recommended)##: Automatically selects mode based on file type. Files with **.log** extension use Log mode; all other files use Book mode.",
-                "##Book Mode##: Standard paginated reading with automatic title detection via **[]** markers. Supports chapter navigation and footnotes. Best for novels, documents, and structured TXT files.",
-                "##Log Mode##: Skips title detection, text optimization, and pagination. Renders content as-is. Best for viewing **.log** files and plain records."
+                "##What is Log Mode##: Monospace font, no TOC, left-aligned, no content filtering. Best for viewing **.log** files or plain text records.",
+                "##How to Enable##: Go to Settings → General → toggle on Log Mode.",
+                "##Auto Detection##: Files with **log** in their name (e.g. server_log.txt) automatically enable log mode on open.",
+                "##Note##: Enabling Log Mode will also enable Auto-Join and Show Line Numbers."
             ]
         },
         {
