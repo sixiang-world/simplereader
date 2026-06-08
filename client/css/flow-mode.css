@@ -82,7 +82,7 @@
 }
 
 /* ===== Show line numbers ===== */
-[data-show-line-num="true"] #content > :is(div, h1, h2, p, span)::before {
+#content[data-show-line-num="true"] > :is(div, h1, h2, p, span)::before {
     content: "<" attr(data-line-num) ">";
     position: absolute;
     left: 2px;
@@ -94,7 +94,7 @@
 }
 
 /* Ensure content children are positioned for ::before */
-[data-show-line-num="true"] #content > :is(div, h1, h2, p, span) {
+#content[data-show-line-num="true"] > :is(div, h1, h2, p, span) {
     position: relative;
 }
 
