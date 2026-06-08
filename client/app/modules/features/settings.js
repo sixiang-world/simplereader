@@ -606,12 +606,12 @@ const MENU_SCHEMA = [
             {
                 section: "setting_separator_behavior",
                 order: 2,
-                items: ["auto_open_last_book", "infinite_scroll_mode"],
+                items: ["auto_open_last_book", "infinite_scroll_mode", "continuous_scroll_mode"],
             },
             {
                 section: "setting_separator_reading_mode",
                 order: 3,
-                items: ["reader_mode", "continuous_scroll_mode", "show_line_numbers"],
+                items: ["reader_mode", "show_line_numbers"],
             },
         ],
     },
