@@ -917,10 +917,14 @@ export class FileHandler {
             FileHandler.markProcessingComplete();
             FileHandler.markDBSaveComplete();
 
-            // Retrieve reading history
-            console.log("[EPUB-handle] Retrieving reading history...");
-            await getHistoryAndSetChapterTitleActive(reader.gotoLine.bind(reader));
-            console.log("[EPUB-handle] History retrieved");
+            // Retrieve reading history (skip if no titles to avoid hanging on tocRendered)
+            if (result.titles.length > 0) {
+                console.log("[EPUB-handle] Retrieving reading history...");
+                await getHistoryAndSetChapterTitleActive(reader.gotoLine.bind(reader));
+                console.log("[EPUB-handle] History retrieved");
+            } else {
+                console.log("[EPUB-handle] Skipping history (no titles in this EPUB)");
+            }
 
             // Finalize UI
             console.log("[EPUB-handle] Hiding loading screen...");
