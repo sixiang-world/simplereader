@@ -249,13 +249,29 @@ class BookshelfDB extends DBManager {
         }
 
         try {
-            const [existingBook, existingProcessedBook] = await Promise.all([
+            let [existingBook, existingProcessedBook] = await Promise.all([
                 this.get([this.#objectStoreNames.bookfiles], name),
                 this.get([this.#objectStoreNames.bookProcessed], name),
             ]);
 
+            // EPUB first save: bookfiles entry doesn't exist yet, create it
             if (!existingBook) {
-                throw new Error(`Book with name "${name}" not found in the database.`);
+                if (processedData.data) {
+                    await this.putBook(name, processedData.data, true, false);
+                    existingBook = await this.get([this.#objectStoreNames.bookfiles], name);
+                    if (existingBook) {
+                        existingBook.is_epub = processedData.is_epub || false;
+                        existingBook.processed = true;
+                        await this.put({ name, ...existingBook }, {
+                            stores: {
+                                [this.#objectStoreNames.bookfiles]: () => existingBook,
+                            },
+                        });
+                    }
+                    existingProcessedBook = await this.get([this.#objectStoreNames.bookProcessed], name);
+                } else {
+                    throw new Error(`Book with name "${name}" not found in the database.`);
+                }
             }
 
             if (!existingProcessedBook) {
