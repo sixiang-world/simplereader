@@ -68,7 +68,8 @@ export class EpubConverter {
 
         const xml = await containerFile.async("text");
         const doc = new DOMParser().parseFromString(xml, "application/xml");
-        const rootfile = doc.querySelector("rootfile");
+        // Use getElementsByTagNameNS to handle default namespace
+        const rootfile = doc.getElementsByTagNameNS("*", "rootfile")[0];
         if (!rootfile) throw new Error("Invalid EPUB: no rootfile in container.xml");
 
         return rootfile.getAttribute("full-path");
@@ -88,15 +89,18 @@ export class EpubConverter {
         const doc = new DOMParser().parseFromString(xml, "application/xml");
 
         // --- Metadata ---
+        // Use getElementsByTagNameNS to handle namespaced elements (dc:title, dc:creator)
         const metadata = {};
-        const titleEl = doc.querySelector("metadata title, metadata > *|title") || doc.getElementsByTagNameNS("*", "title")[0];
-        const creatorEl = doc.querySelector("metadata creator, metadata > *|creator") || doc.getElementsByTagNameNS("*", "creator")[0];
+        const titleEl = doc.getElementsByTagNameNS("*", "title")[0];
+        const creatorEl = doc.getElementsByTagNameNS("*", "creator")[0];
         metadata.title = titleEl?.textContent?.trim() || "";
         metadata.author = creatorEl?.textContent?.trim() || "";
 
         // --- Manifest ---
+        // Use getElementsByTagNameNS("*", ...) to handle namespaced OPF (default xmlns)
         const manifest = {};
-        const manifestItems = doc.querySelectorAll("manifest item") || doc.getElementsByTagNameNS("*", "item");
+        const manifestEl = doc.getElementsByTagNameNS("*", "manifest")[0];
+        const manifestItems = manifestEl ? manifestEl.getElementsByTagNameNS("*", "item") : doc.getElementsByTagNameNS("*", "item");
         for (const item of manifestItems) {
             const id = item.getAttribute("id");
             const href = item.getAttribute("href");
@@ -108,7 +112,8 @@ export class EpubConverter {
 
         // --- Spine ---
         const spine = [];
-        const spineItems = doc.querySelectorAll("spine itemref") || doc.getElementsByTagNameNS("*", "itemref");
+        const spineEl = doc.getElementsByTagNameNS("*", "spine")[0];
+        const spineItems = spineEl ? spineEl.getElementsByTagNameNS("*", "itemref") : doc.getElementsByTagNameNS("*", "itemref");
         for (const itemref of spineItems) {
             const idref = itemref.getAttribute("idref");
             if (idref && manifest[idref]) {
@@ -196,11 +201,12 @@ export class EpubConverter {
         const xml = await ncxFile.async("text");
         const doc = new DOMParser().parseFromString(xml, "application/xml");
 
+        // Use getElementsByTagNameNS to handle default namespace (xmlns="http://www.daisy.org/z3986/2005/ncx/")
         const entries = [];
-        const navPoints = doc.querySelectorAll("navPoint");
+        const navPoints = doc.getElementsByTagNameNS("*", "navPoint");
         for (const point of navPoints) {
-            const labelEl = point.querySelector("navLabel text");
-            const contentEl = point.querySelector("content");
+            const labelEl = point.getElementsByTagNameNS("*", "navLabel")[0]?.getElementsByTagNameNS("*", "text")[0];
+            const contentEl = point.getElementsByTagNameNS("*", "content")[0];
             if (labelEl && contentEl) {
                 const label = labelEl.textContent?.trim();
                 const src = contentEl.getAttribute("src");
