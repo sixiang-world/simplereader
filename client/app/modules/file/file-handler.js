@@ -780,6 +780,7 @@ export class FileHandler {
         const metrics = {
             startTime: performance.now(),
         };
+        console.log(`[EPUB-handle] Starting: ${file.name}`);
 
         try {
             hideDropZone();
@@ -789,11 +790,14 @@ export class FileHandler {
             CONFIG.VARS.IS_BOOK_OPENED = true;
 
             // Convert EPUB to content structure
+            console.log("[EPUB-handle] Calling EpubConverter.convert()...");
             const result = await EpubConverter.convert(file);
+            console.log(`[EPUB-handle] Convert returned: ${result.htmlLines.length} lines, ${result.titles.length} titles`);
 
             // Set metadata
             const bookName = result.metadata.title || removeFileExtension(file.name);
             const author = result.metadata.author || "";
+            console.log(`[EPUB-handle] Book: "${bookName}" by "${author}"`);
             CONFIG.VARS.BOOK_AND_AUTHOR = {
                 bookName,
                 author,
@@ -824,6 +828,7 @@ export class FileHandler {
             CONFIG.VARS.FOOTNOTE_PROCESSED_COUNTER = 0;
 
             // Set pagination based on EPUB spine (chapter) boundaries
+            console.log(`[EPUB-handle] Calculating pagination from ${spineBreaks.length} spine breaks...`);
             const MAX_LINES_PER_PAGE = 100;
             const spineBreaks = result.spineBreaks || [0];
             const totalLines = result.htmlLines.length;
