@@ -28,6 +28,9 @@ export const flowReader = {
     /** @type {boolean} Whether flow mode is currently active */
     _active: false,
 
+    /** @type {number} Content chunk length at last render (to detect content reload) */
+    _lastChunkLength: 0,
+
     /** @type {Function|null} Saved wheel event handler for infinite scroll (to restore on exit) */
     _savedWheelHandler: null,
 
@@ -35,7 +38,17 @@ export const flowReader = {
      * Enter flow mode: render content as continuous scroll
      */
     enter() {
-        if (this._active) return;
+        // If already active, check if content has changed (e.g., file reloaded)
+        // and re-render if needed. This handles the case where flow mode was
+        // activated on initial page load (with no content) before a file is opened.
+        if (this._active) {
+            const chunkLen = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
+            if (chunkLen > 0 && chunkLen !== this._lastChunkLength) {
+                this._active = false; // Force re-entry with new content
+            } else {
+                return;
+            }
+        }
         this._active = true;
 
         const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
@@ -66,6 +79,8 @@ export const flowReader = {
             targetEl.scrollIntoView({ behavior: "instant" });
         }
 
+        this._lastChunkLength = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
+
         getFootnotes();
     },
 
@@ -87,6 +102,7 @@ export const flowReader = {
         CONFIG.VARS.FLOW_PRELOAD_BEGIN = 0;
         CONFIG.VARS.FLOW_PRELOAD_END = 0;
         CONFIG.VARS.FLOW_CURRENT_LINE = 0;
+        this._lastChunkLength = 0;
 
         // Find which page contains the current line and switch to it
         const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
@@ -336,6 +352,18 @@ export const flowReader = {
                 if (firstVisible === 0) firstVisible = num;
                 lastVisible = num;
             }
+        }
+
+        // If no elements are visible (user scrolled past rendered content),
+        // estimate current line from scroll position
+        if (firstVisible === 0 && lastVisible === 0) {
+            const scrollable = content.scrollHeight - content.clientHeight;
+            if (scrollable > 0) {
+                const ratio = content.scrollTop / scrollable;
+                const maxLine = CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1;
+                return Math.round(ratio * maxLine);
+            }
+            return 0;
         }
 
         // In flow mode, always return the last visible line (bottom of viewport)
