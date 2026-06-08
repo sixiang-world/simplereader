@@ -29,6 +29,7 @@ import { reader } from "../features/reader.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { FileProcessor } from "./file-processor.js";
+import { EpubConverter } from "../epub/epub-converter.js";
 import { PopupManager } from "../components/popup-manager.js";
 import { getFootnotes } from "../features/footnotes.js";
 import {
@@ -140,8 +141,33 @@ export class FileHandler {
 
         // Processing input files
         const allFiles = Array.from(fileList);
-        let txtFiles = allFiles.filter((file) => file.type === CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE);
-        const otherFiles = allFiles.filter((file) => file.type !== CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE);
+
+        // Separate EPUB files from the rest
+        const epubFiles = allFiles.filter((file) => file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT));
+        const nonEpubFiles = allFiles.filter((file) => !file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT));
+
+        // Handle EPUB files (first one wins, same as TXT single-file behavior)
+        if (epubFiles.length > 0) {
+            resetVars();
+            const epubFile = epubFiles[0];
+            setIsFromLocal(epubFile.name, getIsFromLocal(epubFile.name) || isFromLocal);
+            setIsOnServer(epubFile.name, getIsOnServer(epubFile.name) || isOnServer);
+            setBookLastReadTimestamp(epubFile.name);
+            await FileHandler.handleEpubFile(epubFile);
+
+            // If there are also TXT files, notify user that only one type is handled at a time
+            if (nonEpubFiles.length > 0) {
+                PopupManager.showNotification({
+                    iconName: "BOOK",
+                    text: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_wrongFileType || "EPUB file opened. TXT files were ignored.",
+                    iconColor: "info",
+                });
+            }
+            return;
+        }
+
+        let txtFiles = nonEpubFiles.filter((file) => file.type === CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE);
+        const otherFiles = nonEpubFiles.filter((file) => file.type !== CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE);
         // const fontFiles = allFiles.filter((file) => CONFIG.CONST_FONT.SUPPORTED_FONT_TYPES.includes(file.type));
 
         // Validate font files
@@ -759,6 +785,186 @@ export class FileHandler {
      * @param {string} messageHeader - Message header
      * @throws {Error} If all titles and CONFIG.VARS.ALL_TITLES_IND length mismatch
      */
+
+    /**
+     * Handles an EPUB file by converting it to SimpleTextReader's content structure
+     * @param {File} file - The EPUB file
+     * @returns {Promise<void>}
+     */
+    static async handleEpubFile(file) {
+        const metrics = {
+            startTime: performance.now(),
+        };
+        console.log(`[EPUB-handle] Starting: ${file.name}`);
+
+        try {
+            hideDropZone();
+            hideContent();
+            showLoadingScreen();
+
+            CONFIG.VARS.IS_BOOK_OPENED = true;
+
+            // Convert EPUB to content structure
+            console.log("[EPUB-handle] Calling EpubConverter.convert()...");
+            const result = await EpubConverter.convert(file);
+            console.log(`[EPUB-handle] Convert returned: ${result.htmlLines.length} lines, ${result.titles.length} titles`);
+
+            // Set metadata
+            const bookName = result.metadata.title || removeFileExtension(file.name);
+            const author = result.metadata.author || "";
+            console.log(`[EPUB-handle] Book: "${bookName}" by "${author}"`);
+            CONFIG.VARS.BOOK_AND_AUTHOR = {
+                bookName,
+                author,
+                bookNameRE: bookName,
+                authorRE: author,
+            };
+            CONFIG.VARS.FILENAME = file.name;
+            // Detect language from actual content, not just title/author
+            const contentSample = result.htmlLines
+                .filter(l => l.elementType === "p" || l.elementType === "h")
+                .slice(0, 10)
+                .map(l => l.content || "")
+                .join(" ")
+                .replace(/<[^>]*>/g, "")
+                .slice(0, 500);
+            CONFIG.VARS.IS_EASTERN_LAN = TextProcessor.getLanguage(
+                (bookName + " " + author + " " + contentSample).slice(0, 1000)
+            );
+            CONFIG.VARS.ENCODING = "utf-8";
+            CONFIG.VARS.TITLE_PAGE_LINE_NUMBER_OFFSET = 0;
+
+            // Set content
+            CONFIG.VARS.FILE_CONTENT_CHUNKS = result.htmlLines;
+            CONFIG.VARS.ALL_TITLES = result.titles;
+            CONFIG.VARS.ALL_TITLES_IND = result.titlesInd;
+            FileHandler.#verifyTitleAndIndexCount("[handleEpubFile]");
+            CONFIG.VARS.FOOTNOTES = [];
+            CONFIG.VARS.FOOTNOTE_PROCESSED_COUNTER = 0;
+
+            // Set pagination based on EPUB spine (chapter) boundaries
+            const MAX_LINES_PER_PAGE = 100;
+            const spineBreaks = result.spineBreaks || [0];
+            const totalLines = result.htmlLines.length;
+            console.log(`[EPUB-handle] Calculating pagination from ${spineBreaks.length} spine breaks (${totalLines} lines)...`);
+
+            // Refine: add sub-breaks for long spine items
+            const pageBreaks = [0];
+            for (let i = 1; i < spineBreaks.length; i++) {
+                const start = spineBreaks[i - 1];
+                const end = spineBreaks[i];
+                const length = end - start;
+
+                if (length > MAX_LINES_PER_PAGE) {
+                    // Add intermediate breaks
+                    for (let offset = MAX_LINES_PER_PAGE; offset < length; offset += MAX_LINES_PER_PAGE) {
+                        pageBreaks.push(start + offset);
+                    }
+                }
+                pageBreaks.push(end);
+            }
+            // Handle last spine item
+            const lastSpineStart = spineBreaks[spineBreaks.length - 1];
+            const lastSpineLength = totalLines - lastSpineStart;
+            if (lastSpineLength > MAX_LINES_PER_PAGE) {
+                for (let offset = MAX_LINES_PER_PAGE; offset < lastSpineLength; offset += MAX_LINES_PER_PAGE) {
+                    pageBreaks.push(lastSpineStart + offset);
+                }
+            }
+
+            CONFIG.VARS.PAGE_BREAKS = pageBreaks;
+            CONFIG.VARS.TOTAL_PAGES = pageBreaks.length;
+            CONFIG.VARS.CURRENT_PAGE = 1;
+            console.log(`[EPUB-handle] Pagination: ${pageBreaks.length} pages from ${pageBreaks.length-1} spine breaks`);
+
+            // Set title
+            console.log("[EPUB-handle] Setting title...");
+            setTitle(bookName);
+
+            // Update UI language
+            console.log("[EPUB-handle] Updating UI language...");
+            cbReg.go("updateUILanguage", {
+                lang: getCurrentDisplayLanguage(),
+                saveToLocalStorage: false,
+            });
+
+            // Process TOC
+            console.log("[EPUB-handle] Processing TOC...");
+            reader.initTOC();
+            reader.processTOC();
+            console.log(`[EPUB-handle] TOC processed: ${reader.getTOCEntries?.()?.length || 'N/A'} entries`);
+
+            // Show content
+            console.log("[EPUB-handle] Rendering content...");
+            CONFIG.VARS.INIT = false;
+            reader.showCurrentPageContent();
+            console.log("[EPUB-handle] showCurrentPageContent done");
+
+            reader.generatePagination();
+            console.log("[EPUB-handle] generatePagination done");
+            console.log("[EPUB-handle] updatePaginationCalculations...");
+            updatePaginationCalculations(false);
+            console.log("[EPUB-handle] GetScrollPositions...");
+            GetScrollPositions(false);
+
+            // Save to bookshelf DB (fire-and-forget, error is handled internally)
+            console.log("[EPUB-handle] saveProcessedBook (fire & forget)...");
+            cbReg.go("saveProcessedBook", {
+                name: file.name,
+                is_epub: true,
+                processed: true,
+                is_eastern_lan: CONFIG.VARS.IS_EASTERN_LAN,
+                encoding: "utf-8",
+                bookAndAuthor: CONFIG.VARS.BOOK_AND_AUTHOR,
+                title_page_line_number_offset: 0,
+                seal_rotate_en: "",
+                seal_left: -1,
+                file_content_chunks: result.htmlLines,
+                all_titles: result.titles,
+                all_titles_ind: result.titlesInd,
+                footnotes: [],
+                footnote_processed_counter: 0,
+                page_breaks: pageBreaks,
+                total_pages: pageBreaks.length,
+                data: file,
+            });
+
+            FileHandler.markProcessingComplete();
+            FileHandler.markDBSaveComplete();
+
+            // Retrieve reading history (skip if no titles to avoid hanging on tocRendered)
+            if (result.titles.length > 0) {
+                console.log("[EPUB-handle] Retrieving reading history...");
+                await getHistoryAndSetChapterTitleActive(reader.gotoLine.bind(reader));
+                console.log("[EPUB-handle] History retrieved");
+            } else {
+                console.log("[EPUB-handle] Skipping history (no titles in this EPUB)");
+            }
+
+            // Finalize UI
+            console.log("[EPUB-handle] Hiding loading screen...");
+            hideDropZone(false);
+            hideLoadingScreen(false);
+            showContent();
+            console.log("[EPUB-handle] UI finalized, triggering fileAfter...");
+            await cbReg.go("fileAfter");
+            console.log("[EPUB-handle] Done.");
+
+            const elapsed = (performance.now() - metrics.startTime) / 1000;
+            console.log(`[EPUB] Book opened in ${elapsed.toFixed(3)}s: "${bookName}" by ${author}`);
+
+        } catch (error) {
+            CONFIG.VARS.IS_BOOK_OPENED = false;
+            await resetUI();
+            PopupManager.showNotification({
+                iconName: "ERROR",
+                text: "Failed to open EPUB file. The file may be corrupted or DRM-protected.",
+                iconColor: "error",
+            });
+            throw new Error("Error processing EPUB file: " + error);
+        }
+    }
+
     static #verifyTitleAndIndexCount(messageHeader) {
         if (CONFIG.VARS.ALL_TITLES.length !== Object.keys(CONFIG.VARS.ALL_TITLES_IND).length) {
             console.log("CONFIG.VARS.ALL_TITLES: ", CONFIG.VARS.ALL_TITLES.length, CONFIG.VARS.ALL_TITLES);
