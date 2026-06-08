@@ -154,14 +154,12 @@ const SETTINGS_SCHEMA = [
         persist: true,
     },
     {
-        key: "reader_mode",
-        type: "select",
+        key: "log_mode",
+        type: "checkbox",
         tab: "general",
-        label: "setting_reader_mode",
-        bind: "CONFIG.CONST_CONFIG.READER_MODE",
-        default: CONFIG.CONST_CONFIG.READER_MODE_DEFAULT,
-        options: ["auto", "book", "log"],
-        optionLabels: ["自动", "书籍", "日志"],
+        label: "setting_log_mode",
+        bind: "CONFIG.CONST_CONFIG.LOG_MODE",
+        default: CONFIG.CONST_CONFIG.LOG_MODE_DEFAULT,
         persist: true,
     },
     {
@@ -611,7 +609,7 @@ const MENU_SCHEMA = [
             {
                 section: "setting_separator_reading_mode",
                 order: 3,
-                items: ["reader_mode", "show_line_numbers"],
+                items: ["log_mode", "show_line_numbers"],
             },
         ],
     },

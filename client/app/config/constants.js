@@ -56,8 +56,8 @@ const SUPPORTED_FONT_EXT = [".ttf", ".otf"];
  * @property {boolean} CONTINUOUS_SCROLL_MODE - Whether to use continuous scroll (flow) mode
  * @property {boolean} CONTINUOUS_SCROLL_MODE_DEFAULT - Whether to use continuous scroll mode (default value)
  * @property {number} CONTINUOUS_SCROLL_WINDOW_SIZE - Number of pages to preload in flow mode
- * @property {string} READER_MODE - Reader mode: "book", "log", or "auto"
- * @property {string} READER_MODE_DEFAULT - Reader mode (default value)
+ * @property {boolean} LOG_MODE - Whether to use log mode (monospace, no TOC)
+ * @property {boolean} LOG_MODE_DEFAULT - Log mode default value
  * @property {boolean} SHOW_LINE_NUMBERS - Whether to show line numbers
  * @property {boolean} SHOW_LINE_NUMBERS_DEFAULT - Whether to show line numbers (default value)
  * @property {RegExp} LOG_FILENAME_RE - Pattern to detect log files
@@ -87,8 +87,8 @@ export const CONST_CONFIG = {
     CONTINUOUS_SCROLL_MODE: false,
     CONTINUOUS_SCROLL_MODE_DEFAULT: false,
     CONTINUOUS_SCROLL_WINDOW_SIZE: 3,
-    READER_MODE: "auto",
-    READER_MODE_DEFAULT: "auto",
+    LOG_MODE: false,
+    LOG_MODE_DEFAULT: false,
     SHOW_LINE_NUMBERS: false,
     SHOW_LINE_NUMBERS_DEFAULT: false,
     LOG_FILENAME_RE: /\.log$|^(.*[^a-zA-Z])?log([^a-zA-Z].*)?.txt$/i,

@@ -1096,7 +1096,10 @@ export function initReader() {
      */
     cbReg.add("applyReaderMode", () => {
         const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
-        if (CONFIG.VARS.IS_LOG_MODE) {
+        // Read from live setting first, fall back to auto-detect value
+        const isLogMode = CONFIG.CONST_CONFIG.LOG_MODE || CONFIG.VARS.IS_LOG_MODE;
+        CONFIG.VARS.IS_LOG_MODE = isLogMode;
+        if (isLogMode) {
             content.setAttribute("data-reader-mode", "log");
             // Log mode forces continuous scroll and line numbers
             if (!CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE) {
