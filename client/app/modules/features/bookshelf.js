@@ -249,13 +249,29 @@ class BookshelfDB extends DBManager {
         }
 
         try {
-            const [existingBook, existingProcessedBook] = await Promise.all([
+            let [existingBook, existingProcessedBook] = await Promise.all([
                 this.get([this.#objectStoreNames.bookfiles], name),
                 this.get([this.#objectStoreNames.bookProcessed], name),
             ]);
 
+            // EPUB first save: bookfiles entry doesn't exist yet, create it
             if (!existingBook) {
-                throw new Error(`Book with name "${name}" not found in the database.`);
+                if (processedData.data) {
+                    await this.putBook(name, processedData.data, true, false);
+                    existingBook = await this.get([this.#objectStoreNames.bookfiles], name);
+                    if (existingBook) {
+                        existingBook.is_epub = processedData.is_epub || false;
+                        existingBook.processed = true;
+                        await this.put({ name, ...existingBook }, {
+                            stores: {
+                                [this.#objectStoreNames.bookfiles]: () => existingBook,
+                            },
+                        });
+                    }
+                    existingProcessedBook = await this.get([this.#objectStoreNames.bookProcessed], name);
+                } else {
+                    throw new Error(`Book with name "${name}" not found in the database.`);
+                }
             }
 
             if (!existingProcessedBook) {
@@ -794,6 +810,20 @@ const bookshelf = {
      */
     async processBook(book, fetchedBook, forceRefresh = false) {
         try {
+            // EPUB files use a separate conversion path
+            if (fetchedBook?.is_epub) {
+                if (book instanceof ArrayBuffer) {
+                    // Convert ArrayBuffer back to File for handleEpubFile
+                    const file = new File([book], fetchedBook.name, { type: "application/epub+zip" });
+                    await FileHandler.handleEpubFile(file);
+                } else if (book instanceof File) {
+                    await FileHandler.handleEpubFile(book);
+                } else {
+                    throw new Error("EPUB book data is not a File or ArrayBuffer");
+                }
+                return;
+            }
+
             const isEastern = fetchedBook.isEastern ?? null;
             const encoding = fetchedBook.encoding ?? null;
             await FileHandler.handleSelectedFile([book], isEastern, encoding, forceRefresh);
@@ -801,7 +831,12 @@ const bookshelf = {
             console.log(e);
             try {
                 await this.removeBook(book.name); // Remove book from db
-                await FileHandler.handleSelectedFile([book]); // Retry processing the book
+                if (fetchedBook?.is_epub) {
+                    // Can't retry EPUB without data
+                    console.error("EPUB reprocess failed, data removed from DB");
+                } else {
+                    await FileHandler.handleSelectedFile([book]); // Retry processing the book
+                }
             } catch (retryError) {
                 console.log(retryError);
             }
