@@ -794,6 +794,20 @@ const bookshelf = {
      */
     async processBook(book, fetchedBook, forceRefresh = false) {
         try {
+            // EPUB files use a separate conversion path
+            if (fetchedBook?.is_epub) {
+                if (book instanceof ArrayBuffer) {
+                    // Convert ArrayBuffer back to File for handleEpubFile
+                    const file = new File([book], fetchedBook.name, { type: "application/epub+zip" });
+                    await FileHandler.handleEpubFile(file);
+                } else if (book instanceof File) {
+                    await FileHandler.handleEpubFile(book);
+                } else {
+                    throw new Error("EPUB book data is not a File or ArrayBuffer");
+                }
+                return;
+            }
+
             const isEastern = fetchedBook.isEastern ?? null;
             const encoding = fetchedBook.encoding ?? null;
             await FileHandler.handleSelectedFile([book], isEastern, encoding, forceRefresh);
@@ -801,7 +815,12 @@ const bookshelf = {
             console.log(e);
             try {
                 await this.removeBook(book.name); // Remove book from db
-                await FileHandler.handleSelectedFile([book]); // Retry processing the book
+                if (fetchedBook?.is_epub) {
+                    // Can't retry EPUB without data
+                    console.error("EPUB reprocess failed, data removed from DB");
+                } else {
+                    await FileHandler.handleSelectedFile([book]); // Retry processing the book
+                }
             } catch (retryError) {
                 console.log(retryError);
             }
