@@ -24,32 +24,44 @@ export class EpubConverter {
      */
     static async convert(file) {
         const t0 = performance.now();
+        console.log("[EPUB] Starting conversion...");
 
         // 1. Unzip
+        console.log("[EPUB] Unzipping...");
         const buffer = await file.arrayBuffer();
+        console.log(`[EPUB] File size: ${(buffer.byteLength / 1024).toFixed(0)}KB`);
         const zip = await JSZip.loadAsync(buffer);
+        console.log(`[EPUB] Unzipped: ${Object.keys(zip.files).length} files`);
 
         // 2. Parse container → find OPF path
+        console.log("[EPUB] Parsing container.xml...");
         const opfPath = await this.#parseContainer(zip);
+        console.log(`[EPUB] OPF path: ${opfPath}`);
 
         // 3. Parse OPF → metadata, manifest, spine
+        console.log("[EPUB] Parsing OPF...");
         const { metadata, manifest, spine } = await this.#parseOpf(zip, opfPath);
+        console.log(`[EPUB] Spine: ${spine.length} items, Manifest: ${Object.keys(manifest).length} items`);
 
         // 4. Parse TOC (EPUB3 nav or EPUB2 NCX)
+        console.log("[EPUB] Parsing TOC...");
         const tocEntries = await this.#parseToc(zip, manifest, opfPath);
+        console.log(`[EPUB] TOC entries: ${tocEntries.length}`);
 
         // 5. Process spine items in order
+        console.log("[EPUB] Processing spine...");
         const { htmlLines, titles, spineBreaks } = await this.#processSpine(zip, spine, manifest, opfPath);
+        console.log(`[EPUB] Spine done: ${htmlLines.length} lines, ${titles.length} titles, ${spineBreaks.length} spine breaks`);
 
         // 6. Build titlesInd
+        console.log("[EPUB] Building titlesInd...");
         const titlesInd = {};
         for (let i = 0; i < titles.length; i++) {
             titlesInd[titles[i][1]] = i;
         }
 
         const elapsed = performance.now() - t0;
-        this.#logger.log(`EPUB conversion done in ${elapsed.toFixed(0)}ms: ${htmlLines.length} lines, ${titles.length} titles`);
-
+        console.log(`[EPUB] Conversion complete in ${elapsed.toFixed(0)}ms`);
         return { htmlLines, titles, titlesInd, metadata, spineBreaks };
     }
 
@@ -236,16 +248,18 @@ export class EpubConverter {
         const titles = [];
         const spineBreaks = [0]; // First page always starts at 0
         let lineNumber = 0;
-        for (const item of spine) {
+        console.log(`[EPUB] Processing ${spine.length} spine items...`);
+        for (const [idx, item] of spine.entries()) {
             const filePath = this.#resolveHref(item.href, opfPath);
             const file = zip.file(filePath);
 
             if (!file) {
-                this.#logger.log(`Spine item not found: ${filePath}`);
+                console.log(`[EPUB]   [${idx}] NOT FOUND: ${filePath}`);
                 continue;
             }
             // Only process XHTML content
             if (!item.mediaType || (!item.mediaType.includes("html") && !item.mediaType.includes("xml"))) {
+                console.log(`[EPUB]   [${idx}] SKIP: ${filePath} (${item.mediaType})`);
                 continue;
             }
 
@@ -255,11 +269,17 @@ export class EpubConverter {
             }
 
             const xhtml = await file.async("text");
+            const t1 = performance.now();
             const result = this.#processXhtml(xhtml, lineNumber);
+            const elapsed = (performance.now() - t1).toFixed(1);
 
             htmlLines.push(...result.elements);
             titles.push(...result.titles);
             lineNumber += result.elements.length;
+
+            if (result.elements.length > 0 || result.titles.length > 0) {
+                console.log(`[EPUB]   [${idx}] ${filePath}: ${result.elements.length} els, ${result.titles.length} titles (${elapsed}ms)`);
+            }
         }
 
         return { htmlLines, titles, spineBreaks };
