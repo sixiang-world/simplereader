@@ -151,6 +151,14 @@
     --ui_setting_tab_about_copyright_en: "Copyright";
     --ui_setting_tab_about_license_zh: "MIT 开源协议";
     --ui_setting_tab_about_license_en: "MIT Licensed";
+    --ui_setting_tab_about_current_repo_zh: "当前仓库";
+    --ui_setting_tab_about_current_repo_en: "Active Repo";
+    --ui_setting_tab_about_upstream_zh: "原版";
+    --ui_setting_tab_about_upstream_en: "Original";
+    --ui_setting_tab_about_enhanced_zh: "增强来源";
+    --ui_setting_tab_about_enhanced_en: "Enhancements by";
+    --ui_setting_tab_about_extensions_note_zh: "（原版发布，上架各商店）";
+    --ui_setting_tab_about_extensions_note_en: "(Original release, on app stores)";
     --ui_reset_zh: "重置";
     --ui_reset_en: "Reset";
     --ui_parameters_zh: "界面参数";
@@ -638,6 +646,10 @@
     --ui_setting_tab_about_extensions: var(--ui_setting_tab_about_extensions_zh);
     --ui_setting_tab_about_copyright: var(--ui_setting_tab_about_copyright_zh);
     --ui_setting_tab_about_license: var(--ui_setting_tab_about_license_zh);
+    --ui_setting_tab_about_current_repo: var(--ui_setting_tab_about_current_repo_zh);
+    --ui_setting_tab_about_upstream: var(--ui_setting_tab_about_upstream_zh);
+    --ui_setting_tab_about_enhanced: var(--ui_setting_tab_about_enhanced_zh);
+    --ui_setting_tab_about_extensions_note: var(--ui_setting_tab_about_extensions_note_zh);
     --ui_lightHeight: var(--ui_lightHeight_zh);
     --ui_fontSize: var(--ui_fontSize_zh);
     --ui_paragraphSpacing: var(--ui_paragraphSpacing_zh);
@@ -790,6 +802,10 @@
     --ui_setting_tab_about_extensions: var(--ui_setting_tab_about_extensions_en);
     --ui_setting_tab_about_copyright: var(--ui_setting_tab_about_copyright_en);
     --ui_setting_tab_about_license: var(--ui_setting_tab_about_license_en);
+    --ui_setting_tab_about_current_repo: var(--ui_setting_tab_about_current_repo_en);
+    --ui_setting_tab_about_upstream: var(--ui_setting_tab_about_upstream_en);
+    --ui_setting_tab_about_enhanced: var(--ui_setting_tab_about_enhanced_en);
+    --ui_setting_tab_about_extensions_note: var(--ui_setting_tab_about_extensions_note_en);
     --ui_lightHeight: var(--ui_lightHeight_en);
     --ui_fontSize: var(--ui_fontSize_en);
     --ui_paragraphSpacing: var(--ui_paragraphSpacing_en);
@@ -1151,6 +1167,18 @@
 }
 #settingLabel-about_copyright::after {
     content: " © 2025";
+}
+#settingLabel-about_current_repo::before {
+    content: var(--ui_setting_tab_about_current_repo);
+}
+#settingLabel-about_upstream::before {
+    content: var(--ui_setting_tab_about_upstream);
+}
+#settingLabel-about_enhanced::before {
+    content: var(--ui_setting_tab_about_enhanced);
+}
+#settingLabel-about_extensions_note::before {
+    content: var(--ui_setting_tab_about_extensions_note);
 }
 #settingLabel-about_license::before {
     content: var(--ui_setting_tab_about_license);

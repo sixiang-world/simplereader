@@ -10,6 +10,15 @@
             ]
         },
         {
+            "title": "自动拼接模式",
+            "folded": false,
+            "content": [
+                "##什么是自动拼接模式##：滑动窗口渲染器，滚动时动态加载/卸载页面内容，实现无缝连续阅读，无需手动翻页",
+                "##如何开启##：前往设置 → 综合设置 → 开启「自动拼接」开关",
+                "##搭配使用##：可配合「显示行号」功能，在拼接模式下每行左侧显示对应行号"
+            ]
+        },
+        {
             "title": "书架管理",
             "folded": true,
             "content": [
@@ -56,6 +65,15 @@
                 "##Supported Formats##: Supports importing **TXT** books and **TTF / OTF** fonts.",
                 "##Drag & Drop##: Drag & drop **multiple books** or **up to 3 fonts** to import.",
                 "##Manual Selection##: Double-click in the interface to manually select book or font files."
+            ]
+        },
+        {
+            "title": "Auto-Join Mode (Flow Mode)",
+            "folded": false,
+            "content": [
+                "##What is Auto-Join Mode##: A sliding-window renderer that dynamically loads/unloads content as you scroll, providing seamless continuous reading without page turns.",
+                "##How to Enable##: Go to Settings → General → toggle on Auto-Join.",
+                "##Pro Tip##: Use with Show Line Numbers to display line numbers on each line in flow mode."
             ]
         },
         {

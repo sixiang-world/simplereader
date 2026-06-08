@@ -1120,6 +1120,10 @@ class SettingsMenu {
     }
 
     /**
+     * Creates the help tab for the settings menu.
+     * @returns {HTMLElement} The created help tab element
+     */
+    /**
      * Creates the about tab for the settings menu.
      * @returns {HTMLElement} The created about tab element
      */
@@ -1136,47 +1140,73 @@ class SettingsMenu {
 
                 <hr class="about-divider">
 
-                <p class="about-text noIndent">
-                    <span id="settingLabel-about_github"></span>
-                    <span class="about-btns">
-                        <button class="about-btn">
-                            ${ICONS.GITHUB}
-                            <a href="https://github.com/henryxrl/SimpleTextReader" target="_blank" class="about-link">SimpleTextReader</a>
-                        </button>
-                    </span>
-                </p>
+                <!-- Repository info -->
+                <div class="about-content">
+                    <div class="about-info-row">
+                        <span class="about-info-label" id="settingLabel-about_current_repo"></span>
+                        <span class="about-info-value">
+                            <a href="https://github.com/sixiang-world/simplereader" target="_blank" class="about-link">shisheng820/simplereader</a>
+                            <span class="about-tag tag-fork">Fork</span>
+                        </span>
+                    </div>
+                    <div class="about-info-row">
+                        <span class="about-info-label" id="settingLabel-about_upstream"></span>
+                        <span class="about-info-value">
+                            <a href="https://github.com/henryxrl/SimpleTextReader" target="_blank" class="about-link">henryxrl/SimpleTextReader</a>
+                            <span class="about-tag tag-original">Original</span>
+                        </span>
+                    </div>
+                    <div class="about-info-row">
+                        <span class="about-info-label" id="settingLabel-about_enhanced"></span>
+                        <span class="about-info-value">
+                            <a href="https://github.com/cataerogong/SimpleTextReader" target="_blank" class="about-link">cataerogong/SimpleTextReader</a>
+                            <span class="about-tag tag-enhance">Enhance</span>
+                        </span>
+                    </div>
+                </div>
 
-                <p class="about-text noIndent">
-                    <span id="settingLabel-about_extensions"></span>
-                    <span class="about-btns">
-                        <button class="about-btn">
-                            ${ICONS.CHROME}
-                            <a href="https://chrome.google.com/webstore/detail/%E6%98%93%E7%AC%BA/dbanahlbopbjpgdkecmclbbonhpohcaf" target="_blank" class="about-link">Chrome</a>
-                        </button>
-                        <span class="about-btn-separator">|</span>
-                        <button class="about-btn">
-                            ${ICONS.FIREFOX}
-                            <a href="https://addons.mozilla.org/firefox/addon/yijian/" target="_blank" class="about-link">Firefox</a>
-                        </button>
-                        <span class="about-btn-separator">|</span>
-                        <button class="about-btn">
-                            ${ICONS.EDGE}
-                            <a href="https://microsoftedge.microsoft.com/addons/detail/pabihehbdhldbdliffaddllmjlknmpak" target="_blank" class="about-link">Edge</a>
-                        </button>
-                    </span>
-                </p>
+                <hr class="about-divider">
 
-                <p class="about-text noIndent">
-                    <span id="settingLabel-about_copyright"></span>
-                    <span class="about-btns">
-                        <button class="about-btn">
-                            <!--${ICONS.GITHUB}-->
+                <!-- Browser extensions -->
+                <div class="about-content">
+                    <div class="about-info-row">
+                        <span class="about-info-label" id="settingLabel-about_extensions"></span>
+                        <span class="about-info-note" id="settingLabel-about_extensions_note"></span>
+                    </div>
+                    <div class="about-info-row">
+                        <span class="about-btns">
+                            <button class="about-btn">
+                                ${ICONS.CHROME}
+                                <a href="https://chrome.google.com/webstore/detail/%E6%98%93%E7%AC%BA/dbanahlbopbjpgdkecmclbbonhpohcaf" target="_blank" class="about-link">Chrome</a>
+                            </button>
+                            <span class="about-btn-separator">|</span>
+                            <button class="about-btn">
+                                ${ICONS.FIREFOX}
+                                <a href="https://addons.mozilla.org/firefox/addon/yijian/" target="_blank" class="about-link">Firefox</a>
+                            </button>
+                            <span class="about-btn-separator">|</span>
+                            <button class="about-btn">
+                                ${ICONS.EDGE}
+                                <a href="https://microsoftedge.microsoft.com/addons/detail/pabihehbdhldbdliffaddllmjlknmpak" target="_blank" class="about-link">Edge</a>
+                            </button>
+                        </span>
+                    </div>
+                </div>
+
+                <hr class="about-divider">
+
+                <!-- Footer -->
+                <div class="about-content">
+                    <div class="about-info-row">
+                        <span class="about-info-label" id="settingLabel-about_copyright"></span>
+                        <span class="about-info-value">
                             <a href="https://github.com/henryxrl" target="_blank" class="about-link">Henry Xu</a>
-                        </button>
-                    </span>
-                    <!--<span class="about-btn-separator">•</span>
-                    <span id="settingLabel-about_license"></span>-->
-                </p>
+                        </span>
+                    </div>
+                    <div class="about-info-row" style="font-size:0.8rem;opacity:0.6;">
+                        <span>MIT Licensed — original by henryxrl</span>
+                    </div>
+                </div>
             </div>
         `;
 
