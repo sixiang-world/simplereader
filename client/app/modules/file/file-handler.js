@@ -801,7 +801,17 @@ export class FileHandler {
                 authorRE: author,
             };
             CONFIG.VARS.FILENAME = file.name;
-            CONFIG.VARS.IS_EASTERN_LAN = TextProcessor.getLanguage(bookName + " " + author);
+            // Detect language from actual content, not just title/author
+            const contentSample = result.htmlLines
+                .filter(l => l.elementType === "p" || l.elementType === "h")
+                .slice(0, 10)
+                .map(l => l.content || "")
+                .join(" ")
+                .replace(/<[^>]*>/g, "")
+                .slice(0, 500);
+            CONFIG.VARS.IS_EASTERN_LAN = TextProcessor.getLanguage(
+                (bookName + " " + author + " " + contentSample).slice(0, 1000)
+            );
             CONFIG.VARS.ENCODING = "utf-8";
             CONFIG.VARS.TITLE_PAGE_LINE_NUMBER_OFFSET = 0;
 
@@ -855,7 +865,7 @@ export class FileHandler {
                 footnote_processed_counter: 0,
                 page_breaks: [0],
                 total_pages: 1,
-                data: await file.arrayBuffer(),
+                data: file,
             });
 
             FileHandler.markProcessingComplete();
