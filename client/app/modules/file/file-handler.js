@@ -531,11 +531,10 @@ export class FileHandler {
             CONFIG.VARS.TITLE_PAGE_LINE_NUMBER_OFFSET = processor.title_page_line_number_offset;
 
             // Detect log mode
-            const readerMode = CONFIG.CONST_CONFIG.READER_MODE;
-            const logFilenameRE = CONFIG.CONST_CONFIG.LOG_FILENAME_RE;
-            if (readerMode === "log") {
+            if (CONFIG.CONST_CONFIG.LOG_MODE) {
                 CONFIG.VARS.IS_LOG_MODE = true;
-            } else if (readerMode === "auto" && logFilenameRE && logFilenameRE.test(CONFIG.VARS.FILENAME)) {
+            } else if (CONFIG.CONST_CONFIG.LOG_FILENAME_RE?.test(CONFIG.VARS.FILENAME)) {
+                // Auto-detect from filename even if log mode is off
                 CONFIG.VARS.IS_LOG_MODE = true;
             } else {
                 CONFIG.VARS.IS_LOG_MODE = false;
