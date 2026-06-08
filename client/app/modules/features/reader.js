@@ -958,12 +958,10 @@ export const reader = {
                     ) {
                         messageIndicator.show(isAtBottom ? "next_release" : "prev_release");
 
-                        if (!isActivelyScrolling()) {
-                            disableScroll();
-                            scrollTimeout = setTimeout(() => {
-                                handlePageTurn(isAtBottom);
-                            }, 150);
-                        }
+                        disableScroll();
+                        scrollTimeout = setTimeout(() => {
+                            handlePageTurn(isAtBottom);
+                        }, 300);
                     }
                 }
                 // else {
