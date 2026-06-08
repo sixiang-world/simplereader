@@ -1145,7 +1145,7 @@ class SettingsMenu {
                     <div class="about-info-row">
                         <span class="about-info-label" id="settingLabel-about_current_repo"></span>
                         <span class="about-info-value">
-                            <a href="https://github.com/sixiang-world/simplereader" target="_blank" class="about-link">shisheng820/simplereader</a>
+                            <a href="https://github.com/sixiang-world/simplereader" target="_blank" class="about-link">sixiang-world/simplereader</a>
                             <span class="about-tag tag-fork">Fork</span>
                         </span>
                     </div>
