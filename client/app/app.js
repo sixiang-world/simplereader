@@ -592,7 +592,7 @@ function openFileSelector(e) {
     // Define the file selector
     const fileSelector = document.createElement("input");
     fileSelector.type = "file";
-    fileSelector.accept = CONFIG.CONST_FONT.SUPPORTED_FONT_EXT.concat(CONFIG.CONST_FILE.SUPPORTED_FILE_EXT).join(",");
+    fileSelector.accept = CONFIG.CONST_FONT.SUPPORTED_FONT_EXT.concat([CONFIG.CONST_FILE.SUPPORTED_FILE_EXT, CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT]).join(",");
     fileSelector.multiple = true;
 
     // Activate overlay before opening file dialog
