@@ -50,10 +50,39 @@ export class EpubConverter {
 
         // 5. Process spine items in order
         console.log("[EPUB] Processing spine...");
-        const { htmlLines, titles, spineBreaks } = await this.#processSpine(zip, spine, manifest, opfPath);
-        console.log(`[EPUB] Spine done: ${htmlLines.length} lines, ${titles.length} titles, ${spineBreaks.length} spine breaks`);
+        const { htmlLines, titles: spineTitles, spineBreaks, fileToLine } = await this.#processSpine(zip, spine, manifest, opfPath);
+        console.log(`[EPUB] Spine done: ${htmlLines.length} lines, ${spineTitles.length} titles, ${spineBreaks.length} spine breaks`);
 
-        // 6. Build titlesInd
+        // 6. Build titles from NCX/TOC entries (using fileToLine mapping)
+        //    Prefer NCX titles over auto-detected ones when available
+        let titles;
+        if (tocEntries.length > 0) {
+            console.log(`[EPUB] Mapping ${tocEntries.length} TOC entries to line numbers...`);
+            titles = [];
+            const seenLines = new Set();
+            for (const entry of tocEntries) {
+                // Resolve the entry href relative to OPF path
+                const resolved = this.#resolveHref(entry.href, opfPath);
+                const normalized = resolved.split("#")[0];
+                const lineNum = fileToLine[normalized];
+                if (lineNum !== undefined && !seenLines.has(lineNum)) {
+                    seenLines.add(lineNum);
+                    titles.push([entry.label, lineNum, entry.label, false]);
+                }
+            }
+            // Also include auto-detected <h1-h6> titles that weren't in NCX
+            for (const st of spineTitles) {
+                if (!seenLines.has(st[1])) {
+                    titles.push(st);
+                    seenLines.add(st[1]);
+                }
+            }
+            console.log(`[EPUB] TOC mapping produced ${titles.length} titles (${tocEntries.length - titles.length} unmapped)`);
+        } else {
+            titles = spineTitles;
+        }
+
+        // 7. Build titlesInd
         console.log("[EPUB] Building titlesInd...");
         const titlesInd = {};
         for (let i = 0; i < titles.length; i++) {
@@ -236,17 +265,19 @@ export class EpubConverter {
     // ──────────────────────────────────────────────
 
     /**
-     * Process all spine items in order, producing htmlLines and titles
+     * Process all spine items in order, producing htmlLines and titles.
+     * Also builds a filePath → startLine mapping for NCX/TOC cross-referencing.
      * @param {JSZip} zip
      * @param {Array} spine
      * @param {Object} manifest
      * @param {string} opfPath
-     * @returns {Promise<{htmlLines: Array, titles: Array}>}
+     * @returns {Promise<{htmlLines: Array, titles: Array, spineBreaks: Array, fileToLine: Object}>}
      */
     static async #processSpine(zip, spine, manifest, opfPath) {
         const htmlLines = [];
         const titles = [];
         const spineBreaks = [0]; // First page always starts at 0
+        const fileToLine = {};   // {filePath: startLineNumber}
         let lineNumber = 0;
         console.log(`[EPUB] Processing ${spine.length} spine items...`);
         for (const [idx, item] of spine.entries()) {
@@ -268,6 +299,9 @@ export class EpubConverter {
                 spineBreaks.push(lineNumber);
             }
 
+            // Map the normalized file path to its starting line number for NCX matching
+            fileToLine[filePath] = lineNumber;
+
             const xhtml = await file.async("text");
             const t1 = performance.now();
             const result = this.#processXhtml(xhtml, lineNumber);
@@ -282,7 +316,7 @@ export class EpubConverter {
             }
         }
 
-        return { htmlLines, titles, spineBreaks };
+        return { htmlLines, titles, spineBreaks, fileToLine };
     }
 
     /**
