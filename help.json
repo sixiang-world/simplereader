@@ -21,6 +21,15 @@
             ]
         },
         {
+            "title": "阅读模式",
+            "folded": false,
+            "content": [
+                "##自动（推荐）##：根据文件类型自动选择。检测到 **.log** 后缀自动用日志模式，其余文件用书本模式",
+                "##书本模式##：标准分页阅读，自动检测 **[]** 标记生成目录，支持跳转章节、脚注引用，适合小说、文档等结构化的 TXT 文件",
+                "##日志模式##：跳过标题检测，不做文本优化和分页，原样展示内容。适合查看 **.log** 日志文件或纯记录文本"
+            ]
+        },
+        {
             "title": "书架管理",
             "folded": true,
             "content": [
@@ -78,6 +87,15 @@
                 "##Note##: Auto-Join and Infinite Scroll are mutually exclusive — enabling Auto-Join disables Infinite Scroll.",
                 "##How to Enable##: Go to Settings → General → toggle on Auto-Join.",
                 "##Pro Tip##: Use with Show Line Numbers to display line numbers on each line in flow mode."
+            ]
+        },
+        {
+            "title": "Reader Mode",
+            "folded": false,
+            "content": [
+                "##Auto (recommended)##: Automatically selects mode based on file type. Files with **.log** extension use Log mode; all other files use Book mode.",
+                "##Book Mode##: Standard paginated reading with automatic title detection via **[]** markers. Supports chapter navigation and footnotes. Best for novels, documents, and structured TXT files.",
+                "##Log Mode##: Skips title detection, text optimization, and pagination. Renders content as-is. Best for viewing **.log** files and plain records."
             ]
         },
         {
