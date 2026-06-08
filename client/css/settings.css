@@ -694,6 +694,99 @@ li:hover:not(.optgroup-label) .option-action.delete-button:hover,
     color: var(--mainColor_inactive);
 }
 
+/* About info rows (repo, extensions, copyright) */
+.about-info-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin: 4px 0;
+    font-size: 0.95rem;
+    text-align: left;
+}
+.about-info-label {
+    flex-shrink: 0;
+    color: var(--fontInfoColor);
+    font-size: 0.9rem;
+    min-width: 5em;
+}
+.about-info-value {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.about-info-note {
+    font-size: 0.8rem;
+    opacity: 0.6;
+    color: var(--fontInfoColor);
+}
+.about-tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+.tag-fork {
+    color: #fff;
+    background: #e67e22;
+}
+.tag-original {
+    color: #fff;
+    background: var(--mainColor_active);
+}
+.tag-enhance {
+    color: #fff;
+    background: #27ae60;
+}
+
+/* About help center */
+.about-help {
+    width: 100%;
+    max-width: 450px;
+    text-align: left;
+}
+.about-help-header {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: var(--fontColor);
+    margin: 8px 0 12px 0;
+    text-align: center;
+}
+.about-help-item {
+    margin: 8px 0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px dashed var(--borderColor);
+    background: var(--btnHoverColor);
+    transition: background 0.15s ease;
+}
+.about-help-feature {
+    font-weight: 600;
+    color: var(--fontColor);
+    margin-bottom: 3px;
+    font-size: 0.95rem;
+}
+.about-help-desc {
+    font-size: 0.82rem;
+    color: var(--fontInfoColor);
+    line-height: 1.5;
+    opacity: 0.85;
+}
+.about-help-desc kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    font-size: 0.78rem;
+    font-family: inherit;
+    border-radius: 3px;
+    border: 1px solid var(--borderColor);
+    background: var(--bgColor);
+    color: var(--fontColor);
+    box-shadow: 0 1px 0 var(--borderColor);
+}
+
 /* Settings menu top row */
 #settings-top-row {
     position: relative;
