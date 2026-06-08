@@ -82,20 +82,20 @@
 }
 
 /* ===== Show line numbers ===== */
+#content[data-show-line-num="true"] > :is(div, h1, h2, p, span) {
+    padding-left: 4.5em;
+    position: relative;
+}
 #content[data-show-line-num="true"] > :is(div, h1, h2, p, span)::before {
     content: "<" attr(data-line-num) ">";
     position: absolute;
-    left: 2px;
-    text-indent: 0;
-    transform: translateY(-1.2em);
+    left: 0.5em;
+    top: 0;
     font-family: var(--fontFamily_ui);
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     color: var(--fontInfoColor);
-}
-
-/* Ensure content children are positioned for ::before */
-#content[data-show-line-num="true"] > :is(div, h1, h2, p, span) {
-    position: relative;
+    white-space: nowrap;
+    line-height: inherit;
 }
 
 /* ===== Reader mode: log ===== */
