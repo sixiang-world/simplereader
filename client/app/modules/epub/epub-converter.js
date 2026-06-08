@@ -205,7 +205,7 @@ export class EpubConverter {
                 const label = labelEl.textContent?.trim();
                 const src = contentEl.getAttribute("src");
                 if (label && src) {
-                    entries.push({ label, href: this.#resolveHref(src, ncxPath) });
+                    entries.push({ label, href: this.#resolveHref(src, opfPath) });
                 }
             }
         }
