@@ -775,6 +775,9 @@ export class FileHandler {
             hideLoadingScreen();
             showContent();
             await cbReg.go("fileAfter");
+        } else if (book?.is_epub) {
+            const epubFile = new File([book?.data], book.name, { type: "application/epub+zip" });
+            await FileHandler.handleEpubFile(epubFile);
         } else {
             await FileHandler.handleSelectedFile([book?.data], null, null, true);
         }
