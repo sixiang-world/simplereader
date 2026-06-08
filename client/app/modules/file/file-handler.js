@@ -859,24 +859,34 @@ export class FileHandler {
 
             CONFIG.VARS.PAGE_BREAKS = pageBreaks;
             CONFIG.VARS.TOTAL_PAGES = pageBreaks.length;
+            CONFIG.VARS.CURRENT_PAGE = 1;
+            console.log(`[EPUB-handle] Pagination: ${pageBreaks.length} pages from ${pageBreaks.length-1} spine breaks`);
 
             // Set title
+            console.log("[EPUB-handle] Setting title...");
             setTitle(bookName);
 
             // Update UI language
+            console.log("[EPUB-handle] Updating UI language...");
             cbReg.go("updateUILanguage", {
                 lang: getCurrentDisplayLanguage(),
                 saveToLocalStorage: false,
             });
 
             // Process TOC
+            console.log("[EPUB-handle] Processing TOC...");
             reader.initTOC();
             reader.processTOC();
+            console.log(`[EPUB-handle] TOC processed: ${reader.getTOCEntries?.()?.length || 'N/A'} entries`);
 
             // Show content
+            console.log("[EPUB-handle] Rendering content...");
             CONFIG.VARS.INIT = false;
             reader.showCurrentPageContent();
+            console.log("[EPUB-handle] showCurrentPageContent done");
+
             reader.generatePagination();
+            console.log("[EPUB-handle] generatePagination done");
             updatePaginationCalculations(false);
             GetScrollPositions(false);
 
