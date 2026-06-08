@@ -828,10 +828,10 @@ export class FileHandler {
             CONFIG.VARS.FOOTNOTE_PROCESSED_COUNTER = 0;
 
             // Set pagination based on EPUB spine (chapter) boundaries
-            console.log(`[EPUB-handle] Calculating pagination from ${spineBreaks.length} spine breaks...`);
             const MAX_LINES_PER_PAGE = 100;
             const spineBreaks = result.spineBreaks || [0];
             const totalLines = result.htmlLines.length;
+            console.log(`[EPUB-handle] Calculating pagination from ${spineBreaks.length} spine breaks (${totalLines} lines)...`);
 
             // Refine: add sub-breaks for long spine items
             const pageBreaks = [0];
