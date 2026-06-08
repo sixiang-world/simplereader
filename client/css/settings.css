@@ -242,43 +242,17 @@
     padding-top: 0;
 }
 .settingItem-span {
-    display: inline-block;
+    display: block;
     width: var(--ui_settingMenuWidth);
     cursor: default;
 }
-.settingItem-span .tooltip-icon {
-    display: inline-block;
-    font-size: 1rem;
+.settingItem-span .settingItem-desc {
+    font-size: 0.78rem;
     color: var(--fontInfoColor);
-    cursor: pointer;
-    position: relative;
-    margin-left: 6px;
-    vertical-align: baseline;
-}
-.settingItem-span .tooltip {
-    font-size: 0.9rem;
-    position: absolute;
-    background-color: var(--bgColor);
-    border: 1px solid var(--borderColor);
-    border-radius: 8px;
-    padding: 10px 15px;
-    box-shadow: 0 0 5px var(--shadowColor);
-    -webkit-box-shadow: var(--shadowColor) 0 0 5px;
-    -moz-box-shadow: 0 0 5px var(--shadowColor);
+    opacity: 0.6;
+    margin-top: 3px;
+    line-height: 1.4;
     font-family: var(--fontFamily_ui) !important;
-    color: var(--fontInfoColor) !important;
-    overflow: unset;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    max-width: 75%;
-    z-index: 5;
-}
-.settingItem-span .tooltip-icon:hover + .tooltip {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transform: translateY(0);
 }
 .settingItem-divider {
     width: var(--ui_settingMenuSeparatorWidth);
@@ -335,6 +309,11 @@
 }
 .settingItem-span[id^="settingLabel-"]::after:empty {
     display: none;
+}
+.settingItem-span[id^="settingLabel-"] .settingItem-desc {
+    grid-column: 1 / -1;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 .color-picker {
     background-color: var(--bgColor) !important;
