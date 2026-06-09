@@ -1097,12 +1097,9 @@ export function initReader() {
     cbReg.add("applyReaderMode", () => {
         const container = document.querySelector(".sidebar-splitview-container");
         const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
-        // Read from live setting first, fall back to auto-detect value
-        const isLogMode = CONFIG.CONST_CONFIG.LOG_MODE || CONFIG.VARS.IS_LOG_MODE;
-        CONFIG.VARS.IS_LOG_MODE = isLogMode;
-        if (isLogMode) {
+        // Read from live setting first, fall back to auto-detect value from file-handler.js
+        if (CONFIG.CONST_CONFIG.LOG_MODE || CONFIG.VARS.IS_LOG_MODE) {
             container?.setAttribute("data-reader-mode", "log");
-            // Log mode forces continuous scroll and line numbers
             content.setAttribute("data-reader-mode", "log");
             // Log mode forces continuous scroll and line numbers
             if (!CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE) {

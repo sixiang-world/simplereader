@@ -66,6 +66,20 @@ The client reads local TXT/EPUB files via the browser File API, detects encoding
 - **已知问题**: 大型书籍需要分页计算优化（pagination calc for large books）
 - **Fork 标注**: README 中标注 `original by henryxrl` 以区分原作者的上架版本
 
+## 阅读模式说明
+
+### 排版模式设置
+
+- **日志模式 (Log Mode)**: 布尔开关，启用后使用等宽字体显示，隐藏目录，不做文本过滤。适合查看 `.log` 文件
+- **自动拼接 (Auto-Join)**: 布尔开关，启用后多页内容连续显示，无分页边界
+- **显示行号 (Show Line Numbers)**: 布尔开关，启用后每行左侧显示行号
+
+### 模式互斥关系
+
+- 日志模式会自动启用自动拼接和行号显示
+- 自动拼接与无限滚动（Infinite Scroll）互斥
+- 日志模式下会隐藏侧边栏
+
 ## 项目约定
 
 - `AGENTS.md` 与 `CLAUDE.md` 互为软链接
