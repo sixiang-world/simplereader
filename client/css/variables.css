@@ -209,7 +209,9 @@
     --ui_infinite_scroll_mode_note_zh: "在页面顶部或底部继续滚动即可翻页";
     --ui_infinite_scroll_mode_note_en: "Scroll further at the top or bottom to turn the page.";
     --ui_log_mode_zh: "日志模式";
+    --ui_log_mode_note_zh: "⚠ 实验功能，可能存在BUG";
     --ui_log_mode_en: "Log Mode";
+    --ui_log_mode_note_en: "⚠ Experimental, may contain bugs";
     --ui_continuous_scroll_mode_zh: "自动拼接";
     --ui_continuous_scroll_mode_en: "Continuous Scroll";
     --ui_show_line_numbers_zh: "显示行号";
@@ -674,6 +676,7 @@
     --ui_infinite_scroll_mode: var(--ui_infinite_scroll_mode_zh);
     --ui_infinite_scroll_mode_note: var(--ui_infinite_scroll_mode_note_zh);
     --ui_log_mode: var(--ui_log_mode_zh);
+    --ui_log_mode_note: var(--ui_log_mode_note_zh);
     --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_zh);
     --ui_show_line_numbers: var(--ui_show_line_numbers_zh);
     --ui_separator_reading_mode: var(--ui_separator_reading_mode_zh);
@@ -830,6 +833,7 @@
     --ui_infinite_scroll_mode: var(--ui_infinite_scroll_mode_en);
     --ui_infinite_scroll_mode_note: var(--ui_infinite_scroll_mode_note_en);
     --ui_log_mode: var(--ui_log_mode_en);
+    --ui_log_mode_note: var(--ui_log_mode_note_en);
     --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_en);
     --ui_show_line_numbers: var(--ui_show_line_numbers_en);
     --ui_separator_reading_mode: var(--ui_separator_reading_mode_en);
@@ -1050,6 +1054,15 @@
 }
 #settingLabel-setting_log_mode::before {
     content: var(--ui_log_mode);
+}
+#settingLabel-setting_log_mode {
+    white-space: nowrap;
+}
+#settingLabel-setting_log_mode .settingItem-desc {
+    white-space: normal;
+}
+#tooltip-setting_log_mode::before {
+    content: var(--ui_log_mode_note);
 }
 #settingLabel-setting_continuous_scroll_mode::before {
     content: var(--ui_continuous_scroll_mode);
