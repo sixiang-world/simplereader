@@ -158,6 +158,7 @@ const SETTINGS_SCHEMA = [
         type: "checkbox",
         tab: "general",
         label: "setting_log_mode",
+        note: true,
         bind: "CONFIG.CONST_CONFIG.LOG_MODE",
         default: CONFIG.CONST_CONFIG.LOG_MODE_DEFAULT,
         persist: true,
