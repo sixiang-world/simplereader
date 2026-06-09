@@ -1119,10 +1119,6 @@ class SettingsMenu {
     }
 
     /**
-     * Creates the help tab for the settings menu.
-     * @returns {HTMLElement} The created help tab element
-     */
-    /**
      * Creates the about tab for the settings menu.
      * @returns {HTMLElement} The created about tab element
      */

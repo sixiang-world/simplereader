@@ -1,6 +1,39 @@
 {
-    "version": "1.6.9.5",
+    "version": "1.6.9.6",
     "changelog": {
+        "1.6.9.6": {
+            "date": "2026-06-09",
+            "changes": {
+                "zh": [
+                    "重构 **阅读模式设置** — 将三态下拉菜单（自动/书籍/日志）简化为布尔开关",
+                    "新增 **日志模式** 开关 — 实验功能，可能包含 BUG",
+                    "「连续滚动」更名为「自动拼接」，移至行为设置区域",
+                    "「阅读模式」更名为「排版模式」",
+                    "移除设置面板中冗长的描述文字，界面更简洁",
+                    "修复 **日志模式** 无法通过设置开关关闭的 bug",
+                    "修复 **行号显示** 在流式模式下的布局问题",
+                    "修复 **行号** 从绝对定位改为内联文本显示",
+                    "修复 **About 页面** 仓库名称显示错误",
+                    "新增 **帮助中心** — 添加自动拼接模式和日志模式的详细说明",
+                    "日志模式现在会隐藏侧边栏",
+                    "其他多项 **代码优化** 和 **问题修复**"
+                ],
+                "en": [
+                    "Refactored **reader mode settings** — replaced tri-state dropdown with boolean toggle",
+                    "Added **log mode** toggle — experimental feature, may contain bugs",
+                    "Renamed 'Continuous Scroll' to 'Auto-Join', moved to behavior section",
+                    "Renamed 'Reader Mode' to 'Reading Mode'",
+                    "Removed verbose setting descriptions for a cleaner UI",
+                    "Fixed **log mode** cannot be turned off via settings toggle",
+                    "Fixed **line number display** layout issues in flow mode",
+                    "Fixed **line numbers** changed from absolute positioning to inline text",
+                    "Fixed **About page** repository name display",
+                    "Added **help center** — detailed explanations for auto-join and log mode",
+                    "Log mode now hides the sidebar",
+                    "Various other **code optimizations** and **bug fixes**"
+                ]
+            }
+        },
         "1.6.9.5": {
             "date": "2026-06-08",
             "changes": {
@@ -11,7 +44,6 @@
                     "新增 **日志模式** — 跳过标题检测和排版优化，自动识别 .log 文件",
                     "新增 **阅读进度条** — 侧边栏内垂直滑动条，支持快速定位",
                     "新增 **行号显示** — 可切换的行号显示（设置中开启）",
-                    "新增 **排版模式设置** — 自动/书籍/日志三种模式，页/流两种翻页模式",
                     "其他多项 **代码优化** 和 **问题修复**"
                 ],
                 "en": [
@@ -21,7 +53,6 @@
                     "Added **log mode** — skips title detection and text optimization, auto-detects .log files",
                     "Added **progress bar** — vertical slider in the sidebar for quick navigation",
                     "Added **line number display** — toggleable line numbers via settings",
-                    "Added **reader mode settings** — auto/book/log modes, page/flow pagination modes",
                     "Various other **code optimizations** and **bug fixes**"
                 ]
             }
