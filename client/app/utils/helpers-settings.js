@@ -23,6 +23,19 @@ import { findStringIndex, isVariableDefined, simulateClick, toBool, getStyleshee
 const fontCache = new Map();
 
 /**
+ * Appends a note/description element to a setting item's text label
+ * @param {HTMLElement} parentElement - The parent element to append to
+ * @param {string} id - Element ID for the tooltip
+ * @private
+ */
+function appendNoteToLabel(parentElement, id) {
+    const desc = document.createElement("div");
+    desc.setAttribute("class", "settingItem-desc");
+    desc.setAttribute("id", `tooltip-${id}`);
+    parentElement.appendChild(desc);
+}
+
+/**
  * Gets CSS property value for a specific selector
  * @param {string} sel - CSS selector
  * @param {string} prop - CSS property name
@@ -79,10 +92,7 @@ export function createSelectorItem(id, values, texts, note = false) {
     settingItemText.onmousedown = () => false;
 
     if (note) {
-        const desc = document.createElement("div");
-        desc.setAttribute("class", "settingItem-desc");
-        desc.setAttribute("id", `tooltip-${id}`);
-        settingItemText.appendChild(desc);
+        appendNoteToLabel(settingItemText, id);
     }
 
     const settingItemInput = document.createElement("select");
@@ -710,10 +720,7 @@ export function createRangeItem(id, value, rangeConfig, func, note = false) {
     settingItemText.onmousedown = () => false;
 
     if (note) {
-        const desc = document.createElement("div");
-        desc.setAttribute("class", "settingItem-desc");
-        desc.setAttribute("id", `tooltip-${id}`);
-        settingItemText.appendChild(desc);
+        appendNoteToLabel(settingItemText, id);
     }
 
     const settingItemInput = document.createElement("div");
@@ -782,10 +789,7 @@ export function createColorItem(id, value, savedValues, func, note = false) {
     };
 
     if (note) {
-        const desc = document.createElement("div");
-        desc.setAttribute("class", "settingItem-desc");
-        desc.setAttribute("id", `tooltip-${id}`);
-        settingItemText.appendChild(desc);
+        appendNoteToLabel(settingItemText, id);
     }
 
     let settingItemInput = document.createElement("input");
@@ -826,10 +830,7 @@ export function createCheckboxItem(id, value, func, note = false) {
     settingItemText.onmousedown = () => false;
 
     if (note) {
-        const desc = document.createElement("div");
-        desc.setAttribute("class", "settingItem-desc");
-        desc.setAttribute("id", `tooltip-${id}`);
-        settingItemText.appendChild(desc);
+        appendNoteToLabel(settingItemText, id);
     }
 
     const settingItemInput = document.createElement("label");
