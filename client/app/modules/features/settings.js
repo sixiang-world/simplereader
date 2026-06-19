@@ -165,6 +165,7 @@ const SETTINGS_SCHEMA = [
         type: "checkbox",
         tab: "general",
         label: "setting_infinite_scroll_mode",
+        note: true,
         bind: "CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE",
         default: CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE_DEFAULT,
         persist: true,
@@ -177,6 +178,16 @@ const SETTINGS_SCHEMA = [
         note: true,
         bind: "CONFIG.CONST_CONFIG.INFINITE_SCROLL_EASY_MODE",
         default: CONFIG.CONST_CONFIG.INFINITE_SCROLL_EASY_MODE_DEFAULT,
+        persist: true,
+    },
+    {
+        key: "anonymous_mode",
+        type: "checkbox",
+        tab: "general",
+        label: "setting_anonymous_mode",
+        note: true,
+        bind: "CONFIG.CONST_CONFIG.ANONYMOUS_MODE",
+        default: CONFIG.CONST_CONFIG.ANONYMOUS_MODE_DEFAULT,
         persist: true,
     },
     {
@@ -632,7 +643,7 @@ const MENU_SCHEMA = [
             {
                 section: "setting_separator_behavior",
                 order: 2,
-                items: ["auto_open_last_book", "infinite_scroll_mode", "infinite_scroll_easy_mode", "continuous_scroll_mode"],
+                items: ["auto_open_last_book", "infinite_scroll_mode", "infinite_scroll_easy_mode", "continuous_scroll_mode", "anonymous_mode"],
             },
             {
                 section: "setting_separator_reading_mode",
