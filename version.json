@@ -1,6 +1,25 @@
 {
-    "version": "1.6.9.6",
+    "version": "1.6.10",
     "changelog": {
+        "1.6.10": {
+            "date": "2026-06-19",
+            "changes": {
+                "zh": [
+                    "新增 **「让无限滚动更容易触发」** 开关 — 降低无限滚动翻页触发阈值（1200 → 400）",
+                    "新增 **「显示书名」** 开关（界面区域）— 关闭后浏览器标签页始终显示「易笺」",
+                    "「自动拼接」开关下方新增 ⚠ 实验功能提醒",
+                    "移除设置面板中「排版模式」「自动拼接」「显示行号」三项的冗余描述文字",
+                    "「连续滚动」更名为「自动拼接」"
+                ],
+                "en": [
+                    "Added **Easier Infinite Scrolling** toggle — reduces page turn threshold (1200 → 400)",
+                    "Added **Show Book Title** toggle (interface section) — when off, browser tab always shows \"易笺\"",
+                    "Added ⚠ experimental warning below the Auto-Join toggle",
+                    "Removed verbose description text for Reading Mode, Auto-Join, and Show Line Numbers settings",
+                    "Renamed 'Continuous Scroll' to 'Auto-Join'"
+                ]
+            }
+        },
         "1.6.9.6": {
             "date": "2026-06-09",
             "changes": {

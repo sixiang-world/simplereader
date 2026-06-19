@@ -200,6 +200,8 @@
     --ui_pagination_opacity_en: "Pagination Opacity";
     --ui_show_filter_bar_zh: "显示书架筛选栏";
     --ui_show_filter_bar_en: "Show Bookshelf Filter Bar";
+    --ui_show_book_title_zh: "显示书名";
+    --ui_show_book_title_en: "Show Book Title";
     --ui_show_helper_btn_zh: "显示帮助按钮";
     --ui_show_helper_btn_en: "Show Help Button";
     --ui_auto_open_last_book_zh: "自动打开最近阅读书籍";
@@ -208,12 +210,18 @@
     --ui_infinite_scroll_mode_en: "Infinite Scrolling";
     --ui_infinite_scroll_mode_note_zh: "在页面顶部或底部继续滚动即可翻页";
     --ui_infinite_scroll_mode_note_en: "Scroll further at the top or bottom to turn the page.";
+    --ui_infinite_scroll_easy_mode_zh: "让无限滚动更容易触发";
+    --ui_infinite_scroll_easy_mode_en: "Easier Infinite Scrolling";
+    --ui_infinite_scroll_easy_mode_note_zh: "降低触发翻页所需的滚动量";
+    --ui_infinite_scroll_easy_mode_note_en: "Reduces the scroll amount needed to trigger page turn";
     --ui_log_mode_zh: "日志模式";
     --ui_log_mode_note_zh: "⚠ 实验功能，可能存在BUG";
     --ui_log_mode_en: "Log Mode";
     --ui_log_mode_note_en: "⚠ Experimental, may contain bugs";
     --ui_continuous_scroll_mode_zh: "自动拼接";
     --ui_continuous_scroll_mode_en: "Continuous Scroll";
+    --ui_continuous_scroll_mode_note_zh: "⚠ 实验功能，可能存在BUG";
+    --ui_continuous_scroll_mode_note_en: "⚠ Experimental, may contain bugs";
     --ui_show_line_numbers_zh: "显示行号";
     --ui_show_line_numbers_en: "Show Line Numbers";
     --ui_separator_reading_mode_zh: "排版模式";
@@ -671,13 +679,18 @@
     --ui_pagination2pageBottom_dist: var(--ui_pagination2pageBottom_dist_zh);
     --ui_pagination_opacity: var(--ui_pagination_opacity_zh);
     --ui_show_filter_bar: var(--ui_show_filter_bar_zh);
+    --ui_show_filter_bar: var(--ui_show_filter_bar_zh);
+    --ui_show_book_title: var(--ui_show_book_title_zh);
     --ui_show_helper_btn: var(--ui_show_helper_btn_zh);
     --ui_auto_open_last_book: var(--ui_auto_open_last_book_zh);
     --ui_infinite_scroll_mode: var(--ui_infinite_scroll_mode_zh);
     --ui_infinite_scroll_mode_note: var(--ui_infinite_scroll_mode_note_zh);
+    --ui_infinite_scroll_easy_mode: var(--ui_infinite_scroll_easy_mode_zh);
+    --ui_infinite_scroll_easy_mode_note: var(--ui_infinite_scroll_easy_mode_note_zh);
     --ui_log_mode: var(--ui_log_mode_zh);
     --ui_log_mode_note: var(--ui_log_mode_note_zh);
     --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_zh);
+    --ui_continuous_scroll_mode_note: var(--ui_continuous_scroll_mode_note_zh);
     --ui_show_line_numbers: var(--ui_show_line_numbers_zh);
     --ui_separator_reading_mode: var(--ui_separator_reading_mode_zh);
     --ui_show_toc: var(--ui_show_toc_zh);
@@ -828,13 +841,18 @@
     --ui_pagination2pageBottom_dist: var(--ui_pagination2pageBottom_dist_en);
     --ui_pagination_opacity: var(--ui_pagination_opacity_en);
     --ui_show_filter_bar: var(--ui_show_filter_bar_en);
+    --ui_show_filter_bar: var(--ui_show_filter_bar_en);
+    --ui_show_book_title: var(--ui_show_book_title_en);
     --ui_show_helper_btn: var(--ui_show_helper_btn_en);
     --ui_auto_open_last_book: var(--ui_auto_open_last_book_en);
     --ui_infinite_scroll_mode: var(--ui_infinite_scroll_mode_en);
     --ui_infinite_scroll_mode_note: var(--ui_infinite_scroll_mode_note_en);
+    --ui_infinite_scroll_easy_mode: var(--ui_infinite_scroll_easy_mode_en);
+    --ui_infinite_scroll_easy_mode_note: var(--ui_infinite_scroll_easy_mode_note_en);
     --ui_log_mode: var(--ui_log_mode_en);
     --ui_log_mode_note: var(--ui_log_mode_note_en);
     --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_en);
+    --ui_continuous_scroll_mode_note: var(--ui_continuous_scroll_mode_note_en);
     --ui_show_line_numbers: var(--ui_show_line_numbers_en);
     --ui_separator_reading_mode: var(--ui_separator_reading_mode_en);
     --ui_show_toc: var(--ui_show_toc_en);
@@ -1040,6 +1058,9 @@
 #settingLabel-setting_show_filter_bar::before {
     content: var(--ui_show_filter_bar);
 }
+#settingLabel-setting_show_book_title::before {
+    content: var(--ui_show_book_title);
+}
 #settingLabel-setting_show_helper_btn::before {
     content: var(--ui_show_helper_btn);
 }
@@ -1051,6 +1072,12 @@
 }
 #tooltip-setting_infinite_scroll_mode::before {
     content: var(--ui_infinite_scroll_mode_note);
+}
+#settingLabel-setting_infinite_scroll_easy_mode::before {
+    content: var(--ui_infinite_scroll_easy_mode);
+}
+#tooltip-setting_infinite_scroll_easy_mode::before {
+    content: var(--ui_infinite_scroll_easy_mode_note);
 }
 #settingLabel-setting_log_mode::before {
     content: var(--ui_log_mode);
@@ -1066,6 +1093,9 @@
 }
 #settingLabel-setting_continuous_scroll_mode::before {
     content: var(--ui_continuous_scroll_mode);
+}
+#tooltip-setting_continuous_scroll_mode::before {
+    content: var(--ui_continuous_scroll_mode_note);
 }
 #settingLabel-setting_show_line_numbers::before {
     content: var(--ui_show_line_numbers);

@@ -136,6 +136,22 @@ const SETTINGS_SCHEMA = [
         persist: true,
     },
     {
+        key: "show_book_title",
+        type: "checkbox",
+        tab: "general",
+        label: "setting_show_book_title",
+        bind: "CONFIG.CONST_CONFIG.SHOW_BOOK_TITLE",
+        default: CONFIG.CONST_CONFIG.SHOW_BOOK_TITLE_DEFAULT,
+        persist: true,
+        onApply: function (value) {
+            if (value) {
+                setTitle(CONFIG.VARS.BOOK_AND_AUTHOR?.bookName || "");
+            } else {
+                setTitle("");
+            }
+        },
+    },
+    {
         key: "auto_open_last_book",
         type: "checkbox",
         tab: "general",
@@ -154,6 +170,16 @@ const SETTINGS_SCHEMA = [
         persist: true,
     },
     {
+        key: "infinite_scroll_easy_mode",
+        type: "checkbox",
+        tab: "general",
+        label: "setting_infinite_scroll_easy_mode",
+        note: true,
+        bind: "CONFIG.CONST_CONFIG.INFINITE_SCROLL_EASY_MODE",
+        default: CONFIG.CONST_CONFIG.INFINITE_SCROLL_EASY_MODE_DEFAULT,
+        persist: true,
+    },
+    {
         key: "log_mode",
         type: "checkbox",
         tab: "general",
@@ -168,6 +194,7 @@ const SETTINGS_SCHEMA = [
         type: "checkbox",
         tab: "general",
         label: "setting_continuous_scroll_mode",
+        note: true,
         bind: "CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE",
         default: CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE_DEFAULT,
         persist: true,
@@ -600,12 +627,12 @@ const MENU_SCHEMA = [
             {
                 section: "setting_separator_ui",
                 order: 1,
-                items: ["ui_language", "show_filter_bar", "show_helper_btn", "enable_custom_cursor"],
+                items: ["ui_language", "show_filter_bar", "show_book_title", "show_helper_btn", "enable_custom_cursor"],
             },
             {
                 section: "setting_separator_behavior",
                 order: 2,
-                items: ["auto_open_last_book", "infinite_scroll_mode", "continuous_scroll_mode"],
+                items: ["auto_open_last_book", "infinite_scroll_mode", "infinite_scroll_easy_mode", "continuous_scroll_mode"],
             },
             {
                 section: "setting_separator_reading_mode",
