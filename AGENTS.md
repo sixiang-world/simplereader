@@ -91,6 +91,21 @@ The client reads local TXT/EPUB files via the browser File API, detects encoding
 - 自动拼接与无限滚动（Infinite Scroll）互斥
 - 日志模式下会隐藏侧边栏
 
+## 发布流程（Release Workflow）
+
+每次发版需按以下顺序完成，不可遗漏：
+
+1. **更新版本号** — 同时修改以下 3 个文件：
+   - `version.json` — 更新 `"version"` 字段，并在 `changelog` 顶部新增对应版本条目（含 `date` 和中英文 `changes`）
+   - `client/manifests/Chrome/manifest.json` — 更新 `"version"` 字段
+   - `client/manifests/Firefox/manifest.json` — 更新 `"version"` 字段
+2. **更新 CHANGELOG.md** — 将 `[Unreleased]` 内容移入新版本号段落，格式：`## [x.y.z] - YYYY-MM-DD`
+3. **Commit** — 使用 Conventional Commits 格式，如 `feat: vx.y.z — 简要描述`，Co-Authored-By 标注 Claude
+4. **打 Git Tag** — `git tag vx.y.z`（指向最新 commit，包含 manifest 更新）
+5. **Push**（需用户确认后执行）— `git push origin main && git push origin --tags` 以及 `git push github main && git push github --tags`
+
+> 注意：manifest 版本更新单独一个 commit，tag 指向该 commit。
+
 ## 项目约定
 
 - `AGENTS.md` 与 `CLAUDE.md` 互为软链接
