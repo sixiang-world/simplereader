@@ -1,6 +1,19 @@
 {
-    "version": "1.6.11",
+    "version": "1.6.12",
     "changelog": {
+        "1.6.12": {
+            "date": "2026-06-19",
+            "changes": {
+                "zh": [
+                    "匿名模式开启时，拖拽区文字末尾显示（匿）标识",
+                    "自动拼接警告文案缩短，更简洁"
+                ],
+                "en": [
+                    "Added (anon) indicator to drop zone text when Anonymous Mode is enabled",
+                    "Shortened Auto-Join warning text for clarity"
+                ]
+            }
+        },
         "1.6.11": {
             "date": "2026-06-19",
             "changes": {

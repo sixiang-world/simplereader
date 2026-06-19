@@ -79,6 +79,8 @@
     --ui_dropZoneText: "";
     --ui_dropZoneText_zh: "拖拽文件到此处或双击选择";
     --ui_dropZoneText_en: "Drag & drop files or double click to select";
+    --ui_dropZoneText_anonymous_zh: "拖拽文件到此处或双击选择（匿）";
+    --ui_dropZoneText_anonymous_en: "Drag & drop files or double click to select (anon)";
     --ui_readingProgress: "";
     --ui_readingProgress_zh: "阅读进度：";
     --ui_readingProgress_en: "Progress: "; /* Have to use chinese colon and replace it later */
@@ -636,6 +638,7 @@
     --ui_endPage: var(--ui_endPage_zh);
     --ui_dropZoneText_loading: var(--ui_dropZoneText_loading_zh);
     --ui_dropZoneText: var(--ui_dropZoneText_zh);
+    --ui_dropZoneText_anonymous: var(--ui_dropZoneText_anonymous_zh);
     --fontFamily_title: var(--fontFamily_title_zh);
     --fontFamily_body: var(--fontFamily_body_zh);
     --ui_readingProgress: var(--ui_readingProgress_zh);
@@ -800,6 +803,7 @@
     --ui_endPage: var(--ui_endPage_en);
     --ui_dropZoneText_loading: var(--ui_dropZoneText_loading_en);
     --ui_dropZoneText: var(--ui_dropZoneText_en);
+    --ui_dropZoneText_anonymous: var(--ui_dropZoneText_anonymous_en);
     --fontFamily_title: var(--fontFamily_title_en);
     --fontFamily_body: var(--fontFamily_body_en);
     --ui_readingProgress: var(--ui_readingProgress_en);
@@ -957,6 +961,9 @@
 
 .dropzone-text-text::before {
     content: var(--ui_dropZoneText);
+}
+.dropzone-text-text.dropzone-anonymous::before {
+    content: var(--ui_dropZoneText_anonymous);
 }
 .dropzone-text-loading-text::before {
     content: var(--ui_dropZoneText_loading);
