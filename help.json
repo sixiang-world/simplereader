@@ -10,14 +10,23 @@
             ]
         },
         {
+            "title": "无限滚动模式",
+            "folded": false,
+            "content": [
+                "##什么是无限滚动##：在页面顶部或底部继续滚动即可翻页，保留分页结构",
+                "##推荐设置##：**推荐同时开启「让无限滚动更容易触发」**，两功能配合翻页更丝滑",
+                "##如何开启##：前往设置 → 综合设置 → 开启「无限滚动」和「让无限滚动更容易触发」开关"
+            ]
+        },
+        {
             "title": "自动拼接模式",
             "folded": false,
             "content": [
+                "##⚠ 实验警告##：自动拼接为实验功能，存在已知 BUG，**不推荐日常使用**。推荐使用「无限滚动 + 让无限滚动更容易触发」组合",
                 "##什么是自动拼接模式##：滑动窗口渲染器，滚动时动态加载/卸载页面内容，实现无缝连续阅读，无需手动翻页",
                 "##与无限滚动的区别##：无限滚动是在页面顶部或底部继续滚动时翻页（仍保持分页结构）；自动拼接则是将多页内容连续拼接显示，无分页概念",
                 "##注意##：自动拼接与无限滚动互斥，开启自动拼接后不会触发无限滚动",
-                "##如何开启##：前往设置 → 综合设置 → 开启「自动拼接」开关",
-                "##搭配使用##：可配合「显示行号」功能，在拼接模式下每行左侧显示对应行号"
+                "##如何开启##：前往设置 → 综合设置 → 开启「自动拼接」开关"
             ]
         },
         {
@@ -29,6 +38,15 @@
                 "##如何开启##：前往设置 → 综合设置 → 开启「日志模式」开关",
                 "##自动检测##：文件名包含 **log** 字样的文件（如 server_log.txt）打开时自动启用日志模式",
                 "##注意##：开启日志模式后会自动启用自动拼接和行号显示"
+            ]
+        },
+        {
+            "title": "匿名模式",
+            "folded": true,
+            "content": [
+                "##什么是匿名模式##：开启后，打开的书籍不会出现在书架上，适合临时查看文件",
+                "##如何开启##：前往设置 → 综合设置 → 开启「匿名模式」开关",
+                "##注意##：匿名模式不影响已保存在书架上的书籍，仅阻止新打开的书籍写入书架"
             ]
         },
         {
@@ -48,7 +66,7 @@
             "folded": false,
             "content": [
                 "##跳转至指定章节##：点击 **目录** 中指定的章节名称",
-                "##上下翻页##：使用 **← → 方向键** 翻页，或在设置中开启 **无限滚动模式**",
+                "##上下翻页##：使用 **← → 方向键** 翻页，或在设置中开启 **无限滚动模式**（推荐同时开启「让无限滚动更容易触发」）",
                 "##上下章节跳转##：使用 **Page Up / Page Down 键** 跳转至上或下一章节",
                 "##退出阅读##：按 **Esc** 退出阅读，返回书架"
             ]
@@ -81,14 +99,23 @@
             ]
         },
         {
+            "title": "Infinite Scroll Mode",
+            "folded": false,
+            "content": [
+                "##What is Infinite Scroll##: Scroll further at the top or bottom of a page to turn it — pagination structure is preserved.",
+                "##Recommended##: **Enable both Infinite Scroll and Easier Infinite Scrolling** for the smoothest page-turn experience.",
+                "##How to Enable##: Go to Settings → General → toggle on Infinite Scroll and Easier Infinite Scrolling."
+            ]
+        },
+        {
             "title": "Auto-Join Mode (Flow Mode)",
             "folded": false,
             "content": [
+                "##⚠ Experimental Warning##: Auto-Join is an experimental feature with known bugs — **not recommended for daily use**. Use Infinite Scroll + Easier Infinite Scrolling instead.",
                 "##What is Auto-Join Mode##: A sliding-window renderer that dynamically loads/unloads content as you scroll, providing seamless continuous reading without page turns.",
                 "##Difference from Infinite Scroll##: Infinite Scroll turns pages when you scroll past the top or bottom (paginated structure preserved); Auto-Join concatenates pages into a continuous flow with no pagination boundary.",
                 "##Note##: Auto-Join and Infinite Scroll are mutually exclusive — enabling Auto-Join disables Infinite Scroll.",
-                "##How to Enable##: Go to Settings → General → toggle on Auto-Join.",
-                "##Pro Tip##: Use with Show Line Numbers to display line numbers on each line in flow mode."
+                "##How to Enable##: Go to Settings → General → toggle on Auto-Join."
             ]
         },
         {
@@ -100,6 +127,15 @@
                 "##How to Enable##: Go to Settings → General → toggle on Log Mode.",
                 "##Auto Detection##: Files with **log** in their name (e.g. server_log.txt) automatically enable log mode on open.",
                 "##Note##: Enabling Log Mode will also enable Auto-Join and Show Line Numbers."
+            ]
+        },
+        {
+            "title": "Anonymous Mode",
+            "folded": true,
+            "content": [
+                "##What is Anonymous Mode##: When enabled, opened books won't appear on the bookshelf — useful for quick one-off reads.",
+                "##How to Enable##: Go to Settings → General → toggle on Anonymous Mode.",
+                "##Note##: Anonymous Mode only prevents new books from being saved; books already on the bookshelf remain unaffected."
             ]
         },
         {
@@ -119,7 +155,7 @@
             "folded": false,
             "content": [
                 "##Jump to a Chapter##: Click a **chapter title** in the **TOC** to jump to that chapter.",
-                "##Turn Pages##: Use the **← → arrow keys** to turn pages, or enable **infinite scroll mode** in settings.",
+                "##Turn Pages##: Use the **← → arrow keys** to turn pages, or enable **Infinite Scroll** in settings (recommended: also enable **Easier Infinite Scrolling**).",
                 "##Navigate Chapters##: Use **Page Up / Page Down keys** to jump to the previous or next chapter.",
                 "##Exit Reading##: Press **Esc** to exit reading and return to the bookshelf."
             ]

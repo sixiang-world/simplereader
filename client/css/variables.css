@@ -219,9 +219,9 @@
     --ui_log_mode_en: "Log Mode";
     --ui_log_mode_note_en: "⚠ Experimental, may contain bugs";
     --ui_continuous_scroll_mode_zh: "自动拼接";
-    --ui_continuous_scroll_mode_en: "Continuous Scroll";
-    --ui_continuous_scroll_mode_note_zh: "⚠ 实验功能，可能存在BUG";
-    --ui_continuous_scroll_mode_note_en: "⚠ Experimental, may contain bugs";
+    --ui_continuous_scroll_mode_en: "Auto-Join";
+    --ui_continuous_scroll_mode_note_zh: "⚠ 实验功能，存在已知 BUG，不推荐日常使用。推荐使用无限滚动 + 易触发模式";
+    --ui_continuous_scroll_mode_note_en: "⚠ Experimental, known bugs exist. Use Infinite Scroll + Easier mode instead";
     --ui_anonymous_mode_zh: "匿名模式";
     --ui_anonymous_mode_en: "Anonymous Mode";
     --ui_anonymous_mode_note_zh: "开启后，打开的书籍不会出现在书架上";

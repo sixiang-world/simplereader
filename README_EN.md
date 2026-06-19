@@ -57,7 +57,7 @@ Core features from [henryxrl/SimpleTextReader](https://github.com/henryxrl/Simpl
 
 Enhancements from [cataerogong/SimpleTextReader](https://github.com/cataerogong/SimpleTextReader):
 
-1. **Continuous Scroll (Flow Mode)**: Sliding-window renderer that dynamically loads/unloads content as you scroll, providing seamless reading without page breaks.
+1. **Auto-Join Mode (Flow Mode)**: Sliding-window renderer that dynamically loads/unloads content as you scroll, providing seamless reading without page breaks. ⚠ Experimental feature with known bugs — not recommended for daily use.
 2. **Full-Text Search**: Regex-enabled search dialog with forward/backward navigation and match highlighting. Shortcut: `F`.
 3. **Quick Jump (Go to Line)**: Jump by line number or percentage. Shortcut: `G`.
 4. **Log Mode**: Simplified rendering for `.log` files — skips title detection, text optimization, and pagination. Auto-detected or manually toggled.
@@ -67,7 +67,7 @@ Enhancements from [cataerogong/SimpleTextReader](https://github.com/cataerogong/
 
 ### New Features in This Project
 
-Added by this repository (shisheng):
+Added by this repository (sixiang-world):
 
 1. **EPUB Format Support**: JSZip decompression + OPF parsing + XHTML-to-structure conversion, feeding EPUB content into the existing TXT rendering pipeline. All TXT reading features (pagination, TOC, dark mode, fonts, bookshelf, progress) work automatically for EPUB files.
 2. **EPUB Chapter-Based Pagination**: Spine-based chapter-level pagination replacing single-page rendering.
@@ -75,6 +75,14 @@ Added by this repository (shisheng):
 4. **EPUB Bookshelf Persistence**: EPUB files saved to bookshelf with progress restore on reopen.
 5. **EPUB Language Detection**: Automatic language detection with UI language switching.
 6. **Infinite Scroll Fix**: Original `isActivelyScrolling` check required `deltaY < 20` for 3 consecutive events — impossible with normal mouse wheels. Replaced with a 300ms idle timeout: page turns automatically after the user stops scrolling.
+7. **Easier Infinite Scrolling**: Reduces the page-turn threshold (1200 → 400). **Recommended for use together with Infinite Scroll** for smoother page turns.
+8. **Anonymous Mode**: When enabled, opened books won't appear on the bookshelf — useful for quick one-off reads.
+9. **Show Book Title Toggle**: Hides the book name from the browser tab title, always showing "易笺" instead.
+
+### Recommended Page-Turn Settings
+
+> **Recommended: Enable both "Infinite Scroll" and "Easier Infinite Scrolling"** — the combination provides the smoothest page-turn experience.
+> "Auto-Join" is experimental with known bugs and is not recommended for daily use.
 
 ## Usage
 
@@ -91,7 +99,7 @@ Drag and drop **TXT or EPUB files** into the interface (batch import supported),
 ### Reading Features
 
 - Left sidebar TOC for chapter navigation
-- **Arrow keys** to turn pages, or enable infinite scroll / continuous scroll mode
+- **Arrow keys** to turn pages, or enable Infinite Scroll mode (recommended: also enable Easier Infinite Scrolling for smoother turns)
 - **Page Up / Page Down** to jump between chapters
 - **F** for full-text search, **G** for quick jump
 - **Esc** to return to bookshelf

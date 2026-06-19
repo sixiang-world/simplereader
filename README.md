@@ -19,7 +19,7 @@
 
 易笺是一款简单纯粹的 TXT/EPUB 阅读器，让朴素的纯文本书籍拥有精致优雅的阅读体验。
 
-本项目基于 [henryxrl/SimpleTextReader](https://github.com/henryxrl/SimpleTextReader)（原版）和 [cataerogong/SimpleTextReader](https://github.com/cataerogong/SimpleTextReader)（增强版）开发，整合了两者的功能并新增了 EPUB 支持等特性。
+本项目基于 [henryxrl/SimpleTextReader](https://github.com/henryxrl/SimpleTextReader)（原版）和 [cataerogong/SimpleTextReader](https://github.com/cataerogong/SimpleTextReader)（增强版）开发，整合了两者的功能并新增了 EPUB 支持、无限滚动易触发模式、匿名模式等特性。
 
 ![主界面](assets/0_intro_zh.png)
 
@@ -67,7 +67,7 @@
 
 ### 本项目新增功能
 
-本仓库（shisheng）在上述基础上新增：
+本仓库（sixiang-world）在上述基础上新增：
 
 1. **EPUB 格式支持**：通过 JSZip 解压 + OPF 解析 + XHTML 结构转换，将 EPUB 内容接入现有 TXT 渲染管线。所有 TXT 阅读功能（分页、目录、暗黑模式、字体、书架、进度）对 EPUB 自动生效
 2. **EPUB 章节分页**：基于 spine 的章节级分页，替代单页渲染
