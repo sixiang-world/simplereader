@@ -1,6 +1,23 @@
 {
-    "version": "1.6.10",
+    "version": "1.6.11",
     "changelog": {
+        "1.6.11": {
+            "date": "2026-06-19",
+            "changes": {
+                "zh": [
+                    "新增 **匿名模式** — 开启后打开的书籍不会出现在书架上",
+                    "新增 **无限滚动** 功能说明文字",
+                    "不推荐使用自动拼接（存在已知 BUG），推荐使用无限滚动配合让无限滚动更容易触发",
+                    "更新 README 和 CLAUDE.md 阅读模式说明"
+                ],
+                "en": [
+                    "Added **Anonymous Mode** — opened books won't appear on the bookshelf",
+                    "Added description text for Infinite Scroll setting",
+                    "Discouraged Auto-Join (known bugs); recommend Infinite Scroll + Easier Infinite Scrolling instead",
+                    "Updated README and CLAUDE.md reading mode documentation"
+                ]
+            }
+        },
         "1.6.10": {
             "date": "2026-06-19",
             "changes": {

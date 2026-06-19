@@ -113,6 +113,9 @@ class BookshelfDB extends DBManager {
      * @throws {Error} When database initialization fails or transaction fails
      */
     async putBook(name, data, isFromLocal = true, isOnServer = false) {
+        if (CONFIG.CONST_CONFIG.ANONYMOUS_MODE) {
+            return false;
+        }
         if (!(await this.init())) {
             throw new Error("Init local db error!");
         }
@@ -897,7 +900,7 @@ const bookshelf = {
                         // }
 
                         await this.db.putBook(file.name, file, isFromLocal, isOnServer);
-                        if (!(await this.db.isBookExist(file.name))) {
+                        if (!CONFIG.CONST_CONFIG.ANONYMOUS_MODE && !(await this.db.isBookExist(file.name))) {
                             PopupManager.showNotification({
                                 iconName: "ERROR",
                                 text: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToSave,

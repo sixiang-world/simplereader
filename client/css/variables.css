@@ -222,6 +222,10 @@
     --ui_continuous_scroll_mode_en: "Continuous Scroll";
     --ui_continuous_scroll_mode_note_zh: "⚠ 实验功能，可能存在BUG";
     --ui_continuous_scroll_mode_note_en: "⚠ Experimental, may contain bugs";
+    --ui_anonymous_mode_zh: "匿名模式";
+    --ui_anonymous_mode_en: "Anonymous Mode";
+    --ui_anonymous_mode_note_zh: "开启后，打开的书籍不会出现在书架上";
+    --ui_anonymous_mode_note_en: "When enabled, opened books won't appear on the bookshelf";
     --ui_show_line_numbers_zh: "显示行号";
     --ui_show_line_numbers_en: "Show Line Numbers";
     --ui_separator_reading_mode_zh: "排版模式";
@@ -691,6 +695,8 @@
     --ui_log_mode_note: var(--ui_log_mode_note_zh);
     --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_zh);
     --ui_continuous_scroll_mode_note: var(--ui_continuous_scroll_mode_note_zh);
+    --ui_anonymous_mode: var(--ui_anonymous_mode_zh);
+    --ui_anonymous_mode_note: var(--ui_anonymous_mode_note_zh);
     --ui_show_line_numbers: var(--ui_show_line_numbers_zh);
     --ui_separator_reading_mode: var(--ui_separator_reading_mode_zh);
     --ui_show_toc: var(--ui_show_toc_zh);
@@ -853,6 +859,8 @@
     --ui_log_mode_note: var(--ui_log_mode_note_en);
     --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_en);
     --ui_continuous_scroll_mode_note: var(--ui_continuous_scroll_mode_note_en);
+    --ui_anonymous_mode: var(--ui_anonymous_mode_en);
+    --ui_anonymous_mode_note: var(--ui_anonymous_mode_note_en);
     --ui_show_line_numbers: var(--ui_show_line_numbers_en);
     --ui_separator_reading_mode: var(--ui_separator_reading_mode_en);
     --ui_show_toc: var(--ui_show_toc_en);
@@ -1096,6 +1104,12 @@
 }
 #tooltip-setting_continuous_scroll_mode::before {
     content: var(--ui_continuous_scroll_mode_note);
+}
+#settingLabel-setting_anonymous_mode::before {
+    content: var(--ui_anonymous_mode);
+}
+#tooltip-setting_anonymous_mode::before {
+    content: var(--ui_anonymous_mode_note);
 }
 #settingLabel-setting_show_line_numbers::before {
     content: var(--ui_show_line_numbers);
