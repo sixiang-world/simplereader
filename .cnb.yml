@@ -1,0 +1,79 @@
+# .cnb.yml — CNB 流水线
+# 手动触发推送到 GitHub 镜像
+
+$:
+  web_trigger:
+    - name: sync-to-github
+      docker:
+        image: alpine/git:latest
+      env:
+        GITHUB_TOKEN: $GITHUB_TOKEN
+      stages:
+        - name: validate-token
+          script: |
+            if [ -z "$GITHUB_TOKEN" ]; then
+              echo "ERROR: GITHUB_TOKEN environment variable is required"
+              echo "Please set GITHUB_TOKEN in CNB pipeline secrets"
+              exit 78
+            fi
+
+        - name: configure-git
+          script: |
+            git config user.name "cnb-sync[bot]"
+            git config user.email "cnb-sync[bot]@users.noreply.github.com"
+
+        - name: add-github-remote
+          script: |
+            git remote add github https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git || \
+              git remote set-url github https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git
+
+        - name: push-branches
+          script: |
+            FORCE_FLAG=""
+            if [ "${FORCE_PUSH}" = "true" ]; then
+              FORCE_FLAG="--force"
+            fi
+
+            BRANCHES="${PUSH_BRANCH}"
+            if [ -z "$BRANCHES" ]; then
+              BRANCHES=$(git branch --format='%(refname:short)' 2>/dev/null || git branch | sed 's/^\* //')
+            fi
+
+            for BRANCH in $BRANCHES; do
+              if [ "${DRY_RUN}" = "true" ]; then
+                echo "[DRY RUN] Would push: branch ${BRANCH} -> github ${BRANCH} ${FORCE_FLAG}"
+              else
+                echo "Pushing branch: ${BRANCH}"
+                git push github "${BRANCH}" ${FORCE_FLAG} 2>&1 || echo "WARN: failed to push branch ${BRANCH}"
+              fi
+            done
+
+        - name: push-tags
+          script: |
+            if [ "${PUSH_TAGS}" = "false" ]; then
+              echo "Skipping tags (PUSH_TAGS=false)"
+              exit 0
+            fi
+
+            FORCE_FLAG=""
+            if [ "${FORCE_PUSH}" = "true" ]; then
+              FORCE_FLAG="--force"
+            fi
+
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "[DRY RUN] Would push: all tags ${FORCE_FLAG}"
+              git tag -l | head -20
+            else
+              echo "Pushing all tags..."
+              git push github --tags ${FORCE_FLAG} 2>&1 || echo "WARN: failed to push some tags"
+            fi
+
+        - name: summary
+          script: |
+            echo "=== CNB → GitHub Sync Summary ==="
+            echo "Target: sixiang-world/simplereader"
+            echo "Force Push: ${FORCE_PUSH:-false}"
+            echo "Branches: ${PUSH_BRANCH:-all local}"
+            echo "Tags: ${PUSH_TAGS:-true}"
+            echo "Dry Run: ${DRY_RUN:-false}"
+            echo "==============================="
