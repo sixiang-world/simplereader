@@ -189,6 +189,11 @@ const SETTINGS_SCHEMA = [
         bind: "CONFIG.CONST_CONFIG.ANONYMOUS_MODE",
         default: CONFIG.CONST_CONFIG.ANONYMOUS_MODE_DEFAULT,
         persist: true,
+        onApply: function (value) {
+            const dz = CONFIG.DOM_ELEMENT.DROPZONE_TEXT;
+            if (!dz) return;
+            dz.classList.toggle("dropzone-anonymous", value);
+        },
     },
     {
         key: "log_mode",
