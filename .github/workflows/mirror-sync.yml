@@ -1,0 +1,120 @@
+name: Mirror Sync to CNB
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_push:
+        description: "强制推送（覆盖远程历史）"
+        required: false
+        type: boolean
+        default: false
+      push_branch:
+        description: "推送分支（留空=全部分支，逗号分隔多个，如 main,dev）"
+        required: false
+        type: string
+        default: ""
+      push_tags:
+        description: "同时推送 tags"
+        required: false
+        type: boolean
+        default: true
+      pull_before_push:
+        description: "推送前先 pull 远程最新"
+        required: false
+        type: boolean
+        default: false
+      cnb_repo:
+        description: "CNB 仓库地址（留空=默认 shisheng820/simplereader）"
+        required: false
+        type: string
+        default: ""
+      dry_run:
+        description: "试运行（只显示会执行什么，不实际推送）"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve CNB repo URL
+        id: resolve
+        run: |
+          REPO="${{ inputs.cnb_repo }}"
+          if [ -z "$REPO" ]; then
+            REPO="shisheng820/simplereader"
+          fi
+          echo "cnb_url=https://cnb:${{ secrets.CNB_TOKEN }}@cnb.cool/${REPO}.git" >> $GITHUB_OUTPUT
+          echo "repo=${REPO}" >> $GITHUB_OUTPUT
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Pull remote (optional)
+        if: inputs.pull_before_push
+        run: |
+          git remote add cnb-pull https://cnb:${{ secrets.CNB_TOKEN }}@cnb.cool/${{ steps.resolve.outputs.repo }}.git || true
+          git fetch cnb-pull
+          git pull cnb-pull main --rebase || echo "WARN: pull failed, continuing with local state"
+
+      - name: Add CNB remote
+        run: |
+          git remote add mirror "${{ steps.resolve.outputs.cnb_url }}" || git remote set-url mirror "${{ steps.resolve.outputs.cnb_url }}"
+
+      - name: Push branches
+        run: |
+          FORCE_FLAG=""
+          if [ "${{ inputs.force_push }}" = "true" ]; then
+            FORCE_FLAG="--force"
+          fi
+
+          BRANCHES="${{ inputs.push_branch }}"
+          if [ -z "$BRANCHES" ]; then
+            # Push all local branches
+            BRANCHES=$(git branch --format='%(refname:short)' | tr '\n' ' ')
+          fi
+
+          for BRANCH in $BRANCHES; do
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "[DRY RUN] Would push: branch ${BRANCH} -> mirror ${BRANCH} ${FORCE_FLAG}"
+            else
+              echo "Pushing branch: ${BRANCH}"
+              git push mirror "${BRANCH}" ${FORCE_FLAG} || echo "WARN: failed to push branch ${BRANCH}"
+            fi
+          done
+
+      - name: Push tags
+        if: inputs.push_tags
+        run: |
+          FORCE_FLAG=""
+          if [ "${{ inputs.force_push }}" = "true" ]; then
+            FORCE_FLAG="--force"
+          fi
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "[DRY RUN] Would push: all tags ${FORCE_FLAG}"
+            git tag -l | head -20
+          else
+            echo "Pushing all tags..."
+            git push mirror --tags ${FORCE_FLAG} || echo "WARN: failed to push some tags"
+          fi
+
+      - name: Summary
+        run: |
+          echo "## ✅ CNB Mirror Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Option | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Target | \`${{ steps.resolve.outputs.repo }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Force Push | ${{ inputs.force_push }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branches | \`${{ inputs.push_branch || 'all' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tags | ${{ inputs.push_tags }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Pull Before | ${{ inputs.pull_before_push }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dry Run | ${{ inputs.dry_run }} |" >> $GITHUB_STEP_SUMMARY
