@@ -299,6 +299,7 @@
 .settingItem-span[id^="settingLabel-"]::before {
     grid-column: 1;
     text-align: left;
+    white-space: nowrap;
 }
 .settingItem-span[id^="settingLabel-"]::after {
     grid-column: 2;

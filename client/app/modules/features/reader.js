@@ -951,7 +951,8 @@ export const reader = {
             lastScrollEvent = currentTime;
 
             if ((isAtBottom && isScrollingDown) || (isAtTop && isScrollingUp)) {
-                if (additionalScroll > CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE_THRESHOLD) {
+                const threshold = CONFIG.CONST_CONFIG.INFINITE_SCROLL_EASY_MODE ? 200 : CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE_THRESHOLD;
+                if (additionalScroll > threshold) {
                     if (
                         (isAtBottom && CONFIG.VARS.CURRENT_PAGE < CONFIG.VARS.TOTAL_PAGES) ||
                         (isAtTop && CONFIG.VARS.CURRENT_PAGE > 1)

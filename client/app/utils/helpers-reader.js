@@ -35,7 +35,11 @@ let currentTitleID = null;
  * @param {string} [title=""] - The title to set for the document.
  */
 export function setTitle(title = "") {
-    document.title = title || CONFIG.RUNTIME_VARS.STYLE.ui_title || CONFIG.RUNTIME_VARS.STYLE.ui_title_zh;
+    if (CONFIG.CONST_CONFIG.SHOW_BOOK_TITLE === false) {
+        document.title = CONFIG.RUNTIME_VARS.STYLE.ui_title || CONFIG.RUNTIME_VARS.STYLE.ui_title_zh;
+    } else {
+        document.title = title || CONFIG.RUNTIME_VARS.STYLE.ui_title || CONFIG.RUNTIME_VARS.STYLE.ui_title_zh;
+    }
 }
 
 /**
