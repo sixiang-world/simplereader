@@ -2140,6 +2140,12 @@ const settings = {
 
         // Trigger updateAllBookCovers event
         cbReg.go("updateAllBookCovers", { colorOnly: colorOnly });
+
+        // Refresh the share URL input with updated settings
+        const shareInput = document.getElementById("config-share-url");
+        if (shareInput) {
+            shareInput.value = this.generateConfigURL();
+        }
     },
 
     /**
