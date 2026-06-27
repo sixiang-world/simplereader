@@ -278,6 +278,8 @@
     --ui_separator_behavior_en: "Behavior";
     --ui_separator_shortcuts_zh: "键盘快捷键";
     --ui_separator_shortcuts_en: "Keyboard Shortcuts";
+    --ui_separator_share_zh: "分享配置";
+    --ui_separator_share_en: "Share Config";
 
     /* UI font settings strings */
     --ui_font_group_system: "";
@@ -724,6 +726,7 @@
     --ui_separator_ui: var(--ui_separator_ui_zh);
     --ui_separator_behavior: var(--ui_separator_behavior_zh);
     --ui_separator_shortcuts: var(--ui_separator_shortcuts_zh);
+    --ui_separator_share: var(--ui_separator_share_zh);
     --ui_settingMenuFontSize: var(--ui_settingMenuFontSize_zh);
     --ui_settingMenuWidth: var(--ui_settingMenuWidth_zh);
     --ui_settingMenuSeparatorWidth: var(--ui_settingMenuSeparatorWidth_zh);
@@ -889,6 +892,7 @@
     --ui_separator_ui: var(--ui_separator_ui_en);
     --ui_separator_behavior: var(--ui_separator_behavior_en);
     --ui_separator_shortcuts: var(--ui_separator_shortcuts_en);
+    --ui_separator_share: var(--ui_separator_share_en);
     --ui_settingMenuFontSize: var(--ui_settingMenuFontSize_en);
     --ui_settingMenuWidth: var(--ui_settingMenuWidth_en);
     --ui_settingMenuSeparatorWidth: var(--ui_settingMenuSeparatorWidth_en);
@@ -1204,6 +1208,9 @@
 }
 #settingLabel-setting_separator_shortcuts::before {
     content: var(--ui_separator_shortcuts);
+}
+#settingLabel-setting_separator_share::before {
+    content: var(--ui_separator_share);
 }
 #settingLabel-about_title::before {
     content: var(--ui_setting_tab_about_title);

@@ -656,6 +656,11 @@ const MENU_SCHEMA = [
                 order: 3,
                 items: ["log_mode", "show_line_numbers"],
             },
+            {
+                section: "setting_separator_share",
+                order: 4,
+                items: ["__config_share_url"],
+            },
         ],
     },
     {
@@ -803,6 +808,12 @@ class SettingsMenu {
         // Add ESC key listener
         document.addEventListener("click", this.#handleClose);
         document.addEventListener("keydown", this.#handleClose, true);
+
+        // Refresh the share URL input with current settings
+        const shareInput = document.getElementById("config-share-url");
+        if (shareInput) {
+            shareInput.value = this.settingsObj.generateConfigURL();
+        }
 
         // Add global wheel event handler
         // Disable page scrolling when settings menu is open
@@ -1101,6 +1112,12 @@ class SettingsMenu {
             const items = [...section.items].sort((a, b) => (a.order || 0) - (b.order || 0));
 
             for (const itemId of items) {
+                // Special items not in SETTINGS_SCHEMA
+                if (itemId === "__config_share_url") {
+                    tab.appendChild(this.#createShareURLItem());
+                    continue;
+                }
+
                 const def = this.#SETTINGS_MAP[itemId];
                 if (!def || def.hidden) continue; // skip undefined or hidden items
 
@@ -1315,6 +1332,44 @@ class SettingsMenu {
         versionDisplay.className = "about-btn";
         versionDisplay.textContent = `v${CONFIG.RUNTIME_VARS.APP_VERSION}`;
         return versionDisplay;
+    }
+
+    /**
+     * Creates the "Share Config" URL item for the general tab.
+     * Renders a read-only input with the current config URL and a copy button.
+     * @returns {HTMLElement} The share URL item element
+     */
+    #createShareURLItem() {
+        const isZh = CONFIG.RUNTIME_VARS.STYLE.ui_LANG === "zh";
+        const copyText = isZh ? "复制" : "Copy";
+        const copiedText = isZh ? "✓ 已复制" : "✓ Copied!";
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "share-url-wrapper";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.id = "config-share-url";
+        input.readOnly = true;
+        input.value = this.settingsObj.generateConfigURL();
+        wrapper.appendChild(input);
+
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "share-url-copy-btn";
+        copyBtn.textContent = copyText;
+        copyBtn.addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText(input.value);
+                const orig = copyBtn.textContent;
+                copyBtn.textContent = copiedText;
+                setTimeout(() => { copyBtn.textContent = orig; }, 2000);
+            } catch {
+                input.select();
+            }
+        });
+        wrapper.appendChild(copyBtn);
+
+        return wrapper;
     }
 
     /**
@@ -1835,6 +1890,33 @@ const settings = {
             //     setSelectorValue(def.label, findFontIndex(this.values[def.key]));
             // }
         }
+    },
+
+    /**
+     * Generates a full URL with all current settings as query parameters.
+     * The generated URL can be used to reproduce the exact settings state.
+     * Range values have their unit stripped (the URL parser re-appends it).
+     * @returns {string} The full config URL
+     */
+    generateConfigURL() {
+        const params = [];
+        const keys = Object.keys(this.values).sort();
+        for (const key of keys) {
+            const val = this.values[key];
+            const type = this.types[key];
+            if (type === "checkbox") {
+                params.push(`${encodeURIComponent(key)}=${encodeURIComponent(val ? "true" : "false")}`);
+            } else if (type === "range") {
+                const num = parseFloat(val);
+                if (!isNaN(num)) {
+                    params.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(num))}`);
+                }
+            } else if (val !== undefined && val !== null && val !== "") {
+                params.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(val))}`);
+            }
+        }
+        const base = window.location.origin + window.location.pathname;
+        return params.length > 0 ? `${base}?${params.join("&")}` : base;
     },
 
     /**
