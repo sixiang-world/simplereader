@@ -1913,6 +1913,10 @@ const settings = {
         const params = [];
         const keys = Object.keys(this.values).sort();
         for (const key of keys) {
+            const def = SETTINGS_SCHEMA.find((d) => d.key === key);
+            // Skip hidden/computed settings — they cannot be URL-overridden
+            if (def?.hidden) continue;
+
             const val = this.values[key];
             const type = this.types[key];
             if (type === "checkbox") {
