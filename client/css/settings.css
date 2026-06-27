@@ -960,7 +960,7 @@ dialog::backdrop {
 }
 .share-url-wrapper .share-url-copy-btn {
     flex-shrink: 0;
-    padding: 8px 14px;
+    padding: 6px 12px;
     border: 1px solid var(--mainColor_inactive);
     border-radius: 4px;
     background: transparent;
