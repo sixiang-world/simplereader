@@ -934,3 +934,43 @@ dialog::backdrop {
     -webkit-backdrop-filter: blur(5px);
     backdrop-filter: blur(5px);
 }
+
+/* Share config URL input */
+.share-url-wrapper {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 6px 0px;
+    width: 100%;
+}
+.share-url-wrapper input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid var(--mainColor_inactive);
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.8em;
+    outline: none;
+}
+.share-url-wrapper input:focus {
+    border-color: var(--mainColor_active);
+}
+.share-url-wrapper .share-url-copy-btn {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid var(--mainColor_inactive);
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.8em;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+.share-url-wrapper .share-url-copy-btn:hover {
+    background: var(--mainColor_active);
+    color: var(--bgColor);
+    border-color: var(--mainColor_active);
+}
