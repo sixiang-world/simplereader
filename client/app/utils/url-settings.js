@@ -15,6 +15,7 @@ import { toBool } from "./base.js";
  * @type {RegExp}
  */
 const UNIT_REGEX = /^[\d.]+(em|px|%|rem|vh|vw)$/i;
+const NUMBER_REGEX = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
 
 /**
  * Parses URL query parameters and coerces values to match their declared
@@ -59,10 +60,10 @@ export function parseURLSettings(schema, urlParams) {
 
             case "range": {
                 const trimmed = rawValue.trim();
-                // Skip invalid numeric values
-                if (isNaN(parseFloat(trimmed))) continue;
-                // Append unit from schema if the value doesn't already carry one
-                if (def.unit && !UNIT_REGEX.test(trimmed)) {
+                // Skip invalid values (must be number or number+unit)
+                if (!NUMBER_REGEX.test(trimmed) && !UNIT_REGEX.test(trimmed)) continue;
+                // Append unit from schema if the value is unitless
+                if (def.unit && NUMBER_REGEX.test(trimmed)) {
                     overrides[key] = trimmed + def.unit;
                 } else {
                     overrides[key] = trimmed;
