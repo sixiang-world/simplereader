@@ -46,6 +46,7 @@ import {
     setDeep,
     getFontOffsets,
 } from "../../utils/base.js";
+import { parseURLSettings } from "../../utils/url-settings.js";
 import {
     setRangeValue,
     setColorValue,
@@ -1755,12 +1756,13 @@ const settings = {
                 // All other settings from schema
                 this.values[def.key] = this.loadSettingWithFallback(def.key);
             }
+        }
 
-            // URL parameter override: temporarily shadow persistent settings in memory only
-            if (CONFIG.URL_SETTINGS_OVERRIDE && def.key in CONFIG.URL_SETTINGS_OVERRIDE) {
-                const rawVal = CONFIG.URL_SETTINGS_OVERRIDE[def.key];
-                this.values[def.key] = def.type === "checkbox" ? toBool(rawVal, false) : rawVal;
-            }
+        // URL parameter override: schema-driven, properly typed, memory-only
+        for (const [key, value] of Object.entries(
+            parseURLSettings(SETTINGS_SCHEMA, new URLSearchParams(window.location.search))
+        )) {
+            this.values[key] = value;
         }
     },
 
