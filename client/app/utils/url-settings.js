@@ -54,12 +54,14 @@ export function parseURLSettings(schema, urlParams) {
 
         switch (def.type) {
             case "checkbox":
-                overrides[key] = toBool(rawValue, false);
+                overrides[key] = rawValue === "" ? false : toBool(rawValue, false);
                 break;
 
             case "range": {
-                // Append unit from schema if the value doesn't already carry one
                 const trimmed = rawValue.trim();
+                // Skip invalid numeric values
+                if (isNaN(parseFloat(trimmed))) continue;
+                // Append unit from schema if the value doesn't already carry one
                 if (def.unit && !UNIT_REGEX.test(trimmed)) {
                     overrides[key] = trimmed + def.unit;
                 } else {
