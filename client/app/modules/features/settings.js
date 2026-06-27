@@ -1824,7 +1824,11 @@ const settings = {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has("ui_language")) {
             this.respectUserLangSetting = true;
-            this.setLanguage(this.values.ui_language, false);
+            // If "auto", resolve to the actual browser language; CSS only knows "zh"/"en"
+            const lang = this.values.ui_language === "auto"
+                ? (navigator.language.startsWith("zh") ? "zh" : "en")
+                : this.values.ui_language;
+            this.setLanguage(lang, false);
         }
     },
 
