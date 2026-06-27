@@ -26,7 +26,7 @@ const NUMBER_REGEX = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
  * - `checkbox` → `toBool(rawVal, false)` → `true` / `false`
  * - `range`    → auto-appends `def.unit` if the raw value lacks a unit suffix
  * - `color`    → passed as raw string (e.g. `"#333333"`)
- * - `select`   → passed as raw string (e.g. `"zh"`)
+ * - `select`   → validated against `def.options` when provided, then passed as raw string
  * - `select-font` → passed as raw string (CSS font-family value)
  * - `hidden`   → **skipped** (derived/computed by `getValue`, not URL-overridable)
  *
@@ -71,8 +71,14 @@ export function parseURLSettings(schema, urlParams) {
                 break;
             }
 
+            case "select":
+                // Enforce schema options when available (e.g. ui_language)
+                if (Array.isArray(def.options) && def.options.length > 0 && !def.options.includes(rawValue)) continue;
+                overrides[key] = rawValue;
+                break;
+
             default:
-                // color, select, select-font, and any future types → raw string
+                // color, select-font, and any future types → raw string
                 overrides[key] = rawValue;
                 break;
         }
