@@ -42,15 +42,6 @@ console.log("Print database:", printDatabase);
 console.log("Upgrade database:", upgradeDB);
 
 /**
- * URL settings override — raw key-value pairs from query string.
- * Keys match SETTINGS_SCHEMA keys; values are raw strings.
- * Used by settings.js to temporarily override persistent settings
- * without writing to localStorage.
- * @type {Object<string, string>}
- */
-export const URL_SETTINGS_OVERRIDE = Object.fromEntries(urlParams.entries());
-
-/**
  * Runtime configuration
  * @type {Object}
  * @property {boolean} ENABLE_BOOKSHELF - Whether bookshelf feature is enabled
