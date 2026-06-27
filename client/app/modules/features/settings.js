@@ -1819,6 +1819,13 @@ const settings = {
         )) {
             this.values[key] = value;
         }
+
+        // Special case: ui_language URL override also needs to activate the language live
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has("ui_language")) {
+            this.respectUserLangSetting = true;
+            this.setLanguage(this.values.ui_language, false);
+        }
     },
 
     /**
