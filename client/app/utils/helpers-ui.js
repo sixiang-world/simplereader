@@ -813,7 +813,7 @@ export function setTOC_onRatio(initial = false) {
  * @public
  */
 export function setHelpButton() {
-    const showHelperBtn = toBool(localStorage.getItem("show_helper_btn"), false) ?? CONFIG.CONST_CONFIG.SHOW_HELPER_BTN;
+    const showHelperBtn = CONFIG.CONST_CONFIG.SHOW_HELPER_BTN ?? toBool(localStorage.getItem("show_helper_btn"), false);
     if (showHelperBtn && !isVariableDefined(CONFIG.DOM_ELEMENT.HELP_BUTTON)) {
         const helpButton = document.createElement("div");
         helpButton.id = "help-btn";
@@ -853,7 +853,7 @@ export function toggleHelpButton(visible = false) {
  */
 export function setCustomCursor() {
     const enableCustomCursor =
-        toBool(localStorage.getItem("enable_custom_cursor"), false) ?? CONFIG.CONST_CONFIG.ENABLE_CUSTOM_CURSOR;
+        CONFIG.CONST_CONFIG.ENABLE_CUSTOM_CURSOR ?? toBool(localStorage.getItem("enable_custom_cursor"), false);
     if (enableCustomCursor) {
         if (typeof IPadCursor !== "undefined") {
             IPadCursor.init({
