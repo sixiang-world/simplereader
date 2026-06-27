@@ -1751,11 +1751,16 @@ const settings = {
                 if (this.respectUserLangSetting) {
                     this.values[def.key] = this.loadSettingWithFallback(def.key, "UILang");
                 }
-                continue;
+            } else {
+                // All other settings from schema
+                this.values[def.key] = this.loadSettingWithFallback(def.key);
             }
 
-            // All other settings from schema
-            this.values[def.key] = this.loadSettingWithFallback(def.key);
+            // URL parameter override: temporarily shadow persistent settings in memory only
+            if (CONFIG.URL_SETTINGS_OVERRIDE && def.key in CONFIG.URL_SETTINGS_OVERRIDE) {
+                const rawVal = CONFIG.URL_SETTINGS_OVERRIDE[def.key];
+                this.values[def.key] = def.type === "checkbox" ? toBool(rawVal, false) : rawVal;
+            }
         }
     },
 
