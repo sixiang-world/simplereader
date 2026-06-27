@@ -938,10 +938,11 @@ dialog::backdrop {
 /* Share config URL input */
 .share-url-wrapper {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
-    padding: 6px 0px;
+    padding: 10px 0px;
     width: 100%;
+    min-height: 40px;
 }
 .share-url-wrapper input {
     flex: 1;
@@ -959,7 +960,7 @@ dialog::backdrop {
 }
 .share-url-wrapper .share-url-copy-btn {
     flex-shrink: 0;
-    padding: 6px 12px;
+    padding: 8px 14px;
     border: 1px solid var(--mainColor_inactive);
     border-radius: 4px;
     background: transparent;
