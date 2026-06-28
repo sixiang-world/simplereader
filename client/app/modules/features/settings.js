@@ -1364,6 +1364,18 @@ class SettingsMenu {
 
         const copyBtn = document.createElement("button");
         copyBtn.className = "share-url-copy-btn";
+        // Stash both labels as data-* attributes so setLanguage() can refresh
+        // them in-place when the user switches language while the settings
+        // menu is open (Issue-12). Without this, the button keeps showing the
+        // language that was active when #createShareURLItem() first ran.
+        copyBtn.id = "config-share-url-copy-btn";
+        copyBtn.dataset.copyText = copyText;
+        copyBtn.dataset.copiedText = copiedText;
+        // "is-copied" flag tracks whether the button is currently in the
+        // "✓ Copied" transient state, so a language switch mid-countdown
+        // updates the right label (copied vs idle) instead of clobbering
+        // the transient with the idle label.
+        copyBtn.dataset.isCopied = "false";
         copyBtn.textContent = copyText;
         // Track pending "copied" reset timer so rapid double-clicks don't leave
         // the button stuck on "✓ Copied" forever. The bug: the second click
@@ -1396,9 +1408,11 @@ class SettingsMenu {
                 }
             }
             if (copied) {
-                copyBtn.textContent = copiedText;
+                copyBtn.textContent = copyBtn.dataset.copiedText;
+                copyBtn.dataset.isCopied = "true";
                 copiedResetTimer = setTimeout(() => {
-                    copyBtn.textContent = copyText;
+                    copyBtn.textContent = copyBtn.dataset.copyText;
+                    copyBtn.dataset.isCopied = "false";
                     copiedResetTimer = null;
                 }, 2000);
             } else {
@@ -2380,6 +2394,29 @@ const settings = {
 
         // Update tooltips content
         cbReg.go("updateCustomTooltip");
+
+        // Refresh share-URL copy button labels if the settings menu is
+        // currently open (Issue-12). #createShareURLItem() captures the
+        // labels at creation time, so without this refresh the button
+        // keeps showing the previous language's "Copy" / "✓ Copied" text
+        // after a language switch inside the settings menu.
+        // We intentionally only touch the share URL button — other labels
+        // in the settings menu still require a close/reopen to refresh,
+        // and that is a separate architectural issue tracked elsewhere.
+        const shareCopyBtn = document.getElementById("config-share-url-copy-btn");
+        if (shareCopyBtn) {
+            const isZhNow = lang === "zh";
+            shareCopyBtn.dataset.copyText = isZhNow ? "复制" : "Copy";
+            shareCopyBtn.dataset.copiedText = isZhNow ? "✓ 已复制" : "✓ Copied!";
+            // Only update visible textContent when the button is in its
+            // idle state. If a "✓ Copied" countdown is in flight, let the
+            // pending setTimeout restore the (now-updated) idle label —
+            // flashing "✓ Copied" → "Copy" → "✓ Copied" mid-countdown
+            // would be worse than keeping the transient.
+            if (shareCopyBtn.dataset.isCopied !== "true") {
+                shareCopyBtn.textContent = shareCopyBtn.dataset.copyText;
+            }
+        }
 
         if (consoleLog) {
             console.log(`Language set to "${lang}".`);
