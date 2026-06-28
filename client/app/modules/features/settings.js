@@ -1829,6 +1829,9 @@ const settings = {
                 ? (navigator.language.startsWith("zh") ? "zh" : "en")
                 : this.values.ui_language;
             this.setLanguage(lang, false);
+            // Write back resolved value so applySettings uses the actual language code
+            // rather than the literal "auto" string.
+            this.values.ui_language = lang;
         }
     },
 

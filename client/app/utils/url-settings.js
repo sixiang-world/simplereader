@@ -73,7 +73,10 @@ export function parseURLSettings(schema, urlParams) {
 
             case "select":
                 // Enforce schema options when available (e.g. ui_language)
-                if (Array.isArray(def.options) && def.options.length > 0 && !def.options.includes(rawValue)) continue;
+                if (Array.isArray(def.options) && def.options.length > 0) {
+                    const lowerValue = rawValue.toLowerCase();
+                    if (!def.options.some((opt) => opt.toLowerCase() === lowerValue)) continue;
+                }
                 overrides[key] = rawValue;
                 break;
 
