@@ -1357,13 +1357,44 @@ class SettingsMenu {
         const copyBtn = document.createElement("button");
         copyBtn.className = "share-url-copy-btn";
         copyBtn.textContent = copyText;
+        // Track pending "copied" reset timer so rapid double-clicks don't leave
+        // the button stuck on "✓ Copied" forever. The bug: the second click
+        // captures `orig` = copiedText (since the first click already changed
+        // textContent), and the second setTimeout restores to copiedText.
+        let copiedResetTimer = null;
         copyBtn.addEventListener("click", async () => {
+            // Always reset the label first so consecutive clicks give clear feedback.
+            if (copiedResetTimer !== null) {
+                clearTimeout(copiedResetTimer);
+                copiedResetTimer = null;
+            }
+            let copied = false;
             try {
                 await navigator.clipboard.writeText(input.value);
-                const orig = copyBtn.textContent;
-                copyBtn.textContent = copiedText;
-                setTimeout(() => { copyBtn.textContent = orig; }, 2000);
+                copied = true;
             } catch {
+                // Clipboard API can fail on non-HTTPS origins, insecure
+                // contexts, or older browsers. Fall back to the deprecated
+                // execCommand path so the share URL is still copied.
+                try {
+                    input.removeAttribute("readonly");
+                    input.select();
+                    input.setSelectionRange(0, input.value.length);
+                    copied = document.execCommand("copy");
+                    input.setAttribute("readonly", "");
+                    input.blur();
+                } catch {
+                    copied = false;
+                }
+            }
+            if (copied) {
+                copyBtn.textContent = copiedText;
+                copiedResetTimer = setTimeout(() => {
+                    copyBtn.textContent = copyText;
+                    copiedResetTimer = null;
+                }, 2000);
+            } else {
+                // Last-ditch: select the input so the user can manually Ctrl+C.
                 input.select();
             }
         });
