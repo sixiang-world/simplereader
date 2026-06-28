@@ -1975,6 +1975,26 @@ const settings = {
      * @returns {string} The full config URL
      */
     generateConfigURL() {
+        // Build a Set of known setting keys so we can preserve unknown query
+        // params (e.g. ?book=xxx, ?token=yyy) that are not part of SETTINGS_SCHEMA
+        // but were present on the incoming URL. This avoids the share URL silently
+        // dropping context the original URL was carrying.
+        const knownKeys = new Set(Object.keys(this.schemaMap));
+        const preservedParams = [];
+        try {
+            const incoming = new URLSearchParams(window.location.search);
+            for (const [k, v] of incoming.entries()) {
+                if (!knownKeys.has(k)) {
+                    // Keep the last occurrence if duplicated, matching URLSearchParams
+                    // toString() behavior — simplest: re-add and dedupe below.
+                    preservedParams.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+                }
+            }
+        } catch {
+            // window.location.search may be unavailable in some sandboxed contexts;
+            // fall through silently with no preserved params.
+        }
+
         const params = [];
         const keys = Object.keys(this.values).sort();
         for (const key of keys) {
@@ -2004,8 +2024,15 @@ const settings = {
                 params.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(val))}`);
             }
         }
+
+        const allParams = [...preservedParams, ...params];
+        // Preserve hash so anchors like #chapter-3 survive a share round-trip.
+        const hash = window.location.hash || "";
         const base = window.location.origin + window.location.pathname;
-        return params.length > 0 ? `${base}?${params.join("&")}` : base;
+        if (allParams.length > 0) {
+            return `${base}?${allParams.join("&")}${hash}`;
+        }
+        return `${base}${hash}`;
     },
 
     /**
