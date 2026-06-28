@@ -1824,7 +1824,11 @@ const settings = {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has("ui_language")) {
             this.respectUserLangSetting = true;
-            // If "auto", resolve to the actual browser language; CSS only knows "zh"/"en"
+            // If "auto", resolve to the actual browser language; CSS only knows "zh"/"en".
+            // IMPORTANT: keep this.values.ui_language as the *original* URL value
+            // (e.g. "auto") so generateConfigURL can faithfully reproduce the URL.
+            // Store the resolved language code in _resolved_ui_language for
+            // applySettings to consume.
             const lang = this.values.ui_language === "auto"
                 ? (navigator.language.startsWith("zh") ? "zh" : "en")
                 : this.values.ui_language;
@@ -1832,9 +1836,7 @@ const settings = {
             // Sync WEB_LANG so the pending updateUILanguage event (fired after this
             // in enable()) uses the URL-overridden value, not the original browser one.
             CONFIG.RUNTIME_VARS.WEB_LANG = lang;
-            // Write back resolved value so applySettings uses the actual language code
-            // rather than the literal "auto" string.
-            this.values.ui_language = lang;
+            this._resolved_ui_language = lang;
         }
 
         // Recalculate hidden getValue-dependent settings after URL overrides.
@@ -1881,6 +1883,10 @@ const settings = {
 
         // Special case: respectUserLangSetting (not in manifest)
         this.respectUserLangSetting = CONFIG.RUNTIME_VARS.RESPECT_USER_LANG_SETTING_DEFAULT;
+
+        // Clear URL-resolved language cache so applySettings doesn't keep using
+        // a stale URL override after the user resets to defaults.
+        this._resolved_ui_language = null;
 
         // Loop through all settings from schema
         for (const def of SETTINGS_SCHEMA) {
@@ -1940,6 +1946,15 @@ const settings = {
             const def = SETTINGS_SCHEMA.find((d) => d.key === key);
             // Skip hidden/computed settings — they cannot be URL-overridden
             if (def?.hidden) continue;
+
+            // Skip ui_language when the user has the "auto" setting active
+            // (respectUserLangSetting === false). In that case this.values.ui_language
+            // is the resolved browser language (e.g. "zh"), but emitting it in the
+            // share URL would force *every* recipient onto that language instead of
+            // letting their own browser auto-detect. The user picked "auto", so the
+            // shared URL should preserve that semantic — which we do by *not*
+            // emitting the param at all (no override = browser default).
+            if (key === "ui_language" && !this.respectUserLangSetting) continue;
 
             const val = this.values[key];
             const type = this.types[key];
@@ -2031,7 +2046,11 @@ const settings = {
         // Special case: respectUserLangSetting (not in manifest)
         CONFIG.RUNTIME_VARS.RESPECT_USER_LANG_SETTING = this.respectUserLangSetting;
         if (this.respectUserLangSetting) {
-            CONFIG.RUNTIME_VARS.STYLE.ui_LANG = this.values.ui_language;
+            // Prefer the URL-resolved language (handles ui_language=auto case where
+            // this.values.ui_language is still "auto" but we want CSS to receive
+            // the resolved "zh"/"en" code). Falls back to the schema value when no
+            // URL override is active.
+            CONFIG.RUNTIME_VARS.STYLE.ui_LANG = this._resolved_ui_language ?? this.values.ui_language;
         }
 
         // Apply all settings except ui_language
@@ -2146,6 +2165,18 @@ const settings = {
 
         // Update all other values
         updateValuesFromInputs();
+
+        // When the user manually changes ui_language via the settings UI, the
+        // URL-resolved cache is stale (or no URL override was active to begin
+        // with). Reset it so applySettings falls back to this.values.ui_language.
+        // If the user picked "auto", applySettings needs the resolved browser
+        // language rather than the literal "auto" string.
+        if (this.values.ui_language === "auto") {
+            this._resolved_ui_language =
+                (CONFIG.VARS.IS_EASTERN_LAN ? "zh" : "en");
+        } else {
+            this._resolved_ui_language = this.values.ui_language;
+        }
 
         // Save language settings to local storage
         if (forceSetLanguage || (this.respectUserLangSetting && toSetLanguage)) {
