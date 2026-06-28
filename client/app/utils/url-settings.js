@@ -7,8 +7,6 @@
  * @module client/app/utils/url-settings
  */
 
-import { toBool } from "./base.js";
-
 /**
  * Regex to detect an existing unit suffix on a numeric value.
  * Accepts common CSS units: em, px, %, rem, vh, vw.
@@ -18,12 +16,22 @@ const UNIT_REGEX = /^[\d.]+(em|px|%|rem|vh|vw)$/i;
 const NUMBER_REGEX = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
 
 /**
+ * Set of string values that should coerce to boolean `true` for checkbox
+ * settings. Everything else (including "0", "no", "off", "false", "") coerces
+ * to `false`. This is stricter than `toBool(rawVal, false)`, which leaves
+ * unknown strings (e.g. "0", "1", "yes", "no") as truthy strings rather than
+ * booleans — and "0" / "no" being truthy would invert the user's intent.
+ * @type {Set<string>}
+ */
+const TRUTHY_CHECKBOX_VALUES = new Set(["true", "1", "yes", "on"]);
+
+/**
  * Parses URL query parameters and coerces values to match their declared
  * setting type from SETTINGS_SCHEMA. Non-schema params, hidden settings,
  * and unknown keys are silently ignored.
  *
  * Type coercion rules:
- * - `checkbox` → `toBool(rawVal, false)` → `true` / `false`
+ * - `checkbox` → `true` for "true"/"1"/"yes"/"on" (case-insensitive), `false` otherwise
  * - `range`    → auto-appends `def.unit` if the raw value lacks a unit suffix
  * - `color`    → passed as raw string (e.g. `"#333333"`)
  * - `select`   → validated against `def.options` when provided, then passed as raw string
@@ -55,7 +63,9 @@ export function parseURLSettings(schema, urlParams) {
 
         switch (def.type) {
             case "checkbox":
-                overrides[key] = rawValue === "" ? false : toBool(rawValue, false);
+                // Strict boolean coercion: "0"/"no"/"off"/"" must be `false`,
+                // not the truthy strings that `toBool(rawVal, false)` would return.
+                overrides[key] = TRUTHY_CHECKBOX_VALUES.has(rawValue.trim().toLowerCase());
                 break;
 
             case "range": {
