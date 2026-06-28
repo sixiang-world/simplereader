@@ -2266,10 +2266,16 @@ const settings = {
         // Trigger updateAllBookCovers event
         cbReg.go("updateAllBookCovers", { colorOnly: colorOnly });
 
-        // Refresh the share URL input with updated settings
-        const shareInput = document.getElementById("config-share-url");
-        if (shareInput) {
-            shareInput.value = this.generateConfigURL();
+        // Refresh the share URL input with updated settings.
+        // Only do this when the settings menu is actually visible — saveSettings
+        // is also called from the menu-close handler (handleSettingsClose with
+        // shouldSave: true), in which case the share URL field is about to be
+        // hidden anyway and regenerating the URL is wasted work.
+        if (CONFIG.VARS.IS_SETTINGS_MENU_SHOWN) {
+            const shareInput = document.getElementById("config-share-url");
+            if (shareInput) {
+                shareInput.value = this.generateConfigURL();
+            }
         }
     },
 
