@@ -76,8 +76,10 @@ export function parseURLSettings(schema, urlParams) {
                 if (Array.isArray(def.options) && def.options.length > 0) {
                     const lowerValue = rawValue.toLowerCase();
                     if (!def.options.some((opt) => opt.toLowerCase() === lowerValue)) continue;
+                    overrides[key] = lowerValue;
+                } else {
+                    overrides[key] = rawValue;
                 }
-                overrides[key] = rawValue;
                 break;
 
             default:
