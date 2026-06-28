@@ -16,6 +16,14 @@ const UNIT_REGEX = /^[\d.]+(em|px|%|rem|vh|vw)$/i;
 const NUMBER_REGEX = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
 
 /**
+ * Regex to validate 3- or 6-digit hex color strings (with leading #).
+ * Used to reject garbage like ?light_mainColor_active=not-a-color before
+ * it pollutes CSS variables.
+ * @type {RegExp}
+ */
+const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?$/;
+
+/**
  * Set of string values that should coerce to boolean `true` for checkbox
  * settings. Everything else (including "0", "no", "off", "false", "") coerces
  * to `false`. This is stricter than `toBool(rawVal, false)`, which leaves
@@ -34,7 +42,7 @@ const TRUTHY_CHECKBOX_VALUES = new Set(["true", "1", "yes", "on"]);
  * - `checkbox` → `true` for "true"/"1"/"yes"/"on" (case-insensitive), `false` otherwise
  * - `range`    → auto-appends `def.unit` if the raw value lacks a unit suffix;
  *                values outside `def.min`/`def.max` are silently rejected
- * - `color`    → passed as raw string (e.g. `"#333333"`)
+ * - `color`    → validated as a 3- or 6-digit hex string (e.g. `"#333333"`)
  * - `select`   → validated against `def.options` when provided, then passed as raw string
  * - `select-font` → passed as raw string (CSS font-family value)
  * - `hidden`   → **skipped** (derived/computed by `getValue`, not URL-overridable)
@@ -93,6 +101,16 @@ export function parseURLSettings(schema, urlParams) {
                 } else {
                     overrides[key] = trimmed;
                 }
+                break;
+            }
+
+            case "color": {
+                // Validate as 3- or 6-digit hex. Reject garbage so it never
+                // reaches hexToHSL (which returns NaN for invalid input) or
+                // gets baked into CSS variables.
+                const trimmed = rawValue.trim();
+                if (!HEX_COLOR_REGEX.test(trimmed)) continue;
+                overrides[key] = trimmed;
                 break;
             }
 
