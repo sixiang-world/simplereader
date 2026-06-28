@@ -32,7 +32,8 @@ const TRUTHY_CHECKBOX_VALUES = new Set(["true", "1", "yes", "on"]);
  *
  * Type coercion rules:
  * - `checkbox` → `true` for "true"/"1"/"yes"/"on" (case-insensitive), `false` otherwise
- * - `range`    → auto-appends `def.unit` if the raw value lacks a unit suffix
+ * - `range`    → auto-appends `def.unit` if the raw value lacks a unit suffix;
+ *                values outside `def.min`/`def.max` are silently rejected
  * - `color`    → passed as raw string (e.g. `"#333333"`)
  * - `select`   → validated against `def.options` when provided, then passed as raw string
  * - `select-font` → passed as raw string (CSS font-family value)
@@ -72,6 +73,20 @@ export function parseURLSettings(schema, urlParams) {
                 const trimmed = rawValue.trim();
                 // Skip invalid values (must be number or number+unit)
                 if (!NUMBER_REGEX.test(trimmed) && !UNIT_REGEX.test(trimmed)) continue;
+
+                // Extract the numeric portion for range validation.
+                // NUMBER_REGEX matches the whole string; UNIT_REGEX matches "<num><unit>".
+                const numStr = NUMBER_REGEX.test(trimmed)
+                    ? trimmed
+                    : trimmed.match(/^[\d.]+/)?.[0];
+                const num = numStr !== undefined ? parseFloat(numStr) : NaN;
+                if (isNaN(num)) continue;
+
+                // Enforce schema min/max to prevent hostile values like
+                // ?p_fontSize=99999 from breaking layout.
+                if (def.min !== undefined && num < def.min) continue;
+                if (def.max !== undefined && num > def.max) continue;
+
                 // Append unit from schema if the value is unitless
                 if (def.unit && NUMBER_REGEX.test(trimmed)) {
                     overrides[key] = trimmed + def.unit;
