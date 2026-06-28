@@ -575,7 +575,12 @@ const SETTINGS_SCHEMA = [
  * Each section object in `content` defines a group separator and its items:
  *   - section:   {string}    Localization key or label for the section separator
  *   - order:     {number}    Display order of this section within the tab
- *   - items:     {Array<string>} Ordered list of setting keys (referencing SETTINGS_SCHEMA) to show in this section
+ *   - items:     {Array<string>} Ordered list of setting keys (referencing SETTINGS_SCHEMA) to show in this section.
+ *                            Item keys starting with "__" are virtual items — they are NOT backed by a SETTINGS_SCHEMA
+ *                            entry and are rendered by a dedicated branch in #createTabFromSchema. The "__" prefix
+ *                            is the convention that distinguishes these virtual items from real setting keys.
+ *                            Current virtual items:
+ *                              - "__config_share_url" → renders the share-config URL input + copy button (#createShareURLItem)
  *
  * @constant
  * @type {Array<Object>}
@@ -1112,7 +1117,10 @@ class SettingsMenu {
             const items = [...section.items].sort((a, b) => (a.order || 0) - (b.order || 0));
 
             for (const itemId of items) {
-                // Special items not in SETTINGS_SCHEMA
+                // Virtual items: itemId starts with "__" and is NOT a SETTINGS_SCHEMA key.
+                // These are dispatched to dedicated creators before the schema lookup below,
+                // so the schema-map lookup never throws on them. See MENU_SCHEMA docs for
+                // the full list of virtual items.
                 if (itemId === "__config_share_url") {
                     tab.appendChild(this.#createShareURLItem());
                     continue;
@@ -1357,13 +1365,44 @@ class SettingsMenu {
         const copyBtn = document.createElement("button");
         copyBtn.className = "share-url-copy-btn";
         copyBtn.textContent = copyText;
+        // Track pending "copied" reset timer so rapid double-clicks don't leave
+        // the button stuck on "✓ Copied" forever. The bug: the second click
+        // captures `orig` = copiedText (since the first click already changed
+        // textContent), and the second setTimeout restores to copiedText.
+        let copiedResetTimer = null;
         copyBtn.addEventListener("click", async () => {
+            // Always reset the label first so consecutive clicks give clear feedback.
+            if (copiedResetTimer !== null) {
+                clearTimeout(copiedResetTimer);
+                copiedResetTimer = null;
+            }
+            let copied = false;
             try {
                 await navigator.clipboard.writeText(input.value);
-                const orig = copyBtn.textContent;
-                copyBtn.textContent = copiedText;
-                setTimeout(() => { copyBtn.textContent = orig; }, 2000);
+                copied = true;
             } catch {
+                // Clipboard API can fail on non-HTTPS origins, insecure
+                // contexts, or older browsers. Fall back to the deprecated
+                // execCommand path so the share URL is still copied.
+                try {
+                    input.removeAttribute("readonly");
+                    input.select();
+                    input.setSelectionRange(0, input.value.length);
+                    copied = document.execCommand("copy");
+                    input.setAttribute("readonly", "");
+                    input.blur();
+                } catch {
+                    copied = false;
+                }
+            }
+            if (copied) {
+                copyBtn.textContent = copiedText;
+                copiedResetTimer = setTimeout(() => {
+                    copyBtn.textContent = copyText;
+                    copiedResetTimer = null;
+                }, 2000);
+            } else {
+                // Last-ditch: select the input so the user can manually Ctrl+C.
                 input.select();
             }
         });
@@ -1696,6 +1735,10 @@ const settings = {
     defaults: Object.fromEntries(SETTINGS_SCHEMA.map((item) => [item.key, item.default])),
     values: Object.fromEntries(SETTINGS_SCHEMA.map((item) => [item.key, item.default])),
     types: Object.fromEntries(SETTINGS_SCHEMA.map((item) => [item.key, item.type])),
+    // Pre-built key → def lookup so generateConfigURL is O(n) instead of O(n²).
+    // Each call previously did SETTINGS_SCHEMA.find() per key (~50 keys × ~50 schema
+    // entries = 2500 ops) on every applySettings() / saveSettings().
+    schemaMap: Object.fromEntries(SETTINGS_SCHEMA.map((item) => [item.key, item])),
 
     /**
      * Loads a user setting from localStorage, falling back to an alternate key or the default value.
@@ -1824,7 +1867,11 @@ const settings = {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has("ui_language")) {
             this.respectUserLangSetting = true;
-            // If "auto", resolve to the actual browser language; CSS only knows "zh"/"en"
+            // If "auto", resolve to the actual browser language; CSS only knows "zh"/"en".
+            // IMPORTANT: keep this.values.ui_language as the *original* URL value
+            // (e.g. "auto") so generateConfigURL can faithfully reproduce the URL.
+            // Store the resolved language code in _resolved_ui_language for
+            // applySettings to consume.
             const lang = this.values.ui_language === "auto"
                 ? (navigator.language.startsWith("zh") ? "zh" : "en")
                 : this.values.ui_language;
@@ -1832,9 +1879,7 @@ const settings = {
             // Sync WEB_LANG so the pending updateUILanguage event (fired after this
             // in enable()) uses the URL-overridden value, not the original browser one.
             CONFIG.RUNTIME_VARS.WEB_LANG = lang;
-            // Write back resolved value so applySettings uses the actual language code
-            // rather than the literal "auto" string.
-            this.values.ui_language = lang;
+            this._resolved_ui_language = lang;
         }
 
         // Recalculate hidden getValue-dependent settings after URL overrides.
@@ -1881,6 +1926,10 @@ const settings = {
 
         // Special case: respectUserLangSetting (not in manifest)
         this.respectUserLangSetting = CONFIG.RUNTIME_VARS.RESPECT_USER_LANG_SETTING_DEFAULT;
+
+        // Clear URL-resolved language cache so applySettings doesn't keep using
+        // a stale URL override after the user resets to defaults.
+        this._resolved_ui_language = null;
 
         // Loop through all settings from schema
         for (const def of SETTINGS_SCHEMA) {
@@ -1934,12 +1983,41 @@ const settings = {
      * @returns {string} The full config URL
      */
     generateConfigURL() {
+        // Build a Set of known setting keys so we can preserve unknown query
+        // params (e.g. ?book=xxx, ?token=yyy) that are not part of SETTINGS_SCHEMA
+        // but were present on the incoming URL. This avoids the share URL silently
+        // dropping context the original URL was carrying.
+        const knownKeys = new Set(Object.keys(this.schemaMap));
+        const preservedParams = [];
+        try {
+            const incoming = new URLSearchParams(window.location.search);
+            for (const [k, v] of incoming.entries()) {
+                if (!knownKeys.has(k)) {
+                    // Keep the last occurrence if duplicated, matching URLSearchParams
+                    // toString() behavior — simplest: re-add and dedupe below.
+                    preservedParams.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+                }
+            }
+        } catch {
+            // window.location.search may be unavailable in some sandboxed contexts;
+            // fall through silently with no preserved params.
+        }
+
         const params = [];
         const keys = Object.keys(this.values).sort();
         for (const key of keys) {
-            const def = SETTINGS_SCHEMA.find((d) => d.key === key);
+            const def = this.schemaMap[key];
             // Skip hidden/computed settings — they cannot be URL-overridden
             if (def?.hidden) continue;
+
+            // Skip ui_language when the user has the "auto" setting active
+            // (respectUserLangSetting === false). In that case this.values.ui_language
+            // is the resolved browser language (e.g. "zh"), but emitting it in the
+            // share URL would force *every* recipient onto that language instead of
+            // letting their own browser auto-detect. The user picked "auto", so the
+            // shared URL should preserve that semantic — which we do by *not*
+            // emitting the param at all (no override = browser default).
+            if (key === "ui_language" && !this.respectUserLangSetting) continue;
 
             const val = this.values[key];
             const type = this.types[key];
@@ -1954,8 +2032,15 @@ const settings = {
                 params.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(val))}`);
             }
         }
+
+        const allParams = [...preservedParams, ...params];
+        // Preserve hash so anchors like #chapter-3 survive a share round-trip.
+        const hash = window.location.hash || "";
         const base = window.location.origin + window.location.pathname;
-        return params.length > 0 ? `${base}?${params.join("&")}` : base;
+        if (allParams.length > 0) {
+            return `${base}?${allParams.join("&")}${hash}`;
+        }
+        return `${base}${hash}`;
     },
 
     /**
@@ -2031,7 +2116,11 @@ const settings = {
         // Special case: respectUserLangSetting (not in manifest)
         CONFIG.RUNTIME_VARS.RESPECT_USER_LANG_SETTING = this.respectUserLangSetting;
         if (this.respectUserLangSetting) {
-            CONFIG.RUNTIME_VARS.STYLE.ui_LANG = this.values.ui_language;
+            // Prefer the URL-resolved language (handles ui_language=auto case where
+            // this.values.ui_language is still "auto" but we want CSS to receive
+            // the resolved "zh"/"en" code). Falls back to the schema value when no
+            // URL override is active.
+            CONFIG.RUNTIME_VARS.STYLE.ui_LANG = this._resolved_ui_language ?? this.values.ui_language;
         }
 
         // Apply all settings except ui_language
@@ -2147,6 +2236,18 @@ const settings = {
         // Update all other values
         updateValuesFromInputs();
 
+        // When the user manually changes ui_language via the settings UI, the
+        // URL-resolved cache is stale (or no URL override was active to begin
+        // with). Reset it so applySettings falls back to this.values.ui_language.
+        // If the user picked "auto", applySettings needs the resolved browser
+        // language rather than the literal "auto" string.
+        if (this.values.ui_language === "auto") {
+            this._resolved_ui_language =
+                (CONFIG.VARS.IS_EASTERN_LAN ? "zh" : "en");
+        } else {
+            this._resolved_ui_language = this.values.ui_language;
+        }
+
         // Save language settings to local storage
         if (forceSetLanguage || (this.respectUserLangSetting && toSetLanguage)) {
             let lang = this.respectUserLangSetting
@@ -2173,10 +2274,16 @@ const settings = {
         // Trigger updateAllBookCovers event
         cbReg.go("updateAllBookCovers", { colorOnly: colorOnly });
 
-        // Refresh the share URL input with updated settings
-        const shareInput = document.getElementById("config-share-url");
-        if (shareInput) {
-            shareInput.value = this.generateConfigURL();
+        // Refresh the share URL input with updated settings.
+        // Only do this when the settings menu is actually visible — saveSettings
+        // is also called from the menu-close handler (handleSettingsClose with
+        // shouldSave: true), in which case the share URL field is about to be
+        // hidden anyway and regenerating the URL is wasted work.
+        if (CONFIG.VARS.IS_SETTINGS_MENU_SHOWN) {
+            const shareInput = document.getElementById("config-share-url");
+            if (shareInput) {
+                shareInput.value = this.generateConfigURL();
+            }
         }
     },
 
