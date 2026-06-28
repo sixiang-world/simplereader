@@ -575,7 +575,12 @@ const SETTINGS_SCHEMA = [
  * Each section object in `content` defines a group separator and its items:
  *   - section:   {string}    Localization key or label for the section separator
  *   - order:     {number}    Display order of this section within the tab
- *   - items:     {Array<string>} Ordered list of setting keys (referencing SETTINGS_SCHEMA) to show in this section
+ *   - items:     {Array<string>} Ordered list of setting keys (referencing SETTINGS_SCHEMA) to show in this section.
+ *                            Item keys starting with "__" are virtual items — they are NOT backed by a SETTINGS_SCHEMA
+ *                            entry and are rendered by a dedicated branch in #createTabFromSchema. The "__" prefix
+ *                            is the convention that distinguishes these virtual items from real setting keys.
+ *                            Current virtual items:
+ *                              - "__config_share_url" → renders the share-config URL input + copy button (#createShareURLItem)
  *
  * @constant
  * @type {Array<Object>}
@@ -1112,7 +1117,10 @@ class SettingsMenu {
             const items = [...section.items].sort((a, b) => (a.order || 0) - (b.order || 0));
 
             for (const itemId of items) {
-                // Special items not in SETTINGS_SCHEMA
+                // Virtual items: itemId starts with "__" and is NOT a SETTINGS_SCHEMA key.
+                // These are dispatched to dedicated creators before the schema lookup below,
+                // so the schema-map lookup never throws on them. See MENU_SCHEMA docs for
+                // the full list of virtual items.
                 if (itemId === "__config_share_url") {
                     tab.appendChild(this.#createShareURLItem());
                     continue;
