@@ -1829,6 +1829,9 @@ const settings = {
                 ? (navigator.language.startsWith("zh") ? "zh" : "en")
                 : this.values.ui_language;
             this.setLanguage(lang, false);
+            // Sync WEB_LANG so the pending updateUILanguage event (fired after this
+            // in enable()) uses the URL-overridden value, not the original browser one.
+            CONFIG.RUNTIME_VARS.WEB_LANG = lang;
             // Write back resolved value so applySettings uses the actual language code
             // rather than the literal "auto" string.
             this.values.ui_language = lang;
