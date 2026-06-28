@@ -1833,6 +1833,24 @@ const settings = {
             // rather than the literal "auto" string.
             this.values.ui_language = lang;
         }
+
+        // Recalculate hidden getValue-dependent settings after URL overrides.
+        // Hidden settings like light_mainColor_inactive derive from a sibling setting
+        // (e.g. light_mainColor_active) via getValue, but URL overrides only update
+        // the source key, leaving the derived value stale in localStorage.
+        const labelToKey = Object.create(null);
+        for (const def of SETTINGS_SCHEMA) {
+            if (def.label) labelToKey[def.label] = def.key;
+        }
+        for (const def of SETTINGS_SCHEMA) {
+            if (def.hidden && typeof def.getValue === "function" && def.inputRef) {
+                const sourceKey = labelToKey[def.inputRef];
+                if (sourceKey && this.values[sourceKey] !== undefined) {
+                    const $mockInput = { val: () => this.values[sourceKey] };
+                    this.values[def.key] = def.getValue.call({ defaults: this.defaults }, $mockInput);
+                }
+            }
+        }
     },
 
     /**
