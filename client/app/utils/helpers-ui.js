@@ -813,7 +813,17 @@ export function setTOC_onRatio(initial = false) {
  * @public
  */
 export function setHelpButton() {
-    const showHelperBtn = CONFIG.CONST_CONFIG.SHOW_HELPER_BTN ?? toBool(localStorage.getItem("show_helper_btn"), false);
+    // INTENT: read CONFIG.CONST_CONFIG.SHOW_HELPER_BTN first (NOT localStorage)
+    // because URL parameter overrides are applied to CONFIG by applySettings(),
+    // never to localStorage. Falling back to localStorage only matters when
+    // applySettings() has not yet run (e.g. early init) or failed.
+    // The trailing `?? true` covers the pathological case where
+    // CONST_CONFIG.SHOW_HELPER_BTN is somehow nullish AND localStorage has no
+    // value, so the button is still shown by default rather than disappearing.
+    const showHelperBtn =
+        CONFIG.CONST_CONFIG.SHOW_HELPER_BTN ??
+        toBool(localStorage.getItem("show_helper_btn"), false) ??
+        true;
     if (showHelperBtn && !isVariableDefined(CONFIG.DOM_ELEMENT.HELP_BUTTON)) {
         const helpButton = document.createElement("div");
         helpButton.id = "help-btn";
@@ -852,8 +862,16 @@ export function toggleHelpButton(visible = false) {
  * @public
  */
 export function setCustomCursor() {
+    // INTENT: read CONFIG.CONST_CONFIG.ENABLE_CUSTOM_CURSOR first (NOT localStorage)
+    // because URL parameter overrides are applied to CONFIG by applySettings(),
+    // never to localStorage. Falling back to localStorage only matters when
+    // applySettings() has not yet run (e.g. early init) or failed.
+    // The trailing `?? false` preserves the upstream default of "disabled"
+    // when neither source provides a value.
     const enableCustomCursor =
-        CONFIG.CONST_CONFIG.ENABLE_CUSTOM_CURSOR ?? toBool(localStorage.getItem("enable_custom_cursor"), false);
+        CONFIG.CONST_CONFIG.ENABLE_CUSTOM_CURSOR ??
+        toBool(localStorage.getItem("enable_custom_cursor"), false) ??
+        false;
     if (enableCustomCursor) {
         if (typeof IPadCursor !== "undefined") {
             IPadCursor.init({

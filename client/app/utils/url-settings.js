@@ -7,8 +7,6 @@
  * @module client/app/utils/url-settings
  */
 
-import { toBool } from "./base.js";
-
 /**
  * Regex to detect an existing unit suffix on a numeric value.
  * Accepts common CSS units: em, px, %, rem, vh, vw.
@@ -18,14 +16,33 @@ const UNIT_REGEX = /^[\d.]+(em|px|%|rem|vh|vw)$/i;
 const NUMBER_REGEX = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
 
 /**
+ * Regex to validate 3- or 6-digit hex color strings (with leading #).
+ * Used to reject garbage like ?light_mainColor_active=not-a-color before
+ * it pollutes CSS variables.
+ * @type {RegExp}
+ */
+const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?$/;
+
+/**
+ * Set of string values that should coerce to boolean `true` for checkbox
+ * settings. Everything else (including "0", "no", "off", "false", "") coerces
+ * to `false`. This is stricter than `toBool(rawVal, false)`, which leaves
+ * unknown strings (e.g. "0", "1", "yes", "no") as truthy strings rather than
+ * booleans — and "0" / "no" being truthy would invert the user's intent.
+ * @type {Set<string>}
+ */
+const TRUTHY_CHECKBOX_VALUES = new Set(["true", "1", "yes", "on"]);
+
+/**
  * Parses URL query parameters and coerces values to match their declared
  * setting type from SETTINGS_SCHEMA. Non-schema params, hidden settings,
  * and unknown keys are silently ignored.
  *
  * Type coercion rules:
- * - `checkbox` → `toBool(rawVal, false)` → `true` / `false`
- * - `range`    → auto-appends `def.unit` if the raw value lacks a unit suffix
- * - `color`    → passed as raw string (e.g. `"#333333"`)
+ * - `checkbox` → `true` for "true"/"1"/"yes"/"on" (case-insensitive), `false` otherwise
+ * - `range`    → auto-appends `def.unit` if the raw value lacks a unit suffix;
+ *                values outside `def.min`/`def.max` are silently rejected
+ * - `color`    → validated as a 3- or 6-digit hex string (e.g. `"#333333"`)
  * - `select`   → validated against `def.options` when provided, then passed as raw string
  * - `select-font` → passed as raw string (CSS font-family value)
  * - `hidden`   → **skipped** (derived/computed by `getValue`, not URL-overridable)
@@ -55,19 +72,45 @@ export function parseURLSettings(schema, urlParams) {
 
         switch (def.type) {
             case "checkbox":
-                overrides[key] = rawValue === "" ? false : toBool(rawValue, false);
+                // Strict boolean coercion: "0"/"no"/"off"/"" must be `false`,
+                // not the truthy strings that `toBool(rawVal, false)` would return.
+                overrides[key] = TRUTHY_CHECKBOX_VALUES.has(rawValue.trim().toLowerCase());
                 break;
 
             case "range": {
                 const trimmed = rawValue.trim();
                 // Skip invalid values (must be number or number+unit)
                 if (!NUMBER_REGEX.test(trimmed) && !UNIT_REGEX.test(trimmed)) continue;
+
+                // Extract the numeric portion for range validation.
+                // NUMBER_REGEX matches the whole string; UNIT_REGEX matches "<num><unit>".
+                const numStr = NUMBER_REGEX.test(trimmed)
+                    ? trimmed
+                    : trimmed.match(/^[\d.]+/)?.[0];
+                const num = numStr !== undefined ? parseFloat(numStr) : NaN;
+                if (isNaN(num)) continue;
+
+                // Enforce schema min/max to prevent hostile values like
+                // ?p_fontSize=99999 from breaking layout.
+                if (def.min !== undefined && num < def.min) continue;
+                if (def.max !== undefined && num > def.max) continue;
+
                 // Append unit from schema if the value is unitless
                 if (def.unit && NUMBER_REGEX.test(trimmed)) {
                     overrides[key] = trimmed + def.unit;
                 } else {
                     overrides[key] = trimmed;
                 }
+                break;
+            }
+
+            case "color": {
+                // Validate as 3- or 6-digit hex. Reject garbage so it never
+                // reaches hexToHSL (which returns NaN for invalid input) or
+                // gets baked into CSS variables.
+                const trimmed = rawValue.trim();
+                if (!HEX_COLOR_REGEX.test(trimmed)) continue;
+                overrides[key] = trimmed;
                 break;
             }
 
