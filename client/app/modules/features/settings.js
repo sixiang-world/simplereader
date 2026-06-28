@@ -1727,6 +1727,10 @@ const settings = {
     defaults: Object.fromEntries(SETTINGS_SCHEMA.map((item) => [item.key, item.default])),
     values: Object.fromEntries(SETTINGS_SCHEMA.map((item) => [item.key, item.default])),
     types: Object.fromEntries(SETTINGS_SCHEMA.map((item) => [item.key, item.type])),
+    // Pre-built key → def lookup so generateConfigURL is O(n) instead of O(n²).
+    // Each call previously did SETTINGS_SCHEMA.find() per key (~50 keys × ~50 schema
+    // entries = 2500 ops) on every applySettings() / saveSettings().
+    schemaMap: Object.fromEntries(SETTINGS_SCHEMA.map((item) => [item.key, item])),
 
     /**
      * Loads a user setting from localStorage, falling back to an alternate key or the default value.
@@ -1974,7 +1978,7 @@ const settings = {
         const params = [];
         const keys = Object.keys(this.values).sort();
         for (const key of keys) {
-            const def = SETTINGS_SCHEMA.find((d) => d.key === key);
+            const def = this.schemaMap[key];
             // Skip hidden/computed settings — they cannot be URL-overridden
             if (def?.hidden) continue;
 
