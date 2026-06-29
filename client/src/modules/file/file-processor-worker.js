@@ -54,8 +54,8 @@ self.onmessage = async function (e) {
         const [FileProcessorCore, CONSTANTS, VARS, Logger] = await importDependencies(
             [
                 "shared/core/file/file-processor-core.js",
-                "client/app/config/constants.js",
-                "client/app/config/variables.js",
+                "client/src/config/constants.js",
+                "client/src/config/variables.js",
                 "shared/utils/logger.js",
             ],
             import.meta.url

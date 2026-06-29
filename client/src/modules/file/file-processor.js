@@ -40,7 +40,7 @@ export class FileProcessor extends FileProcessorCore {
 
         this.file = file;
         this.initialChunk = this.file.slice(0, this.initialChunkSize);
-        this.worker = createWorker("client/app/modules/file/file-processor-worker.js", import.meta.url);
+        this.worker = createWorker("client/src/modules/file/file-processor-worker.js", import.meta.url);
         /** @type {boolean} Whether to process in log mode (skip title/footnote/optimize) */
         this.logMode = false;
     }
