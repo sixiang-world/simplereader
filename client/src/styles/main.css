@@ -1,0 +1,665 @@
+@charset "UTF-8";
+/* General UI */
+html {
+    margin: 0 auto;
+    /* max-width: var(--ui_maxWidth); */
+    min-width: 500px;
+    min-height: 450px;
+    /* (v2 refactor) Consolidated from reader-splitview.css — the splitview
+       layout requires html and body to never scroll. */
+    overflow: hidden;
+}
+body {
+    min-width: 500px;
+    min-height: 450px;
+    font-size: 100% !important;
+    background-color: var(--bgColor) !important;
+    scrollbar-color: var(--fontInfoColor) var(--bgColor) !important;
+    /* (v2 refactor) Consolidated:
+       - margin: 0 from reader.css (CSS reset for the reader container)
+       - overflow: hidden from reader-splitview.css (the splitview layout
+         manages its own internal scroll areas, so the outer body must not
+         scroll) */
+    margin: 0;
+    overflow: hidden;
+    /* transition: var(--darkMode_animation); */
+}
+::selection {
+    background-color: var(--mainColor_active) !important;
+    background: var(--mainColor_active) !important;
+    color: var(--bgColor) !important;
+}
+::-moz-selection {
+    background-color: var(--mainColor_active) !important;
+    background: var(--mainColor_active) !important;
+    color: var(--bgColor) !important;
+}
+*:focus {
+    outline: none;
+    box-shadow: none;
+}
+::-webkit-scrollbar {
+    width: var(--ui_scrollBarWidth) !important;
+    background: var(--bgColor) !important;
+    transition: var(--darkMode_animation);
+}
+::-webkit-scrollbar-thumb {
+    border: 4px solid var(--bgColor);
+    background-clip: padding-box;
+    border-radius: 10px;
+    background: var(--fontInfoColor) !important;
+    -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+    /* transition: var(--darkMode_animation); */
+}
+div {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+    overflow-y: scroll;
+}
+div::-webkit-scrollbar {
+    display: none;
+}
+.prevent-select {
+    -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Chrome/Safari/Opera */
+    -khtml-user-select: none; /* Konqueror */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none; /* Standard syntax */
+}
+/*
+Credit: https://stackoverflow.com/questions/64997928/how-to-offset-a-anchor-link-to-clear-fixed-header
+To Offset the anchor link to clear fixed header
+ */
+:target:before {
+    content: "";
+    display: block;
+    height: var(--ui_anchorTargetBefore);
+    margin: calc(-1 * var(--ui_anchorTargetBefore)) 0 0;
+}
+/* Global Scrollbar Style */
+* {
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: var(--mainColor_active) transparent;
+}
+/* Webkit (Chrome/Safari/Edge) */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background-color: var(--mainColor_active);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--mainColor_inactive);
+}
+
+/* Drop Zone */
+#global-drop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99990;
+    background: transparent;
+    pointer-events: none;
+}
+#global-drop-overlay.dragActive {
+    pointer-events: auto;
+    /* position: absolute; */
+    inset: 0;
+    opacity: 1;
+    border: none;
+    outline: none;
+    /* background: linear-gradient(var(--bgColor), var(--bgColor)) no-repeat, */
+    background: linear-gradient(transparent, transparent) no-repeat,
+        linear-gradient(90deg, var(--mainColor_active) 50%, transparent 0) repeat-x,
+        linear-gradient(90deg, var(--mainColor_active) 50%, transparent 0) repeat-x,
+        linear-gradient(0deg, var(--mainColor_active) 50%, transparent 0) repeat-y,
+        linear-gradient(0deg, var(--mainColor_active) 50%, transparent 0) repeat-y;
+    background-size: calc(100% - var(--ui_borderSize) * 2) calc(100% - var(--ui_borderSize) * 2),
+        var(--ui_borderWidth) var(--ui_borderSize), var(--ui_borderWidth) var(--ui_borderSize),
+        var(--ui_borderSize) var(--ui_borderWidth), var(--ui_borderSize) var(--ui_borderWidth);
+    background-position: center, 0 0, 0 100%, 0 0, 100% 0;
+    animation: linearGradientMove 3s infinite linear;
+}
+@keyframes linearGradientMove {
+    100% {
+        background-position: center, var(--ui_borderWidth) 0, calc(var(--ui_borderWidth) * -1) 100%,
+            0 calc(var(--ui_borderWidth) * -1), 100% var(--ui_borderWidth);
+    }
+}
+#dropZone {
+    background: var(--bgColor);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: calc(100% - var(--ui_borderSize) * 2);
+    height: calc(100% - var(--ui_borderSize) * 2);
+    padding: var(--ui_borderSize);
+    z-index: 999;
+    visibility: visible;
+    /* border: var(--ui_borderSize) dashed;
+    border-color: var(--mainColor_inactive);
+    border-radius: 16px;
+    box-sizing: border-box; */
+    /* transition: var(--darkMode_animation); */
+}
+#dropzone-img {
+    visibility: visible;
+    z-index: 1000;
+    position: absolute;
+    left: var(--ui_dropZoneImgLeft);
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+    margin: auto;
+    /* convert to var(--mainColor_active) */
+    /* filter: var(--mainColor_active_filter); */
+    /* convert to var(--mainColor_inactive) */
+    /* filter: var(--mainColor_inactive_filter); */
+    /* convert to var(--fontInfoColor) */
+    filter: var(--toGray_filter);
+    transition: all 0.2s ease-in-out;
+    pointer-events: none;
+}
+.dropzone-img-default {
+    top: calc(var(--ui_dropZoneImgTop) - var(--ui_dropZoneTextSize) * 1.5);
+    width: var(--ui_dropZoneImgSize);
+    height: var(--ui_dropZoneImgSize);
+}
+.dropzone-img-custom {
+    top: calc(
+        var(--ui_dropZoneImgText_scaleFactor) * var(--ui_dropZoneImgTop) - var(--ui_dropZoneTextSize_max) *
+            (var(--ui_dropZoneImgText_lineNumber) - 0.5)
+    );
+    width: var(--ui_dropZoneImgSize_max);
+    height: var(--ui_dropZoneImgSize_max);
+}
+#dropzone-text {
+    visibility: visible;
+    z-index: 1000;
+    position: absolute;
+    left: var(--ui_dropZoneTextLeft);
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+    margin: auto;
+    color: var(--fontInfoColor);
+    transition: all 0.2s ease-in-out;
+    pointer-events: none;
+}
+.dropzone-text-default {
+    top: calc(var(--ui_dropZoneTextTop) + var(--ui_dropZoneImgSize) / 4.5);
+    font-size: var(--ui_dropZoneTextSize);
+}
+.dropzone-text-custom {
+    top: calc(var(--ui_dropZoneImgText_scaleFactor) * var(--ui_dropZoneTextTop) + var(--ui_dropZoneImgSize_max) / 2.25);
+    font-size: var(--ui_dropZoneTextSize_max);
+}
+
+/* Loading screen */
+#loading {
+    background: var(--bgColor);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 99999;
+    visibility: visible;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+#loading img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--ui_loadingImgSize);
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+    /* filter: var(--mainColor_inactive_filter); */
+    filter: var(--toGray_filter);
+}
+#loading .loader {
+    width: fit-content;
+    font-size: 6em;
+    line-height: 1.5;
+    font-family: var(--fontFamily_ui);
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #0000;
+    -webkit-text-stroke: 1px var(--fontInfoColor);
+    background: radial-gradient(1.13em at 50% 1.6em, var(--fontInfoColor) 99%, #0000 101%) calc(50% - 1.6em) 0/3.2em
+            100% text,
+        radial-gradient(1.13em at 50% -0.8em, #0000 99%, var(--fontInfoColor) 101%) 50% 0.8em/3.2em 100% repeat-x text;
+    animation: l9 2s linear infinite;
+}
+.loader:before {
+    content: var(--ui_loading_text);
+}
+@keyframes l9 {
+    to {
+        background-position: calc(50% + 1.6em) 0, calc(50% + 3.2em) 0.8em;
+    }
+}
+#loading-img svg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    stroke: var(--fontInfoColor);
+    width: clamp(300px, 80vw, 1000px);
+    max-height: 180vh;
+    aspect-ratio: 1 / 1;
+}
+#loading-img svg g.path {
+    stroke-width: 5;
+    stroke: var(--mainColor_active);
+    animation: draw 14s infinite;
+    animation-timing-function: linear;
+    z-index: 2;
+}
+#loading-img svg g.path-2 {
+    stroke-width: 5;
+    stroke: var(--mainColor_active);
+    animation: draw 14s infinite;
+    /* animation-delay: 1s; */
+    animation-timing-function: linear;
+    z-index: 2;
+}
+#loading-img svg g.path-bg {
+    stroke-width: 2;
+    z-index: 1;
+}
+#loading-img svg g.path-logo {
+    stroke: none;
+    fill: var(--mainColor_active);
+    z-index: 1;
+}
+@keyframes draw {
+    0% {
+    }
+    100% {
+        stroke-dashoffset: 0;
+        stroke-opacity: 1;
+    }
+}
+
+/* Custom notification styles */
+.custom-notification {
+    display: flex;
+    align-items: center; /* Vertically align the icon and text */
+    justify-content: left; /* Center content */
+    gap: calc(var(--ui_btnGap) * 1.25); /* Space between icon and text */
+    margin: 0 1.5rem 0 0.5rem;
+    width: auto !important;
+    /* (v2 refactor) Merged the duplicate `.custom-notification { contain: paint; }`
+       rule that was previously defined ~50 lines below. Tells the browser
+       that internal changes to this element will not affect the external
+       layout. */
+    contain: paint;
+}
+.custom-notification .custom-notification-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.custom-notification .custom-notification-icon svg {
+    width: var(--ui_notification_icon_size);
+    height: var(--ui_notification_icon_size);
+    /* fill: var(--fontInfoColor); */
+    stroke: var(--mainColor_inactive);
+}
+.custom-notification .custom-notification-text {
+    font-size: 1em; /* Adjust text size */
+    color: var(--fontInfoColor); /* Adjust text color */
+    line-height: 1.5;
+    font-family: var(--fontFamily_ui);
+    text-align: left;
+}
+.custom-notification-container {
+    padding: 1em 1.6em !important;
+    min-width: 350px !important;
+    max-width: 350px !important;
+    width: 100% !important;
+}
+.custom-notification-popup {
+    padding: 0 !important;
+    margin: 10px 0 !important;
+}
+#notification-container {
+    position: fixed;
+    top: 1em;
+    right: 1em;
+    z-index: var(--ui_notification_zIndex);
+    pointer-events: none;
+    /* Creates a new composite layer */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+    /* Tells the browser that internal changes to this element will not affect the external layout */
+    contain: layout style paint;
+}
+/* (v2 refactor) Removed duplicate `.custom-notification { contain: paint; }`
+   rule — merged into the canonical `.custom-notification` block above. */
+#notification-container .custom-notification {
+    position: relative;
+    display: flex !important;
+    /* margin-bottom: 0.5em; */
+    animation: slideIn 0.3s ease-in-out;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: auto;
+    will-change: transform, opacity, height; /* Tells the browser to optimize these properties */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0); /* Forces GPU acceleration */
+    backface-visibility: hidden; /* Reduces composite layers */
+    perspective: 1000px;
+    contain: layout paint;
+}
+#notification-container .custom-notification-popup {
+    display: flex !important;
+    width: auto;
+    /* box-shadow: 0 0 8px hsla(0, 0%, 0%, 0.4) !important; */
+    border-radius: 6px !important;
+}
+.swal2-toast {
+    box-shadow: none !important;
+}
+#notification-container .custom-notification-container {
+    margin: 0;
+    padding: 1em 1.6em;
+}
+@keyframes slideIn {
+    from {
+        -webkit-transform: translate3d(100%, 0, 0); /* Forces GPU acceleration */
+        transform: translate3d(100%, 0, 0); /* Forces GPU acceleration */
+        opacity: 0;
+    }
+    to {
+        -webkit-transform: translate3d(0, 0, 0);
+        transform: translate3d(0, 0, 0);
+        opacity: 1;
+    }
+}
+#notification-container .custom-notification.removing {
+    -webkit-transform: translate3d(100%, 0, 0); /* Forces GPU acceleration */
+    transform: translate3d(100%, 0, 0); /* Forces GPU acceleration */
+    opacity: 0;
+    margin: 0;
+    height: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* Swal popup styles for custom popups such as remove all books, changelog, and help center */
+.swal2-backdrop-show {
+    z-index: 10000 !important;
+}
+.custom-popup-icon {
+    border: none !important; /* remove circle border */
+    background: transparent !important; /* remove circle background */
+    overflow: visible !important;
+}
+.custom-popup-icon svg {
+    width: 5rem;
+    height: 5rem;
+    /* fill: var(--fontInfoColor); */
+    stroke: var(--mainColor_inactive);
+}
+.custom-popup {
+    font-family: var(--fontFamily_ui) !important;
+    border: 1px solid var(--borderColor);
+    border-radius: 5px !important;
+    box-shadow: 0 0 5px var(--shadowColor) !important;
+    -webkit-box-shadow: var(--shadowColor) 0 0 5px !important;
+    -moz-box-shadow: 0 0 5px var(--shadowColor) !important;
+}
+/* .custom-popup .swal2-actions {
+    gap: calc(var(--ui_btnGap) * 2);
+    margin-top: 1.75rem;
+    padding-bottom: 2.5rem !important;
+} */
+.custom-popup .swal2-actions button {
+    border-radius: 8px !important;
+    padding: 10px 35px !important;
+}
+.custom-popup-title {
+    font-family: var(--fontFamily_ui) !important;
+    font-weight: bold;
+}
+.custom-popup-actions {
+    font-family: var(--fontFamily_ui) !important;
+    margin: auto !important;
+    height: 100% !important;
+    min-height: 110px !important;
+    max-height: 110px !important;
+    gap: calc(var(--ui_btnGap) * 2);
+}
+.custom-popup-confirm-btn {
+    background-color: var(--mainColor_active) !important;
+    color: var(--bgColor) !important;
+    font-family: var(--fontFamily_ui) !important;
+}
+.custom-popup-cancel-btn {
+    background-color: var(--fontInfoColor) !important;
+    color: var(--bgColor) !important;
+    font-family: var(--fontFamily_ui) !important;
+}
+.custom-popup-confirm-btn:focus-visible,
+.custom-popup-cancel-btn:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Changelog styles */
+.changelog-popup {
+    width: fit-content;
+    min-width: min(500px, 80vw);
+    max-width: min(800px, 80vw);
+    transition: width 0.3s ease-in-out;
+    height: fit-content;
+    max-height: 80vh;
+    overflow-y: auto;
+    display: flex !important;
+    flex-direction: column;
+}
+.changelog-container {
+    flex: 1;
+    padding: 0 2.5em !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--mainColor_active) transparent;
+    margin: 0 10px !important;
+    max-height: calc(80vh - 5em);
+}
+.changelog-title {
+    margin-top: 0.75em !important;
+    color: var(--fontInfoColor_title);
+    margin: 1em !important;
+}
+.changelog-content {
+    width: 100%;
+    text-align: left;
+}
+/* Version block styles */
+.version-block {
+    margin-bottom: 0.5em;
+    padding-bottom: 0.5em;
+    /* border-bottom: 1px solid var(--borderColor); */
+    font-family: var(--fontFamily_ui) !important;
+    color: var(--fontInfoColor) !important;
+}
+.version-block:last-child {
+    border-bottom: none;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+.version-number {
+    color: var(--mainColor_active);
+    font-weight: bold;
+    font-size: 1.1em;
+    font-family: var(--fontFamily_ui) !important;
+}
+.version-date {
+    color: var(--fontInfoColor);
+    font-size: 0.9em;
+    margin-left: 0.5em;
+    font-family: var(--fontFamily_ui) !important;
+}
+/* Version changes list */
+.version-changes {
+    list-style-type: none;
+    padding-left: 0;
+    margin-top: 1em;
+}
+.version-changes li {
+    margin-bottom: 0.5em;
+    padding-left: 1.5em;
+    position: relative;
+    line-height: 1.4;
+}
+.version-changes li:last-child {
+    margin-bottom: 0 !important;
+}
+.version-changes li:before {
+    content: "•";
+    color: var(--mainColor_active);
+    position: absolute;
+    left: 0.5em;
+}
+.version-changes span.emphasis {
+    color: var(--mainColor_inactive);
+}
+.version-changes span.title {
+    color: var(--mainColor_active);
+    font-weight: bold;
+}
+/* Previous changes section */
+.previous-changes {
+    margin-top: 0.5em;
+    padding-top: 1.5em;
+    border-top: 1px dashed var(--borderColor);
+}
+.previous-changes summary {
+    color: var(--mainColor_active);
+    cursor: pointer;
+    font-size: 1.1em;
+    padding: 0.5em 0;
+    margin-bottom: 1em;
+}
+.previous-changes summary:hover {
+    color: var(--mainColor_inactive);
+}
+.previous-changes .version-block {
+    margin-left: 1em;
+    padding-left: 1em;
+    border-left: 2px solid var(--borderColor);
+}
+
+/* Help styles */
+.help-popup {
+    width: fit-content;
+    min-width: min(500px, 80vw);
+    max-width: min(1000px, 80vw);
+    transition: width 0.3s ease-in-out;
+    height: fit-content;
+    max-height: 80vh;
+    overflow-y: auto;
+    display: flex !important;
+    flex-direction: column;
+}
+.help-container {
+    flex: 1;
+    padding: 0 2.5em !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--mainColor_active) transparent;
+    margin: 0 10px !important;
+    max-height: calc(80vh - 5em);
+}
+.help-title {
+    margin-top: 0.75em !important;
+    color: var(--fontInfoColor_title);
+    margin: 1em !important;
+}
+.help-content {
+    width: 100%;
+    text-align: left;
+}
+/* Help block styles */
+.help-block {
+    margin-bottom: 2em;
+    /* border-bottom: 1px solid var(--borderColor); */
+}
+.help-block:last-child {
+    border-bottom: none;
+    margin-bottom: 0 !important;
+}
+.help-block-title {
+    color: var(--mainColor_active);
+    font-weight: bold;
+    font-size: 1.1em;
+}
+.help-block summary {
+    color: var(--mainColor_active);
+    cursor: pointer;
+}
+.help-block summary:hover {
+    color: var(--mainColor_inactive);
+}
+.help-block[open] {
+    margin-bottom: 2em;
+}
+.help-text {
+    list-style-type: none;
+    padding-left: 0;
+    margin-top: 1em;
+    color: var(--fontInfoColor);
+}
+.help-text span.emphasis {
+    color: var(--mainColor_inactive);
+}
+.help-text span.title {
+    color: var(--mainColor_active);
+    font-weight: bold;
+}
+.help-text li {
+    margin-bottom: 0.5em;
+    padding-left: 1.5em;
+    position: relative;
+    line-height: 1.4;
+}
+.help-text li:before {
+    content: "•";
+    color: var(--mainColor_active);
+    position: absolute;
+    left: 0.5em;
+}
+.help-text li:last-child {
+    margin-bottom: 0 !important;
+}
+
+/* iPad cursor overrides */
+[class*="ipad-cursor"] {
+    overflow: visible !important;
+    overflow-y: visible !important;
+    -ms-overflow-style: auto !important;
+    scrollbar-width: auto !important;
+}
+
+/* Custom tooltip styles */
+.tippy-box[data-theme~="custom-tooltip"] {
+    background-color: var(--fontInfoColor_title);
+    color: var(--bgColor);
+    font-size: 0.8em;
+    font-family: var(--fontFamily_ui);
+    border: 1px solid var(--borderColor);
+}

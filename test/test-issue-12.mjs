@@ -20,7 +20,7 @@
  */
 
 import assert from "node:assert";
-import { refreshShareButtonLabels } from "../client/app/utils/label-refresh.js";
+import { refreshShareButtonLabels } from "../client/src/utils/label-refresh.js";
 
 function makeMockButton(initialLang) {
     const isZh = initialLang === "zh";

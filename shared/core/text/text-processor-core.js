@@ -11,16 +11,16 @@
  * @requires shared/adapters/jschardet
  * @requires shared/core/text/regex-rules
  * @requires shared/core/text/bracket-processor
- * @requires client/app/config/constants
- * @requires client/app/config/variables
+ * @requires client/src/config/constants
+ * @requires client/src/config/variables
  */
 
 import { Logger } from "../../utils/logger.js";
 import { getJschardet } from "../../adapters/jschardet.js";
 import { REGEX_RULES, generateAdsRules } from "./regex-rules.js";
 import { BracketProcessor } from "./bracket-processor.js";
-import * as CONFIG_CONST from "../../../client/app/config/constants.js";
-import * as CONFIG_VAR from "../../../client/app/config/variables.js";
+import * as CONFIG_CONST from "../../../client/src/config/constants.js";
+import * as CONFIG_VAR from "../../../client/src/config/variables.js";
 
 /**
  * Initialize jschardet

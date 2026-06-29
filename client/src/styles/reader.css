@@ -1,0 +1,479 @@
+@charset "UTF-8";
+/* (v2 refactor) The `body { margin: 0; }` reset was consolidated into
+   main.css to avoid three-way duplication across main.css, reader.css,
+   and reader-splitview.css. */
+img {
+    max-width: 100%;
+    max-height: 100%;
+    margin: auto;
+    overflow: auto;
+}
+#content {
+    /* height: 100%; */
+    overflow-x: hidden;
+    padding-bottom: 6em;
+}
+.columns-1,
+.columns-2 {
+    max-width: none;
+    column-gap: 2em;
+}
+.columns-1 {
+    column-count: 1;
+}
+.columns-2 {
+    column-count: 2;
+}
+.active {
+    font-weight: normal;
+}
+.center {
+    text-align: center;
+}
+.uifont {
+    font-family: var(--fontFamily_ui);
+    color: var(--mainColor_inactive);
+}
+p {
+    font-family: var(--fontFamily_body);
+    font-size: var(--p_fontSize);
+    color: var(--fontColor);
+    text-align: var(--p_textAlign_value);
+    text-indent: var(--p_paragraphIndent_value);
+    line-height: var(--p_lineHeight);
+    margin: 0;
+    position: relative;
+    top: var(--p_top, 0);
+    left: var(--p_left, 0);
+}
+p.first,
+p.noIndent {
+    text-indent: 0em !important;
+}
+p::selection {
+    background-color: var(--mainColor_active) !important;
+    background: var(--mainColor_active) !important;
+    color: var(--bgColor) !important;
+}
+p::-moz-selection {
+    background-color: var(--mainColor_active) !important;
+    background: var(--mainColor_active) !important;
+    color: var(--bgColor) !important;
+}
+.cover {
+    width: 100%;
+}
+.center {
+    text-align: center;
+    margin-left: 0%;
+    margin-right: 0%;
+}
+.left {
+    text-align: left;
+    margin-left: 0%;
+    margin-right: 0%;
+}
+.right {
+    text-align: right;
+    margin-left: 0%;
+    margin-right: 0%;
+}
+.quote {
+    margin-top: 0%;
+    margin-bottom: 0%;
+    margin-left: 1em;
+    margin-right: 1em;
+    text-align: justify;
+    font-family: var(--fontFamily_body);
+    color: var(--fontColor);
+}
+.stickupCap {
+    font-size: 4em;
+    text-transform: uppercase;
+    font-weight: bold;
+    margin: 7px 6px 6px -1px;
+    padding: 3px;
+    text-indent: 0em !important;
+}
+.dropCap {
+    font-size: 4em;
+    text-transform: uppercase;
+    font-weight: bold;
+    float: left !important;
+    margin: 7px 6px 6px -1px;
+    padding: 3px;
+    text-indent: 0em !important;
+}
+h1 {
+    line-height: var(--h1_lineHeight);
+    text-align: center;
+    font-weight: bold;
+    font-size: var(--h1_fontSize);
+    font-family: var(--fontFamily_title);
+    color: var(--mainColor_active);
+    margin: var(--h1_margin) 0 var(--h1_margin) 0;
+    position: relative;
+    top: var(--h1_top, 0);
+    left: var(--h1_left, 0);
+}
+h1.author {
+    font-size: var(--h1_fontSize_author);
+    /* font-style: italic; */
+    /* color: var(--mainColor_active) !important; */
+    position: relative;
+    top: var(--h1_author_top, 0);
+    left: var(--h1_author_left, 0);
+}
+h2 {
+    line-height: var(--h2_lineHeight);
+    text-align: center;
+    font-weight: bold;
+    font-size: var(--h2_fontSize);
+    font-family: var(--fontFamily_title);
+    color: var(--mainColor_active);
+    margin: var(--h2_margin) 0 var(--h2_margin) 0;
+    position: relative;
+    top: var(--h2_top, 0);
+    left: var(--h2_left, 0);
+}
+h3 {
+    line-height: var(--h3_lineHeight);
+    text-align: center;
+    font-weight: bold;
+    font-size: var(--h3_fontSize);
+    font-family: var(--fontFamily_title);
+    color: var(--mainColor_active);
+    margin: var(--h3_margin) 0 var(--h3_margin) 0;
+    position: relative;
+    top: var(--h3_top, 0);
+    left: var(--h3_left, 0);
+}
+h4 {
+    line-height: var(--h4_lineHeight);
+    text-align: center;
+    font-weight: bold;
+    font-size: var(--h4_fontSize);
+    font-family: var(--fontFamily_title);
+    color: var(--mainColor_active);
+    margin: var(--h4_margin) 0 var(--h4_margin) 0;
+    position: relative;
+    top: var(--h4_top, 0);
+    left: var(--h4_left, 0);
+}
+h5 {
+    line-height: var(--h5_lineHeight);
+    text-align: center;
+    font-weight: bold;
+    font-size: var(--h5_fontSize);
+    font-family: var(--fontFamily_title);
+    color: var(--mainColor_active);
+    margin: var(--h5_margin) 0 var(--h5_margin) 0;
+    position: relative;
+    top: var(--h5_top, 0);
+    left: var(--h5_left, 0);
+}
+h6 {
+    line-height: var(--h6_lineHeight);
+    text-align: center;
+    font-weight: bold;
+    font-size: var(--h6_fontSize);
+    font-family: var(--fontFamily_title);
+    color: var(--mainColor_active);
+    margin: var(--h6_margin) 0 var(--h6_margin) 0;
+    position: relative;
+    top: var(--h6_top, 0);
+    left: var(--h6_left, 0);
+}
+
+/* TOC */
+#toc-content {
+    /* border: var(--mainColor_active) solid 1px; */
+    /* width: 16%; */
+    /* height: 50%; */
+    /* margin: 0 0 0 3%; */
+    padding-right: 0;
+    transition: padding-right 0.3s ease;
+    /* line-height: 1em; */
+    font-size: var(--toc_fontSize);
+    overflow-x: hidden;
+    overflow-y: auto;
+    font-family: var(--fontFamily_title);
+    z-index: 100;
+}
+#toc-list {
+    overscroll-behavior: contain;
+}
+/* Credit: https://stackoverflow.com/questions/3874602/elements-to-look-like-a-bullet-point-list-inside-an-anchor-link */
+.chapter-title-container {
+    /* display: block; */
+    display: flex;
+    align-items: center;
+    position: relative;
+    width: 100%;
+    height: auto;
+    margin-bottom: 1em;
+}
+.chapter-title-container:hover:not(.active) > .toc-bullet {
+    background-color: var(--mainColor_inactive);
+}
+.chapter-title-container:hover:not(.active) > .toc-text {
+    color: var(--mainColor_inactive);
+}
+.chapter-title-container > .toc-bullet {
+    margin: 0;
+}
+.chapter-title-container > .toc-text {
+    position: static;
+}
+.toc-bullet {
+    /* position: absolute; */
+    background-color: var(--fontInfoColor);
+    border-radius: 1em;
+    content: " ";
+    display: inline-block;
+    /* margin-right: 6px; */
+    width: 0.9em;
+    height: 0.3em;
+    visibility: visible !important;
+    opacity: 1 !important;
+    margin-top: 0.65em;
+    margin-bottom: 0.65em;
+}
+.toc-text {
+    position: absolute;
+    top: 0;
+    display: inline-block;
+    width: calc(100% - 0.9em - 1em); /* 100% - width of .toc-bullet - margin-left of <a>*/
+    /* transition: opacity 1s; */
+    opacity: 0;
+    text-decoration: none;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    z-index: 1;
+}
+.toc-text.hidden {
+    display: none !important;
+}
+/* Credit: https://www.taccgl.org/blog/css-transition-visibility.html */
+/* #toc-content:hover > .chapter-title-container > .toc-text {
+    visibility: visible;
+    opacity: 1;
+} */
+#toc-content:hover {
+    padding-right: 1em; /* Leave space for the text */
+    .chapter-title-container .toc-text {
+        opacity: 1;
+        /* transition: opacity 0.3s ease; */
+    }
+}
+a,
+a:link,
+a:visited,
+a:hover,
+a:active {
+    text-decoration: none;
+}
+a.title,
+a.title:link,
+a.title:visited {
+    color: var(--mainColor_active);
+}
+a.author,
+a.author:link,
+a.author:visited {
+    color: var(--mainColor_active);
+}
+a.toc-text:hidden {
+    opacity: 0;
+    pointer-events: none; /* Prevents interactions while fading out */
+}
+a.toc-text,
+a.toc-text:link,
+a.toc-text:visited {
+    color: var(--fontInfoColor);
+    /* margin: 0.15em 0 1.3em 1em; */
+    margin-left: 1em;
+}
+a.toc-text:active {
+    color: var(--mainColor_active);
+}
+a.toc-active {
+    font-weight: bold;
+    color: var(--mainColor_active) !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+.toc-bullet.toc-active {
+    background-color: var(--mainColor_active) !important;
+}
+a.toc-active::before {
+    background-color: var(--mainColor_active) !important;
+}
+.toc-text-span {
+    position: relative;
+    top: var(--toc_text_span_top, 0);
+    left: var(--toc_text_span_left, 0);
+}
+
+/* Pagination */
+#pagination {
+    opacity: var(--ui_paginationOpacity);
+    bottom: var(--ui_paginationBottom);
+    background-color: var(--bgColor);
+    border: 1px dashed var(--borderColor);
+    border-radius: 8px;
+    box-shadow: 0 1px 1px var(--shadowColor), 0 2px 2px var(--shadowColor), 0 4px 4px var(--shadowColor),
+        0 8px 8px var(--shadowColor), 0 16px 16px var(--shadowColor);
+    -webkit-box-shadow: var(--shadowColor) 0 1px 1px, var(--shadowColor) 0 2px 2px, var(--shadowColor) 0 4px 4px,
+        var(--shadowColor) 0 8px 8px, var(--shadowColor) 0 16px 16px;
+    -moz-box-shadow: 0 1px 1px var(--shadowColor), 0 2px 2px var(--shadowColor), 0 4px 4px var(--shadowColor),
+        0 8px 8px var(--shadowColor), 0 16px 16px var(--shadowColor);
+    -webkit-transform: translate(-50%);
+    transform: translate(-50%);
+    font-size: 0.9em;
+}
+.pagination {
+    list-style-type: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* display: none; */
+}
+.pagination li {
+    margin: 0 5px;
+}
+.pagination a {
+    color: var(--paginationFontColor);
+    float: left;
+    padding: 8px 16px;
+    text-decoration: none;
+}
+.pagination a.active {
+    background-color: var(--mainColor_active);
+    color: var(--paginationActiveFontColor);
+    border-radius: 5px;
+}
+.pagination a:hover:not(.active) {
+    background-color: var(--mainColor_inactive);
+    color: var(--paginationActiveFontColor);
+    border-radius: 5px;
+}
+#pagination:hover {
+    opacity: 1;
+}
+.page-jump-input {
+    text-align: center;
+    color: var(--paginationFontColor);
+    font-family: var(--fontFamily_ui);
+    border: 0;
+    outline: 0;
+    background-color: var(--bgColor) !important;
+}
+.disabled-btn {
+    pointer-events: none;
+    opacity: 0.4;
+}
+.pagination-processing {
+    text-align: center;
+    color: var(--bgColor);
+    font-family: var(--fontFamily_ui);
+    border-radius: 5px;
+    background-color: var(--mainColor_active) !important;
+    float: left;
+    padding: 8px 32px;
+    text-decoration: none;
+}
+
+/* Progress */
+#progress {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    height: 3.6em;
+    line-height: 2em;
+    color: var(--fontInfoColor);
+    font-size: 0.9em;
+    z-index: 101;
+}
+
+/* Footnote */
+img.footnote_img {
+    content: var(--footnote_img_url);
+    width: var(--ui_footnoteImgSize);
+    height: var(--ui_footnoteImgSize);
+    vertical-align: super;
+    display: inline-block;
+    margin: var(--ui_footnoteMargin);
+}
+ol#footnote-content {
+    visibility: hidden;
+    display: none;
+}
+
+/* Seal */
+div.seal {
+    margin: 6em 0 6em 0;
+    overflow: hidden;
+}
+img#seal_front {
+    content: var(--seal_url);
+    width: var(--seal_width);
+    height: auto;
+    left: calc(var(--seal_left) * (100% - var(--seal_width)));
+    -webkit-transform: rotate(var(--seal_rotate));
+    transform: rotate(var(--seal_rotate));
+    position: relative;
+}
+img#seal_end {
+    content: var(--seal_url);
+    width: calc(var(--seal_width) / 2);
+    height: auto;
+    left: calc(100% - var(--seal_width) / 2);
+    position: relative;
+}
+
+/* Message indicator styles */
+#message-indicator {
+    -webkit-transform: translate(-50%, calc(-60% - var(--ui_paginationBottom)));
+    transform: translate(-50%, calc(-60% - var(--ui_paginationBottom)));
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px var(--shadowColor);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    width: calc(min(30vw, 30vh, 200px));
+    height: calc(min(30vw, 30vh, 200px));
+    min-width: 180px;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    display: none;
+    overflow: hidden;
+    pointer-events: none !important;
+}
+#message-indicator::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--mainColor_active), transparent 15%);
+    backdrop-filter: blur(15px);
+    z-index: -1;
+}
+#message-indicator .icon {
+    fill: var(--bgColor);
+    width: 120px;
+    height: 120px;
+    overflow: hidden;
+}
+#message-indicator .text {
+    font-size: 1rem;
+    font-weight: normal;
+    font-family: var(--fontFamily_ui);
+    text-align: center;
+    color: var(--bgColor);
+    overflow: hidden;
+}
