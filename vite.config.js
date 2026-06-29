@@ -21,8 +21,35 @@
  */
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
+import { cpSync, existsSync, mkdirSync } from "node:fs";
+
+/**
+ * Post-build: copy classic-script lib files to dist/ so the classic
+ * <script> tags in index.html (jQuery, jschardet, JSZip, etc.) resolve.
+ */
+function copyDir(src, dest) {
+    if (!existsSync(src)) {
+        console.warn(`[vite] Source not found, skipping: ${src}`);
+        return;
+    }
+    if (!existsSync(dest)) {
+        mkdirSync(dest, { recursive: true });
+    }
+    cpSync(src, dest, { recursive: true, force: true });
+    console.log(`[vite] Copied ${src} → ${dest}`);
+}
 
 export default defineConfig({
+    plugins: [
+        {
+            name: "postbuild-copy-lib",
+            closeBundle() {
+                const src = fileURLToPath(new URL("./client/lib/", import.meta.url));
+                const dest = fileURLToPath(new URL("./dist/client/lib/", import.meta.url));
+                copyDir(src, dest);
+            },
+        },
+    ],
     root: fileURLToPath(new URL("./", import.meta.url)),
     base: "./",
     publicDir: false,
