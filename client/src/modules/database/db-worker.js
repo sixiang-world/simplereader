@@ -9,7 +9,7 @@
  * Worker message handler
  */
 self.onmessage = async function (e) {
-    const { importDependencies } = await import("../../utils/helpers-worker.js");
+    const { importDependencies } = await import("../../utils/helpers/worker.js");
     const { type, data } = e.data;
     let logger = null;
 

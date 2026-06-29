@@ -33,7 +33,7 @@ import { Logger } from "../../../../shared/utils/logger.js";
 import { DBManager } from "../database/db-manager.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { FileHandler } from "../file/file-handler.js";
-import { PopupManager } from "../components/popup-manager.js";
+import { PopupManager } from "../../components/popup-manager.js";
 import {
     isVariableDefined,
     getSizePrecise,
@@ -1390,9 +1390,9 @@ const bookshelf = {
         if (!this._coverGenerator) {
             let getCoverGenerator;
             if (CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS) {
-                ({ getCoverGenerator } = await import("../components/cover-generator-canvas.js"));
+                ({ getCoverGenerator } = await import("../../components/cover-generator-canvas.js"));
             } else {
-                ({ getCoverGenerator } = await import("../components/cover-generator-dom.js"));
+                ({ getCoverGenerator } = await import("../../components/cover-generator-dom.js"));
             }
             this._coverGenerator = getCoverGenerator(baselineOffsets);
         }

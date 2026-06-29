@@ -4,11 +4,12 @@
 
 SimpleTextReader is a browser-based TXT/EPUB reader with a vanilla JS client and a Node.js server.
 
-- **`client/`** — Frontend (ES modules, no bundler).
-  - `app/` — Core logic: `config/`, `modules/`, `utils/`, `lib/`, and the `app.js` entry point.
-  - `css/` — Stylesheets; shared variables in `css/variables.css`.
+- **`client/`** — Frontend (ES modules, Vite-powered).
+  - `src/` — Core logic: `config/`, `core/`, `modules/`, `utils/`, `components/`, and `app.js`/`init-webpage.js` entry points.
+  - `src/styles/` — Stylesheets; shared variables in `src/styles/variables.css`.
+  - `lib/` — Third-party libraries (jQuery, tippy, jschardet, JSZip, etc.).
   - `fonts/`, `images/`, `manifests/` — Static assets and platform manifests (Chrome, Firefox, PWA).
-- **`server/`** — Node.js backend with Prisma ORM (`server/prisma/`).
+- **`server/`** — Node.js backend with Prisma ORM (`server/prisma/`). (Archived to `archive/server/` as of v2 refactor.)
 - **`shared/`** — Code shared between client and server (adapters, config, core, utils).
 - **`build-tools/`** — Python scripts for building extensions, subsetting fonts, and generating changelogs.
 
@@ -16,12 +17,12 @@ SimpleTextReader is a browser-based TXT/EPUB reader with a vanilla JS client and
 
 | Command | What it does |
 |---|---|
-| `npm install` | Install Vite + TypeScript + jschardet (root package.json). |
-| `npm run dev` | Start Vite dev server (default port 3000). Hot-reloads on save. |
-| `npm run build` | Production build → `dist/`. Caddy should serve `dist/`. |
-| `npm run preview` | Preview the production build locally. |
-| `npm run typecheck` | Run `tsc --noEmit` for JSDoc-based type checking (jsconfig.json). |
-| `npm run test` | Run the Node-native .mjs test suite (`test/test-*.mjs`). |
+| `pnpm install` | Install Vite + TypeScript + jschardet (root package.json). |
+| `pnpm run dev` | Start Vite dev server (default port 3000). Hot-reloads on save. |
+| `pnpm run build` | Production build → `dist/`. Caddy should serve `dist/`. |
+| `pnpm run preview` | Preview the production build locally. |
+| `pnpm run typecheck` | Run `tsc --noEmit` for JSDoc-based type checking (jsconfig.json). |
+| `pnpm run test` | Run the Node-native .mjs test suite (`test/test-*.mjs`). |
 | `python build-tools/build.py` | Build Chrome/Firefox extensions and Docker image; outputs to `dist/`. |
 | `python build-tools/build.py -v <version>` | Build with an explicit version number. |
 | `python build-tools/generate_changelog.py` | Generate `CHANGELOG.md` from git history. |
@@ -34,7 +35,7 @@ The client is now a Vite project (since v2 refactor). Previously it was pure sta
 - **Modules**: ES modules (`"type": "module"`). Use `import`/`export`, not CommonJS.
 - **Indentation**: 2 spaces (JS/CSS), 4 spaces (Python).
 - **Naming**: `camelCase` for JS identifiers; `kebab-case` for CSS files. Match patterns already in the file you edit.
-- **CSS**: Use variables from `css/variables.css`; keep library styles in `css/lib/`.
+- **CSS**: Use variables from `src/styles/variables.css`; keep library styles in `src/styles/lib/`.
 - No linter or formatter is configured — follow existing code style by example.
 
 ## Testing Guidelines

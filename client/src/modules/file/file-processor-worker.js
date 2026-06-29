@@ -15,7 +15,7 @@
  * Worker message handler
  */
 self.onmessage = async function (e) {
-    const { importDependencies } = await import("../../utils/helpers-worker.js");
+    const { importDependencies } = await import("../../utils/helpers/worker.js");
     const {
         operation = null,
         file = null,

@@ -18,7 +18,7 @@
 import * as CONFIG from "../../config/index.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 import { DBManager } from "../database/db-manager.js";
-import { PopupManager } from "../components/popup-manager.js";
+import { PopupManager } from "../../components/popup-manager.js";
 import { removeFileExtension, constructNotificationMessageFromArray } from "../../utils/base.js";
 import { resetUI, getCurrentDisplayLanguage } from "../../utils/helpers/ui.js";
 import { extractFontName } from "../../utils/helpers/fonts.js";

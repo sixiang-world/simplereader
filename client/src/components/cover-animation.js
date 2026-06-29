@@ -5,7 +5,7 @@
  * @requires shared/utils/logger
  */
 
-import { Logger } from "../../../../shared/utils/logger.js";
+import { Logger } from "../../../shared/utils/logger.js";
 
 /**
  * Cover animation factory and types

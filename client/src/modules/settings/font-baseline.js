@@ -11,8 +11,8 @@
  * @requires client/app/utils/base
  */
 
-import * as CONFIG from "../../../config/index.js";
-import { getFontOffsets } from "../../../utils/base.js";
+import * as CONFIG from "../../config/index.js";
+import { getFontOffsets } from "../../utils/base.js";
 
 /**
  * Recompute per-element font baseline offsets and write them to

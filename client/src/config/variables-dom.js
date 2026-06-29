@@ -9,7 +9,7 @@
  */
 
 import { toBool } from "../utils/base.js";
-import CSSVars from "../lib/css-global-variables.js";
+import CSSVars from "../../lib/css-global-variables.js";
 
 /**
  * URL parameters
