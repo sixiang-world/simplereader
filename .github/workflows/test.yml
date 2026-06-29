@@ -24,5 +24,7 @@ jobs:
           node-version: "22"
 
       - name: Run tests
-        run: node test/test-issue-12.mjs
+        run: |
+          node test/test-issue-12.mjs
+          node test/test-url-settings.mjs
         working-directory: ${{ github.workspace }}
