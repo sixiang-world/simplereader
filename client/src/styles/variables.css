@@ -2,7 +2,7 @@
 @font-face {
     font-family: "ui";
     src: local("霞鹜文楷 屏幕阅读版"), local("霞鹜文楷 GB 屏幕阅读版"), local("LXGW WenKai Screen"),
-        local("LXGW WenKai GB Screen"), url(../fonts/LXGWWenKaiScreen_sub.woff2) format("woff2");
+        local("LXGW WenKai GB Screen"), url(../../fonts/LXGWWenKaiScreen_sub.woff2) format("woff2");
     font-display: swap;
 }
 @font-face {
@@ -525,15 +525,15 @@
     --seal_width_zh: 250px;
     --seal_width_en: 250px;
     --seal_url: "";
-    --seal_url_zh: url(../images/seal_zh.png);
-    --seal_url_en: url(../images/seal_en.png);
+    --seal_url_zh: url(../../images/seal_zh.png);
+    --seal_url_en: url(../../images/seal_en.png);
     --seal_rotate: 0deg;
     --seal_rotate_zh: 0deg;
     --seal_rotate_en: 0deg;
     --seal_left: 0;
     --footnote_img_url: "";
-    --footnote_img_url_zh: url(../images/note_zh.png);
-    --footnote_img_url_en: url(../images/note_en.png);
+    --footnote_img_url_zh: url(../../images/note_zh.png);
+    --footnote_img_url_en: url(../../images/note_en.png);
 
     /* Font variables */
     --fontFamily_fallback: Arial, Helvetica, sans-serif, serif, monospace;

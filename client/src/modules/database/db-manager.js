@@ -75,7 +75,7 @@ export class DBManager {
         this.#errorCallback = config.errorCallback;
 
         // Initialize worker
-        this.#worker = createWorker("client/app/modules/database/db-worker.js", import.meta.url);
+        this.#worker = createWorker("client/src/modules/database/db-worker.js", import.meta.url);
         this.#worker.onmessage = this.#handleWorkerMessage.bind(this);
     }
 
