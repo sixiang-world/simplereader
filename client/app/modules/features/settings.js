@@ -1188,7 +1188,11 @@ const settings = {
      */
     saveSettingFromInput(key, $input, unit = "") {
         const sanitizedUnit = unit ?? "";
-        const def = SETTINGS_SCHEMA.find((item) => item.key === key);
+        // (v2 refactor) Use the pre-built schemaMap (O(1) lookup) instead of
+        // SETTINGS_SCHEMA.find() (O(n) linear scan). The schemaMap was
+        // explicitly built for this purpose — see the comment near its
+        // definition above.
+        const def = this.schemaMap[key];
         let value;
 
         // 1. Prefer per-schema getValue function if defined
