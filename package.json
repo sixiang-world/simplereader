@@ -1,0 +1,20 @@
+{
+  "name": "simplereader",
+  "version": "1.7.0",
+  "type": "module",
+  "private": true,
+  "description": "Browser-based TXT/EPUB reader (Vite-powered refactored edition)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node test/test-issue-12.mjs && node test/test-url-settings.mjs"
+  },
+  "devDependencies": {
+    "@types/jquery": "^3.5.31",
+    "jschardet": "^3.1.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
