@@ -8,14 +8,14 @@
  * - Layout calculations and adjustments
  * - Content container positioning
  *
- * @module client/app/utils/helpers-ui
- * @requires client/app/config/index
- * @requires client/app/config/icons
+ * @module client/src/utils/helpers-ui
+ * @requires client/src/config/index
+ * @requires client/src/config/icons
  * @requires shared/core/callback/callback-registry
- * @requires client/app/modules/features/reader
- * @requires client/app/modules/components/popup-manager
- * @requires client/app/utils/base
- * @requires client/app/utils/helpers-reader
+ * @requires client/src/modules/features/reader
+ * @requires client/src/modules/components/popup-manager
+ * @requires client/src/utils/base
+ * @requires client/src/utils/helpers-reader
  */
 
 import * as CONFIG from "../../config/index.js";

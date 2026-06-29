@@ -1,9 +1,9 @@
 /**
  * @fileoverview Custom Color Picker implementation using @yaireo/color-picker library
  *
- * @module client/app/modules/components/custom-color-picker
- * @requires client/app/lib/yaireo/position
- * @requires client/app/lib/yaireo/color-picker
+ * @module client/src/modules/components/custom-color-picker
+ * @requires client/lib/yaireo/position
+ * @requires client/lib/yaireo/color-picker
  */
 
 // Since "@yaireo/position" is used as a script file rather than a Node module (ES export)

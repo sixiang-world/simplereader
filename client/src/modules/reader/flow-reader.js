@@ -6,12 +6,12 @@
  * Ported from simplereader-enhance's preloadContentFlow() and adapted for
  * cnb's ES modules architecture and structured FILE_CONTENT_CHUNKS.
  *
- * @module client/app/modules/features/flow-reader
- * @requires client/app/config/index
- * @requires client/app/modules/text/text-processor
- * @requires client/app/modules/features/footnotes
- * @requires client/app/utils/base
- * @requires client/app/utils/helpers-reader
+ * @module client/src/modules/features/flow-reader
+ * @requires client/src/config/index
+ * @requires client/src/modules/text/text-processor
+ * @requires client/src/modules/features/footnotes
+ * @requires client/src/utils/base
+ * @requires client/src/utils/helpers-reader
  */
 
 import * as CONFIG from "../../config/index.js";

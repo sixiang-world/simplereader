@@ -5,8 +5,8 @@
  * Modified by Matt Gemmell (http://mattgemmell.com/)
  * Modernized refactored version
  *
- * @module client/app/modules/features/footnotes
- * @requires client/app/config/index.js
+ * @module client/src/modules/features/footnotes
+ * @requires client/src/config/index.js
  * @requires shared/core/callback/callback-registry.js
  */
 

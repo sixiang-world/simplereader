@@ -4,7 +4,7 @@
  * Provides schema-driven parsing and type coercion for URL query parameters
  * that temporarily override persistent settings without writing to localStorage.
  *
- * @module client/app/utils/url-settings
+ * @module client/src/utils/url-settings
  */
 
 /**

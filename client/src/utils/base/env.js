@@ -1,11 +1,11 @@
 /**
  * @fileoverview Environment detection: Safari, Firefox, Windows, macOS (browser + Node aware).
  *
- * (v2 refactor) Extracted from the original client/app/utils/base.js
+ * (v2 refactor) Extracted from the original client/src/utils/base.js
  * monolith. The original base.js now re-exports from these submodules
  * so existing import paths continue to work unchanged.
  *
- * @module client/app/utils/base/env
+ * @module client/src/utils/base/env
  */
 
 /**

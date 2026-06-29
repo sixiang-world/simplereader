@@ -8,9 +8,9 @@
  * - Font reference pixel caching and comparison
  * - Canvas-based font testing and image saving
  *
- * @module client/app/utils/helpers-fonts
- * @requires client/app/config/constants
- * @requires client/app/utils/base
+ * @module client/src/utils/helpers-fonts
+ * @requires client/src/config/constants
+ * @requires client/src/utils/base
  */
 
 import * as CONFIG_CONST from "../../config/constants.js";

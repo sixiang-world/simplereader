@@ -5,14 +5,14 @@
  * - IndexedDB storage for custom fonts
  * - Font management (add/remove/update)
  *
- * @module client/app/modules/features/fontpool
- * @requires client/app/config/index
+ * @module client/src/modules/features/fontpool
+ * @requires client/src/config/index
  * @requires shared/core/callback/callback-registry
- * @requires client/app/modules/database/db-manager
- * @requires client/app/modules/components/popup-manager
- * @requires client/app/utils/base
- * @requires client/app/utils/helpers-ui
- * @requires client/app/utils/helpers-fonts
+ * @requires client/src/modules/database/db-manager
+ * @requires client/src/modules/components/popup-manager
+ * @requires client/src/utils/base
+ * @requires client/src/utils/helpers-ui
+ * @requires client/src/utils/helpers-fonts
  */
 
 import * as CONFIG from "../../config/index.js";

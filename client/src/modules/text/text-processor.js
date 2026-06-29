@@ -8,11 +8,11 @@
  * - Handling footnotes
  * - Creating DOM elements from processed text structure
  *
- * @module client/app/modules/text/text-processor
+ * @module client/src/modules/text/text-processor
  * @requires shared/core/text/text-processor-core
- * @requires client/app/modules/text/text-processor-dom
- * @requires client/app/config/variables
- * @requires client/app/config/variables-dom
+ * @requires client/src/modules/text/text-processor-dom
+ * @requires client/src/config/variables
+ * @requires client/src/config/variables-dom
  */
 
 import { TextProcessorCore } from "../../../../shared/core/text/text-processor-core.js";

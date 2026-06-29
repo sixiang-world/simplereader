@@ -5,12 +5,12 @@
  * - Displaying notifications with customizable icons and text
  * - Showing confirmation popups with customizable icons, text, and actions
  *
- * @module client/app/modules/components/popup-manager
- * @requires client/app/lib/sweetalert2
- * @requires client/app/config/index
- * @requires client/app/config/icons
+ * @module client/src/modules/components/popup-manager
+ * @requires client/lib/sweetalert2
+ * @requires client/src/config/index
+ * @requires client/src/config/icons
  * @requires shared/utils/logger
- * @requires client/app/utils/base
+ * @requires client/src/utils/base
  */
 
 import * as CONFIG from "../config/index.js";

@@ -9,12 +9,12 @@
  * - Two-section layout with customizable colors
  * - Text positioning and line breaking optimization
  *
- * @module client/app/modules/components/cover-generator
- * @requires client/app/lib/clamps
- * @requires client/app/config/variables-dom
+ * @module client/src/modules/components/cover-generator
+ * @requires client/lib/clamps
+ * @requires client/src/config/variables-dom
  * @requires shared/core/callback/callback-registry
- * @requires client/app/modules/text/text-processor
- * @requires client/app/utils/base
+ * @requires client/src/modules/text/text-processor
+ * @requires client/src/utils/base
  */
 
 import { getClamps } from "../../lib/clamps.js";

@@ -393,8 +393,8 @@ class Builder:
                          f for f in files if f in files_to_exclude]
                      )
 
-        # Remove debug directory
-        rmtree(dist_dir / 'client/app/debug', ignore_errors=True)
+        # Debug directory has been archived in v2 refactor — no longer under client/
+        # rmtree(dist_dir / 'client/app/debug', ignore_errors=True)
 
         # Copy individual files
         files_to_copy = ['index.html', 'version.json', 'help.json']

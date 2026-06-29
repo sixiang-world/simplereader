@@ -52,7 +52,7 @@
  * token. Future versions may add a hash of the token as the actual
  * storage key to make enumeration harder.
  *
- * @module client/app/core/config-sync
+ * @module client/src/core/config-sync
  */
 
 /**

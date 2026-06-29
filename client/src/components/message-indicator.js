@@ -4,7 +4,7 @@
  * This module provides a class for displaying messages on the screen using a message indicator element.
  * The message indicator is a fixed position element that displays an icon and text message.
  *
- * @module client/app/modules/components/message-indicator
+ * @module client/src/modules/components/message-indicator
  */
 
 /**

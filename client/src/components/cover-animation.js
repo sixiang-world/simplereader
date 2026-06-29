@@ -1,7 +1,7 @@
 /**
  * @fileoverview Cover animation module for visualizing file processing progress on the book cover
  *
- * @module client/app/modules/components/cover-animation
+ * @module client/src/modules/components/cover-animation
  * @requires shared/utils/logger
  */
 

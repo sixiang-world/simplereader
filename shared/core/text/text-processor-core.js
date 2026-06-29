@@ -11,8 +11,8 @@
  * @requires shared/adapters/jschardet
  * @requires shared/core/text/regex-rules
  * @requires shared/core/text/bracket-processor
- * @requires client/app/config/constants
- * @requires client/app/config/variables
+ * @requires client/src/config/constants
+ * @requires client/src/config/variables
  */
 
 import { Logger } from "../../utils/logger.js";

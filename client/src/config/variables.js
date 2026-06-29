@@ -5,7 +5,7 @@
  * Includes variables for UI state, bookshelf data, file processing,
  * content management, settings, pagination, and various status flags.
  *
- * @module client/app/config/variables
+ * @module client/src/config/variables
  */
 
 /**

@@ -9,9 +9,9 @@
  * settings-menu.js (UI rendering). Extracting them into a dedicated
  * file keeps settings.js focused on state transitions.
  *
- * @module client/app/modules/features/settings/schema
- * @requires client/app/config/index
- * @requires client/app/utils/base
+ * @module client/src/modules/features/settings/schema
+ * @requires client/src/config/index
+ * @requires client/src/utils/base
  */
 
 import * as CONFIG from "../../config/index.js";

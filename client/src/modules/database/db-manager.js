@@ -11,10 +11,10 @@
  * - Hooks for operation lifecycle (before/after)
  * - Partial success handling for batch operations
  *
- * @module client/app/modules/database/db-manager
+ * @module client/src/modules/database/db-manager
  * @requires IndexedDB
  * @requires shared/utils/logger
- * @requires client/app/utils/helpers-worker
+ * @requires client/src/utils/helpers-worker
  * @requires shared/core/callback/callback-registry
  */
 

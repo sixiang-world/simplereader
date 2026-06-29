@@ -17,9 +17,9 @@
  * code — the real implementation lives in app.js. The unused
  * setupReaderUISplitViewParams function was also removed.
  *
- * @module client/app/modules/features/init-webpage
- * @requires client/app/config/icons
- * @requires client/app/utils/base
+ * @module client/src/modules/features/init-webpage
+ * @requires client/src/config/icons
+ * @requires client/src/utils/base
  */
 
 import { createSvgSprite } from "../config/icons.js";

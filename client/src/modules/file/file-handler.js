@@ -8,19 +8,19 @@
  * - Content processing and pagination
  * - Bookshelf management
  *
- * @module client/app/modules/file/file-handler
- * @requires client/app/config/index
+ * @module client/src/modules/file/file-handler
+ * @requires client/src/config/index
  * @requires shared/utils/logger
- * @requires client/app/modules/features/reader
+ * @requires client/src/modules/features/reader
  * @requires shared/core/callback/callback-registry
- * @requires client/app/modules/text/text-processor
- * @requires client/app/modules/file/file-processor
- * @requires client/app/modules/components/popup-manager
- * @requires client/app/utils/base
- * @requires client/app/utils/helpers-ui
- * @requires client/app/utils/helpers-bookshelf
- * @requires client/app/utils/helpers-reader
- * @requires client/app/utils/helpers-fonts
+ * @requires client/src/modules/text/text-processor
+ * @requires client/src/modules/file/file-processor
+ * @requires client/src/modules/components/popup-manager
+ * @requires client/src/utils/base
+ * @requires client/src/utils/helpers-ui
+ * @requires client/src/utils/helpers-bookshelf
+ * @requires client/src/utils/helpers-reader
+ * @requires client/src/utils/helpers-fonts
  */
 
 import * as CONFIG from "../../config/index.js";

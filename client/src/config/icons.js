@@ -9,7 +9,7 @@
  * 1. Generate an SVG sprite using `createSvgSprite()` and append it to your document.
  * 2. Reference icons using `<use>` tags with the corresponding icon ID.
  *
- * @module client/app/config/icons
+ * @module client/src/config/icons
  */
 
 /**

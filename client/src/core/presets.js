@@ -39,7 +39,7 @@
  * settings (e.g. "1.2em" for ranges, "#hex" for colors, "true"/"false"
  * for checkboxes) so applySettings() can consume them directly.
  *
- * @module client/app/core/presets
+ * @module client/src/core/presets
  */
 
 const STORAGE_KEY = "reader_presets";

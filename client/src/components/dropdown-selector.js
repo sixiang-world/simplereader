@@ -4,7 +4,7 @@
  * This module supports optgroup tags and allows handling selection events through an event listener function.
  * Credit: http://jsfiddle.net/BB3JK/47/
  *
- * @module client/app/modules/components/dropdown-selector
+ * @module client/src/modules/components/dropdown-selector
  */
 
 /**

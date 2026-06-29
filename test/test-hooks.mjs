@@ -1,5 +1,5 @@
 /**
- * Tests for the hook system in client/app/core/hooks.js.
+ * Tests for the hook system in client/src/core/hooks.js.
  *
  * The hook system is a typed, ordered, async-aware transform pipeline.
  * These tests cover:
