@@ -18,10 +18,9 @@
     --sidebar-splitview-show-content-boundary-lines: true;
 }
 
-html,
-body {
-    overflow: hidden;
-}
+/* (v2 refactor) The `html, body { overflow: hidden; }` rule was
+   consolidated into main.css to avoid three-way duplication across
+   main.css, reader.css, and reader-splitview.css. */
 
 /* Outer */
 .sidebar-splitview-outer {

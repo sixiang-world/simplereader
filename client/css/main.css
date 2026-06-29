@@ -5,6 +5,9 @@ html {
     /* max-width: var(--ui_maxWidth); */
     min-width: 500px;
     min-height: 450px;
+    /* (v2 refactor) Consolidated from reader-splitview.css — the splitview
+       layout requires html and body to never scroll. */
+    overflow: hidden;
 }
 body {
     min-width: 500px;
@@ -12,6 +15,13 @@ body {
     font-size: 100% !important;
     background-color: var(--bgColor) !important;
     scrollbar-color: var(--fontInfoColor) var(--bgColor) !important;
+    /* (v2 refactor) Consolidated:
+       - margin: 0 from reader.css (CSS reset for the reader container)
+       - overflow: hidden from reader-splitview.css (the splitview layout
+         manages its own internal scroll areas, so the outer body must not
+         scroll) */
+    margin: 0;
+    overflow: hidden;
     /* transition: var(--darkMode_animation); */
 }
 ::selection {
@@ -286,6 +296,11 @@ To Offset the anchor link to clear fixed header
     gap: calc(var(--ui_btnGap) * 1.25); /* Space between icon and text */
     margin: 0 1.5rem 0 0.5rem;
     width: auto !important;
+    /* (v2 refactor) Merged the duplicate `.custom-notification { contain: paint; }`
+       rule that was previously defined ~50 lines below. Tells the browser
+       that internal changes to this element will not affect the external
+       layout. */
+    contain: paint;
 }
 .custom-notification .custom-notification-icon {
     display: inline-flex;
@@ -328,9 +343,8 @@ To Offset the anchor link to clear fixed header
     /* Tells the browser that internal changes to this element will not affect the external layout */
     contain: layout style paint;
 }
-.custom-notification {
-    contain: paint; /* Tells the browser that internal changes to this element will not affect the external layout */
-}
+/* (v2 refactor) Removed duplicate `.custom-notification { contain: paint; }`
+   rule — merged into the canonical `.custom-notification` block above. */
 #notification-container .custom-notification {
     position: relative;
     display: flex !important;
