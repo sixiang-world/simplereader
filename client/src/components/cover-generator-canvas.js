@@ -14,7 +14,7 @@
  * @requires client/app/utils/base
  */
 
-import { TextProcessor } from "../text/text-processor.js";
+import { TextProcessor } from "../modules/text/text-processor.js";
 import { calculateRectangleSimilarity, getFontOffsets } from "../../utils/base.js";
 
 /**

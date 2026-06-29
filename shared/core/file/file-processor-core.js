@@ -14,7 +14,7 @@ import { getTextDecoderClass } from "../../adapters/text-decoder.js";
 import { TextProcessorCore } from "../text/text-processor-core.js";
 import { PaginationCalculator } from "../text/pagination-calculator.js";
 import { TitlePatternDetector } from "../text/title-pattern-detector.js";
-import { removeFileExtension } from "../../../client/app/utils/base.js";
+import { removeFileExtension } from "../../../client/src/utils/base.js";
 
 /**
  * FileProcessorCore class

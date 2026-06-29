@@ -22,8 +22,8 @@
  * @requires client/app/utils/base
  */
 
-import { createSvgSprite } from "../../config/icons.js";
-import { toBool } from "../../utils/base.js";
+import { createSvgSprite } from "../config/icons.js";
+import { toBool } from "../utils/base.js";
 
 /**
  * Toggle console.time

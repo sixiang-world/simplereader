@@ -18,7 +18,7 @@ import * as CONFIG from "../../config/index.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { getFootnotes } from "./footnotes.js";
 import { isInViewport, enableScroll, disableScroll, isElementInContainer } from "../../utils/base.js";
-import { getTopLineNumber, setHistory, GetScrollPositions } from "../../utils/helpers-reader.js";
+import { getTopLineNumber, setHistory, GetScrollPositions } from "../../utils/helpers/reader.js";
 
 /**
  * Flow mode reader — sliding-window continuous scroll renderer

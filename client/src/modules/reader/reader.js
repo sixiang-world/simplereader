@@ -20,7 +20,7 @@ import { ICONS } from "../../config/icons.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { getFootnotes } from "./footnotes.js";
-import { MessageIndicator } from "../components/message-indicator.js";
+import { MessageIndicator } from "../../components/message-indicator.js";
 import {
     isVariableDefined,
     getSizePrecise,
@@ -37,7 +37,7 @@ import {
     showOriginalTitle,
     showShortenedTitle,
     getCurrentTitleLineNumber,
-} from "../../utils/helpers-reader.js";
+} from "../../utils/helpers/reader.js";
 import { flowReader } from "./flow-reader.js";
 import { search } from "./search.js";
 import { goLine } from "./go-line.js";

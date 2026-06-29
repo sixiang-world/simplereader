@@ -18,12 +18,12 @@
 
 import * as CONFIG from "./config/index.js";
 import { cbReg } from "../../shared/core/callback/callback-registry.js";
-import { initBookshelf } from "./modules/features/bookshelf.js";
-import { initFontpool } from "./modules/features/fontpool.js";
-import { initSettings } from "./modules/features/settings.js";
-import { initReader } from "./modules/features/reader.js";
+import { initBookshelf } from "./modules/bookshelf/bookshelf.js";
+import { initFontpool } from "./modules/font/fontpool.js";
+import { initSettings } from "./modules/settings/settings.js";
+import { initReader } from "./modules/reader/reader.js";
 import { FileHandler } from "./modules/file/file-handler.js";
-import { SidebarSplitView } from "./modules/components/sidebar-splitview.js";
+import { SidebarSplitView } from "./components/sidebar-splitview.js";
 import {
     isVariableDefined,
     removeHashbang,
@@ -36,7 +36,7 @@ import {
     toBool,
     createStylesheet,
 } from "./utils/base.js";
-import { setTitle } from "./utils/helpers-reader.js";
+import { setTitle } from "./utils/helpers/reader.js";
 import {
     setHelpButton,
     toggleHelpButton,
@@ -56,7 +56,7 @@ import {
     updateVersionData,
     updateGlobalFontBaselineOffsets,
     handleGlobalScrolling,
-} from "./utils/helpers-ui.js";
+} from "./utils/helpers/ui.js";
 
 /*
  * Start application initialization

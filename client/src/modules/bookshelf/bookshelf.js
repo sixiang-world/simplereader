@@ -49,15 +49,15 @@ import {
     resetVars,
     resetDropZoneState,
     delegateScroll,
-} from "../../utils/helpers-ui.js";
+} from "../../utils/helpers/ui.js";
 import {
     setBookLastReadTimestamp,
     setIsFromLocal,
     getIsFromLocal,
     setIsOnServer,
     getIsOnServer,
-} from "../../utils/helpers-bookshelf.js";
-import { getProgressText, removeHistory, getIsBookFinished } from "../../utils/helpers-reader.js";
+} from "../../utils/helpers/bookshelf.js";
+import { getProgressText, removeHistory, getIsBookFinished } from "../../utils/helpers/reader.js";
 // (v2 refactor) createWorker import removed — the only worker (bookshelf-db-worker)
 // was deleted along with saveProcessedBookFromServer.
 

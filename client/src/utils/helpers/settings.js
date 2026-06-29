@@ -12,8 +12,8 @@
  * @requires client/app/utils/base
  */
 
-import * as CONFIG from "../config/index.js";
-import { findStringIndex, isVariableDefined, simulateClick, toBool, getStylesheet } from "./base.js";
+import * as CONFIG from "../../config/index.js";
+import { findStringIndex, isVariableDefined, simulateClick, toBool, getStylesheet } from "../base.js";
 
 /**
  * Cache for loaded fonts

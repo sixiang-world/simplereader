@@ -19,7 +19,7 @@
  */
 
 import { Logger } from "../../../../shared/utils/logger.js";
-import { createWorker } from "../../utils/helpers-worker.js";
+import { createWorker } from "../../utils/helpers/worker.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 
 /**

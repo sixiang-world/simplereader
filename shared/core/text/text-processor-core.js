@@ -19,8 +19,8 @@ import { Logger } from "../../utils/logger.js";
 import { getJschardet } from "../../adapters/jschardet.js";
 import { REGEX_RULES, generateAdsRules } from "./regex-rules.js";
 import { BracketProcessor } from "./bracket-processor.js";
-import * as CONFIG_CONST from "../../../client/app/config/constants.js";
-import * as CONFIG_VAR from "../../../client/app/config/variables.js";
+import * as CONFIG_CONST from "../../../client/src/config/constants.js";
+import * as CONFIG_VAR from "../../../client/src/config/variables.js";
 
 /**
  * Initialize jschardet

@@ -15,9 +15,9 @@
  * @requires client/app/utils/base
  */
 
-import * as CONFIG from "../config/index.js";
+import * as CONFIG from "../../config/index.js";
 import { cbReg } from "../../../shared/core/callback/callback-registry.js";
-import { isInViewport, isInContainerViewport, getScrollY } from "./base.js";
+import { isInViewport, isInContainerViewport, getScrollY } from "../base.js";
 
 /**
  * Global variables for managing title display and keyboard events
