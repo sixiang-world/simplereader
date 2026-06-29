@@ -6,21 +6,7 @@ The `modules/` directory contains the core application logic, organized into spe
 
 ## Subdirectories
 
-### 1. `api/`
-
-**Purpose**: Manages communication between the client application and backend services, enabling server integration and cloud library functionality.
-
-**Examples**:
-
-- `fetch-worker.js`: A dedicated web worker for handling authenticated file fetching operations in the background, improving performance by offloading network requests from the main thread.
-
-- `server-connector.js`: Handles backend server communication and manages cloud library features.
-
-- `websocket-client.js`: Manages real-time bidirectional communication with the server using WebSocket protocol, enabling features like live book processing status updates.
-
----
-
-### 2. `components/`
+### 1. `components/`
 
 **Purpose**: Contains reusable UI components that are shared across different features or pages.
 
@@ -42,7 +28,7 @@ The `modules/` directory contains the core application logic, organized into spe
 
 ---
 
-### 3. `database/`
+### 2. `database/`
 
 **Purpose**: Provides tools and abstractions for managing IndexedDB operations, ensuring efficient and reliable data storage and retrieval.
 
@@ -52,11 +38,9 @@ The `modules/` directory contains the core application logic, organized into spe
 
 - `db-worker.js`: A background worker that handles database operations asynchronously, preventing UI blocking during intensive database tasks like batch imports or large queries.
 
-- `bookshelf-db-worker.js`: A background worker that handles bookshelf database operations asynchronously.
-
 ---
 
-### 4. `features/`
+### 3. `features/`
 
 **Purpose**: Houses high-level features or flows of the application. These files typically combine multiple components, utilities, and business logic to implement specific features.
 
@@ -76,7 +60,7 @@ The `modules/` directory contains the core application logic, organized into spe
 
 ---
 
-### 5. `file/`
+### 4. `file/`
 
 **Purpose**: Handles file-related logic, such as processing and loading files into the application.
 
@@ -90,7 +74,7 @@ The `modules/` directory contains the core application logic, organized into spe
 
 ---
 
-### 6. `text/`
+### 5. `text/`
 
 **Purpose**: Responsible for text parsing, processing, and rendering logic.
 
@@ -125,3 +109,4 @@ The `modules/` directory contains the core application logic, organized into spe
 
 - The `modules/` directory is the heart of the application, containing both core functionality and high-level features.
 - Each subdirectory is designed to be modular, making it easier to debug, extend, or refactor specific parts of the application.
+- (v2 refactor) The `api/` subdirectory was removed when the server was archived. All client-server communication now happens via the future-direction config-sync hook (see `client/app/core/` after the hooks commit).

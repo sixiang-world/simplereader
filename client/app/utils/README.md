@@ -54,19 +54,7 @@ The `utils/` directory contains small, reusable helper functions and utility mod
 
 ---
 
-### 5. `helpers-server.js`
-
-**Purpose**: Includes utility functions specific to API communication and file handling with the backend.
-
-**Examples**:
-
-- Making authenticated API requests.
-
-- Converting web sources to File objects.
-
----
-
-### 6. `helpers-settings.js`
+### 5. `helpers-settings.js`
 
 **Purpose**: Provides utility functions for managing user settings.
 
@@ -78,7 +66,7 @@ The `utils/` directory contains small, reusable helper functions and utility mod
 
 ---
 
-### 7. `helpers-ui.js`
+### 6. `helpers-ui.js`
 
 **Purpose**: Focuses on UI-related helper functions.
 
@@ -90,7 +78,7 @@ The `utils/` directory contains small, reusable helper functions and utility mod
 
 ---
 
-### 8. `helpers-worker.js`
+### 7. `helpers-worker.js`
 
 **Purpose**: Provides utility functions for creating and managing Web Workers and handling module imports in different environments.
 
