@@ -6,9 +6,12 @@ on:
       - main
       - dev
       - feature/**
+      - v2-design
+      - refactor/**
   pull_request:
     branches:
       - main
+      - dev
 
 jobs:
   test:
@@ -23,8 +26,18 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Run tests
-        run: |
-          node test/test-issue-12.mjs
-          node test/test-url-settings.mjs
+      # (v2 refactor) The project now ships a package.json with a `test`
+      # script that runs ALL 5 test suites in sequence (163 tests total):
+      #   - test-issue-12.mjs        (6 tests, share-button i18n)
+      #   - test-url-settings.mjs    (39 tests, URL ?key=value parsing)
+      #   - test-base-submodules.mjs (80 tests, base/ submodule split)
+      #   - test-hooks.mjs           (16 tests, hook system)
+      #   - test-presets.mjs         (22 tests, preset manager stub)
+      # Previously the workflow only ran the first two suites, which let
+      # regressions in the v2 refactored modules slip through CI.
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run all tests
+        run: npm run test
         working-directory: ${{ github.workspace }}

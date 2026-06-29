@@ -157,4 +157,56 @@ Append `?param` to the URL; use `&` for multiple parameters:
 
 ---
 
+## Development
+
+This project uses **Vite** for building and **pnpm** as the package manager.
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start dev server (default port 3000)
+pnpm run dev
+
+# Production build (outputs to dist/)
+pnpm run build
+
+# Run all 163 tests (5 test files)
+pnpm run test
+```
+
+### Project Structure (v2 Refactor)
+
+```
+client/
+  src/                      # Source code (ES modules)
+    app.js                  # Application entry point
+    init-webpage.js         # Page initialization (language/theme/SVG icons)
+    config/                 # Constants, runtime variables, Schema
+    core/                   # Architecture extensions: Hook system, Presets, Config sync
+    components/             # Reusable UI components
+    modules/
+      reader/               # Reader core (pagination, footnotes, search, navigation)
+      bookshelf/            # Bookshelf management
+      settings/             # Settings (state management + Schema + font baseline)
+      font/                 # Font pool
+      file/                 # File handling & encoding detection
+      text/                 # Text processing
+      database/             # IndexedDB storage
+      epub/                 # EPUB parsing & conversion
+    utils/                  # Utility functions
+      base/                 # Core utilities (color, DOM, format, path, etc.)
+      helpers/              # Feature-specific helpers
+    styles/                 # CSS (variables.css, main.css, reader.css, etc.)
+  lib/                      # Third-party libraries (jQuery, tippy, JSZip, jschardet…)
+  fonts/                    # Font files
+  images/                   # Image assets
+  manifests/                # Extension manifests (Chrome / Firefox / PWA)
+shared/                     # Shared core logic (client/server-agnostic)
+archive/                    # Historical code archives (server/, debug/, etc.)
+test/                       # 163 Node.js test cases
+```
+
+---
+
 ### This project is only for personal use and learning purposes, not for commercial use.

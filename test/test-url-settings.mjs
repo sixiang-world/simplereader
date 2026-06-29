@@ -9,7 +9,7 @@
  */
 
 import assert from "node:assert/strict";
-import { parseURLSettings } from "../client/app/utils/url-settings.js";
+import { parseURLSettings } from "../client/src/utils/url-settings.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
