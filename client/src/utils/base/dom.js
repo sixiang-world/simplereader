@@ -1,11 +1,11 @@
 /**
  * @fileoverview DOM manipulation, viewport/visibility checks, scroll control, event helpers, stylesheet management.
  *
- * (v2 refactor) Extracted from the original client/app/utils/base.js
+ * (v2 refactor) Extracted from the original client/src/utils/base.js
  * monolith. The original base.js now re-exports from these submodules
  * so existing import paths continue to work unchanged.
  *
- * @module client/app/utils/base/dom
+ * @module client/src/utils/base/dom
  */
 
 import * as CONFIG_CONST from "../../config/constants.js";

@@ -4,7 +4,7 @@
  * This script is responsible for detecting and processing `.txt` files opened in the browser.
  * It extracts the content from the file, converts it to Base64, and sends it to the extension's background script.
  *
- * @module client/app/extension/contentScript
+ * @module client/src/extension/contentScript
  */
 
 /**

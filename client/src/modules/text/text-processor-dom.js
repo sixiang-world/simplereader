@@ -3,8 +3,8 @@
  * This class is designed to run in the main thread and perform all UI-related processing,
  * using data provided by TextProcessorCore.
  *
- * @module client/app/modules/text/text-processor-dom
- * @requires client/app/modules/features/reader
+ * @module client/src/modules/text/text-processor-dom
+ * @requires client/src/modules/features/reader
  */
 
 import { reader } from "../reader/reader.js";

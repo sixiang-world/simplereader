@@ -8,22 +8,22 @@
  * - Book management (add/remove/update)
  * - Bookshelf UI and interactions
  *
- * @module client/app/modules/features/bookshelf
- * @requires client/app/config/index
- * @requires client/app/config/icons
+ * @module client/src/modules/features/bookshelf
+ * @requires client/src/config/index
+ * @requires client/src/config/icons
  * @requires shared/core/callback/callback-registry
  * @requires shared/utils/logger
- * @requires client/app/modules/database/db-manager
- * @requires client/app/modules/text/text-processor
- * @requires client/app/modules/file/file-handler
+ * @requires client/src/modules/database/db-manager
+ * @requires client/src/modules/text/text-processor
+ * @requires client/src/modules/file/file-handler
  * @requires shared/core/callback/callback-registry
- * @requires client/app/modules/components/cover-generator
- * @requires client/app/modules/components/popup-manager
- * @requires client/app/utils/base
- * @requires client/app/utils/helpers-ui
- * @requires client/app/utils/helpers-bookshelf
- * @requires client/app/utils/helpers-reader
- * @requires client/app/utils/helpers-worker
+ * @requires client/src/modules/components/cover-generator
+ * @requires client/src/modules/components/popup-manager
+ * @requires client/src/utils/base
+ * @requires client/src/utils/helpers-ui
+ * @requires client/src/utils/helpers-bookshelf
+ * @requires client/src/utils/helpers-reader
+ * @requires client/src/utils/helpers-worker
  */
 
 import * as CONFIG from "../../config/index.js";

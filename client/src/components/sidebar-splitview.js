@@ -12,7 +12,7 @@
  * - Callback registration for resize events
  * - Optional style injection via sidebarStyle object
  *
- * @module client/app/modules/components/sidebar-splitview
+ * @module client/src/modules/components/sidebar-splitview
  */
 
 /**

@@ -1,5 +1,5 @@
 /**
- * Tests for the preset manager in client/app/core/presets.js.
+ * Tests for the preset manager in client/src/core/presets.js.
  *
  * The preset manager stores partial settings objects in localStorage under
  * the "reader_presets" key. Tests cover:

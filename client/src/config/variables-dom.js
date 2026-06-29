@@ -3,9 +3,9 @@
  *
  * Defines and exports runtime configuration based on URL parameters.
  *
- * @module client/app/config/variables-dom
- * @requires client/app/utils/base
- * @requires client/app/lib/css-global-variables
+ * @module client/src/config/variables-dom
+ * @requires client/src/utils/base
+ * @requires client/lib/css-global-variables
  */
 
 import { toBool } from "../utils/base.js";

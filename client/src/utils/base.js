@@ -13,7 +13,7 @@
  *     import { toBool } from "../../utils/base/toBool.js";
  *     import { hexToHSL } from "../../utils/base/color.js";
  *
- * @module client/app/utils/base
+ * @module client/src/utils/base
  */
 
 export * from "./base/color.js";

@@ -7,9 +7,9 @@
  * - Font management and validation
  * - Language switching for settings UI
  *
- * @module client/app/utils/helpers-settings
- * @requires client/app/config/index
- * @requires client/app/utils/base
+ * @module client/src/utils/helpers-settings
+ * @requires client/src/config/index
+ * @requires client/src/utils/base
  */
 
 import * as CONFIG from "../../config/index.js";

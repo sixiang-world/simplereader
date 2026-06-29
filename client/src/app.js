@@ -2,18 +2,18 @@
  * @fileoverview Main application entry point
  * Initializes UI and sets up event listeners for file handling and user interactions
  *
- * @module client/app/app
- * @requires client/app/config/index
+ * @module client/src/app
+ * @requires client/src/config/index
  * @requires shared/core/callback/callback-registry
- * @requires client/app/modules/features/bookshelf
- * @requires client/app/modules/features/fontpool
- * @requires client/app/modules/features/settings
- * @requires client/app/modules/features/reader
- * @requires client/app/modules/file/file-handler
- * @requires client/app/modules/components/sidebar-splitview
- * @requires client/app/utils/base
- * @requires client/app/utils/helpers-reader
- * @requires client/app/utils/helpers-ui
+ * @requires client/src/modules/features/bookshelf
+ * @requires client/src/modules/features/fontpool
+ * @requires client/src/modules/features/settings
+ * @requires client/src/modules/features/reader
+ * @requires client/src/modules/file/file-handler
+ * @requires client/src/modules/components/sidebar-splitview
+ * @requires client/src/utils/base
+ * @requires client/src/utils/helpers-reader
+ * @requires client/src/utils/helpers-ui
  */
 
 import * as CONFIG from "./config/index.js";

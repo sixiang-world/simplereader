@@ -8,7 +8,7 @@
  * - Pagination constants
  * - Database-related constants
  *
- * @module client/app/config/constants
+ * @module client/src/config/constants
  */
 
 /**

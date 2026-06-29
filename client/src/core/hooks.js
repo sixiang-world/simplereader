@@ -80,7 +80,7 @@
  *   // Unregister
  *   hooks.unregister(token);
  *
- * @module client/app/core/hooks
+ * @module client/src/core/hooks
  */
 
 /**

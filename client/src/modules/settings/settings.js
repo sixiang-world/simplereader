@@ -20,19 +20,19 @@
  * focuses on state management (load/save/apply/language) and the SettingsMenu
  * UI class.
  *
- * @module client/app/modules/features/settings
- * @requires client/app/config/index
- * @requires client/app/config/icons
+ * @module client/src/modules/features/settings
+ * @requires client/src/config/index
+ * @requires client/src/config/icons
  * @requires shared/core/callback/callback-registry
- * @requires client/app/modules/components/dropdown-selector
- * @requires client/app/modules/components/custom-custom-color-picker
- * @requires client/app/modules/components/popup-manager
- * @requires client/app/utils/base
- * @requires client/app/utils/helpers-settings
- * @requires client/app/utils/helpers-reader
- * @requires client/app/utils/helpers-ui
- * @requires client/app/modules/features/settings/schema
- * @requires client/app/modules/features/settings/font-baseline
+ * @requires client/src/modules/components/dropdown-selector
+ * @requires client/src/modules/components/custom-custom-color-picker
+ * @requires client/src/modules/components/popup-manager
+ * @requires client/src/utils/base
+ * @requires client/src/utils/helpers-settings
+ * @requires client/src/utils/helpers-reader
+ * @requires client/src/utils/helpers-ui
+ * @requires client/src/modules/features/settings/schema
+ * @requires client/src/modules/features/settings/font-baseline
  */
 
 import * as CONFIG from "../../config/index.js";

@@ -1,7 +1,7 @@
 /**
  * @fileoverview DBWorker module for handling database operations in a background worker
- * @module client/app/modules/database/db-worker
- * @requires client/app/utils/helpers-worker
+ * @module client/src/modules/database/db-worker
+ * @requires client/src/utils/helpers-worker
  * @requires shared/utils/logger
  */
 

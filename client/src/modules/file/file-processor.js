@@ -1,13 +1,13 @@
 /**
  * @fileoverview FileProcessor module for processing files
  *
- * @module client/app/modules/file/file-processor
- * @requires client/app/config/index
+ * @module client/src/modules/file/file-processor
+ * @requires client/src/config/index
  * @requires shared/core/callback/callback-registry
  * @requires shared/core/file/file-processor-core
- * @requires client/app/modules/components/cover-animation
- * @requires client/app/utils/base
- * @requires client/app/utils/helpers-worker
+ * @requires client/src/modules/components/cover-animation
+ * @requires client/src/utils/base
+ * @requires client/src/utils/helpers-worker
  */
 
 import * as CONFIG from "../../config/index.js";

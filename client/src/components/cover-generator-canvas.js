@@ -9,9 +9,9 @@
  * - Two-section layout with customizable colors
  * - Text positioning and line breaking optimization
  *
- * @module client/app/modules/components/cover-generator
- * @requires client/app/modules/text/text-processor
- * @requires client/app/utils/base
+ * @module client/src/modules/components/cover-generator
+ * @requires client/src/modules/text/text-processor
+ * @requires client/src/utils/base
  */
 
 import { TextProcessor } from "../modules/text/text-processor.js";

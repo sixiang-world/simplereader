@@ -9,10 +9,10 @@
  * - History management in localStorage
  * - Title display and formatting
  *
- * @module client/app/utils/helpers-reader
- * @requires client/app/config/index
+ * @module client/src/utils/helpers-reader
+ * @requires client/src/config/index
  * @requires shared/core/callback/callback-registry
- * @requires client/app/utils/base
+ * @requires client/src/utils/base
  */
 
 import * as CONFIG from "../../config/index.js";

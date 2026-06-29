@@ -1,11 +1,11 @@
 /**
  * @fileoverview Typed JSON fetchers for version.json, help.json, and font_baseline_offsets.json.
  *
- * (v2 refactor) Extracted from the original client/app/utils/base.js
+ * (v2 refactor) Extracted from the original client/src/utils/base.js
  * monolith. The original base.js now re-exports from these submodules
  * so existing import paths continue to work unchanged.
  *
- * @module client/app/utils/base/fetch
+ * @module client/src/utils/base/fetch
  */
 
 /**

@@ -3,11 +3,11 @@
  * that do not involve DOM manipulation. This class is designed to run in a
  * background worker and perform all non-UI related processing.
  *
- * @module client/app/modules/file/file-processor-worker
- * @requires client/app/utils/helpers-worker
+ * @module client/src/modules/file/file-processor-worker
+ * @requires client/src/utils/helpers-worker
  * @requires shared/core/file/file-processor-core
- * @requires client/app/config/constants
- * @requires client/app/config/variables
+ * @requires client/src/config/constants
+ * @requires client/src/config/variables
  * @requires shared/utils/logger
  */
 

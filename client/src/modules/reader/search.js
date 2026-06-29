@@ -6,10 +6,10 @@
  * Ported from simplereader-enhance's showSearch() and adapted for cnb's
  * ES modules architecture and structured FILE_CONTENT_CHUNKS.
  *
- * @module client/app/modules/features/search
- * @requires client/app/config/index
- * @requires client/app/utils/helpers-reader
- * @requires client/app/modules/features/flow-reader
+ * @module client/src/modules/features/search
+ * @requires client/src/config/index
+ * @requires client/src/utils/helpers-reader
+ * @requires client/src/modules/features/flow-reader
  */
 
 import * as CONFIG from "../../config/index.js";

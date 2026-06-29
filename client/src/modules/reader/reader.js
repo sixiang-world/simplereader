@@ -4,15 +4,15 @@
  * This module provides functions to set the document title, manage reading progress, process the table of contents,
  * display current page content, and generate pagination controls.
  *
- * @module client/app/modules/features/reader
- * @requires client/app/config/index
- * @requires client/app/config/icons
+ * @module client/src/modules/features/reader
+ * @requires client/src/config/index
+ * @requires client/src/config/icons
  * @requires shared/core/callback/callback-registry
- * @requires client/app/modules/text/text-processor
- * @requires client/app/modules/features/footnotes
- * @requires client/app/modules/components/message-indicator
- * @requires client/app/utils/base
- * @requires client/app/utils/helpers-reader
+ * @requires client/src/modules/text/text-processor
+ * @requires client/src/modules/features/footnotes
+ * @requires client/src/modules/components/message-indicator
+ * @requires client/src/utils/base
+ * @requires client/src/utils/helpers-reader
  */
 
 import * as CONFIG from "../../config/index.js";

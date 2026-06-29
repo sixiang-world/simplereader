@@ -6,7 +6,7 @@
  * - Tracking book storage location (server/local)
  * - Managing book source information
  *
- * @module client/app/utils/helpers-bookshelf
+ * @module client/src/utils/helpers-bookshelf
  */
 
 /**

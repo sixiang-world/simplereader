@@ -3,7 +3,7 @@
  *
  * This script handles the initialization and event listeners for the extension.
  *
- * @module client/app/extension/activate
+ * @module client/src/extension/activate
  */
 
 /**

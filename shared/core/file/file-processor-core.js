@@ -7,7 +7,7 @@
  * @requires shared/core/text/text-processor-core
  * @requires shared/core/text/pagination-calculator
  * @requires shared/core/text/title-pattern-detector
- * @requires client/app/utils/base
+ * @requires client/src/utils/base
  */
 
 import { getTextDecoderClass } from "../../adapters/text-decoder.js";

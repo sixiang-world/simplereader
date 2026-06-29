@@ -5,10 +5,10 @@
  * Ported from simplereader-enhance's showGoLine() and adapted for cnb's
  * ES modules architecture.
  *
- * @module client/app/modules/features/go-line
- * @requires client/app/config/index
- * @requires client/app/utils/helpers-reader
- * @requires client/app/modules/features/flow-reader
+ * @module client/src/modules/features/go-line
+ * @requires client/src/config/index
+ * @requires client/src/utils/helpers-reader
+ * @requires client/src/modules/features/flow-reader
  */
 
 import * as CONFIG from "../../config/index.js";

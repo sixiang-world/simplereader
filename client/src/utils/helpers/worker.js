@@ -1,6 +1,6 @@
 /**
  * @fileoverview Helper functions for worker creation and module imports in different environments
- * @module client/app/utils/helpers-worker
+ * @module client/src/utils/helpers-worker
  * @requires shared/utils/logger
  */
 

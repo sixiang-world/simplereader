@@ -6,9 +6,9 @@
  * from CONFIG.RUNTIME_VARS.STYLE, computes per-element vertical/horizontal pixel offsets
  * via getFontOffsets(), and writes the results back to ~20 CSS custom properties.
  *
- * @module client/app/modules/features/settings/font-baseline
- * @requires client/app/config/index
- * @requires client/app/utils/base
+ * @module client/src/modules/features/settings/font-baseline
+ * @requires client/src/config/index
+ * @requires client/src/utils/base
  */
 
 import * as CONFIG from "../../config/index.js";

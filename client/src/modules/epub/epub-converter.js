@@ -5,7 +5,7 @@
  * (FILE_CONTENT_CHUNKS + ALL_TITLES format) so all existing rendering,
  * pagination, TOC, and reading features work automatically.
  *
- * @module client/app/modules/epub/epub-converter
+ * @module client/src/modules/epub/epub-converter
  */
 
 import { Logger } from "../../../../shared/utils/logger.js";
