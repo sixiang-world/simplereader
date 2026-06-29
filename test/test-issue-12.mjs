@@ -1,6 +1,10 @@
 /**
  * Test for Issue-12: share URL copy button labels must refresh on setLanguage().
  *
+ * Unlike the original version (which copy-pasted the production logic), this
+ * test imports the real refreshShareButtonLabels() from label-refresh.js.
+ * If the production code changes, the test will automatically catch mismatches.
+ *
  * Verifies:
  * 1. After #createShareURLItem() is called, the button carries
  *    data-copy-text and data-copied-text attributes matching the language
@@ -16,11 +20,7 @@
  */
 
 import assert from "node:assert";
-
-// Minimal mocks — we only need to verify the label refresh logic.
-// We don't import the real module because it pulls in DOM/jQuery globals
-// we can't easily polyfill in node. Instead we replicate the exact
-// setLanguage refresh snippet from settings.js to guard against regressions.
+import { refreshShareButtonLabels } from "../client/app/utils/label-refresh.js";
 
 function makeMockButton(initialLang) {
     const isZh = initialLang === "zh";
@@ -40,19 +40,6 @@ function makeMockButton(initialLang) {
         },
     };
     return btn;
-}
-
-// Simulate the exact refresh block from setLanguage().
-// This is a copy-paste of the production code so any future edit to
-// the source will need a matching edit here — intentionally brittle.
-function refreshShareButtonLabels(btn, lang) {
-    if (!btn) return;
-    const isZhNow = lang === "zh";
-    btn.dataset.copyText = isZhNow ? "复制" : "Copy";
-    btn.dataset.copiedText = isZhNow ? "✓ 已复制" : "✓ Copied!";
-    if (btn.dataset.isCopied !== "true") {
-        btn.textContent = btn.dataset.copyText;
-    }
 }
 
 let passed = 0;

@@ -47,6 +47,7 @@ import {
     getFontOffsets,
 } from "../../utils/base.js";
 import { parseURLSettings } from "../../utils/url-settings.js";
+import { refreshShareButtonLabels } from "../../utils/label-refresh.js";
 import {
     setRangeValue,
     setColorValue,
@@ -2007,8 +2008,10 @@ const settings = {
             const incoming = new URLSearchParams(window.location.search);
             for (const [k, v] of incoming.entries()) {
                 if (!knownKeys.has(k)) {
-                    // Keep the last occurrence if duplicated, matching URLSearchParams
-                    // toString() behavior — simplest: re-add and dedupe below.
+                    // Preserve non-setting query params so the share URL
+                    // round-trip keeps book/bookmarks/hash params intact.
+                    // Duplicate keys (e.g. ?book=a&book=b) are preserved;
+                    // URLSearchParams handles duplicates natively.
                     preservedParams.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
                 }
             }
@@ -2396,27 +2399,12 @@ const settings = {
         cbReg.go("updateCustomTooltip");
 
         // Refresh share-URL copy button labels if the settings menu is
-        // currently open (Issue-12). #createShareURLItem() captures the
-        // labels at creation time, so without this refresh the button
-        // keeps showing the previous language's "Copy" / "✓ Copied" text
-        // after a language switch inside the settings menu.
-        // We intentionally only touch the share URL button — other labels
-        // in the settings menu still require a close/reopen to refresh,
-        // and that is a separate architectural issue tracked elsewhere.
-        const shareCopyBtn = document.getElementById("config-share-url-copy-btn");
-        if (shareCopyBtn) {
-            const isZhNow = lang === "zh";
-            shareCopyBtn.dataset.copyText = isZhNow ? "复制" : "Copy";
-            shareCopyBtn.dataset.copiedText = isZhNow ? "✓ 已复制" : "✓ Copied!";
-            // Only update visible textContent when the button is in its
-            // idle state. If a "✓ Copied" countdown is in flight, let the
-            // pending setTimeout restore the (now-updated) idle label —
-            // flashing "✓ Copied" → "Copy" → "✓ Copied" mid-countdown
-            // would be worse than keeping the transient.
-            if (shareCopyBtn.dataset.isCopied !== "true") {
-                shareCopyBtn.textContent = shareCopyBtn.dataset.copyText;
-            }
-        }
+        // currently open (Issue-12). Imported from label-refresh.js so the
+        // same implementation is shared with test/test-issue-12.mjs.
+        refreshShareButtonLabels(
+            document.getElementById("config-share-url-copy-btn"),
+            lang
+        );
 
         if (consoleLog) {
             console.log(`Language set to "${lang}".`);
