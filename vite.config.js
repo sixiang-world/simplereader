@@ -21,22 +21,31 @@
  */
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
-import { cpSync, existsSync, mkdirSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, statSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { dirname } from "node:path";
 
 /**
- * Post-build: copy classic-script lib files to dist/ so the classic
- * <script> tags in index.html (jQuery, jschardet, JSZip, etc.) resolve.
+ * Post-build: copy files to dist/ that are loaded at runtime (classic <script>
+ * libs, JSON data, Web Worker, font CSS) so they resolve correctly.
  */
 function copyDir(src, dest) {
     if (!existsSync(src)) {
         console.warn(`[vite] Source not found, skipping: ${src}`);
         return;
     }
-    if (!existsSync(dest)) {
-        mkdirSync(dest, { recursive: true });
+    if (statSync(src).isFile()) {
+        var destDir = dirname(dest);
+        if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true });
+        if (existsSync(dest) && statSync(dest).isDirectory()) {
+            rmSync(dest, { recursive: true, force: true });
+        }
+        writeFileSync(dest, readFileSync(src));
+        console.log(`[vite] Copied file ${src} → ${dest}`);
+    } else {
+        if (!existsSync(dest)) mkdirSync(dest, { recursive: true });
+        cpSync(src, dest, { recursive: true, force: true });
+        console.log(`[vite] Copied dir ${src} → ${dest}`);
     }
-    cpSync(src, dest, { recursive: true, force: true });
-    console.log(`[vite] Copied ${src} → ${dest}`);
 }
 
 export default defineConfig({
@@ -44,9 +53,13 @@ export default defineConfig({
         {
             name: "postbuild-copy-lib",
             closeBundle() {
-                const src = fileURLToPath(new URL("./client/lib/", import.meta.url));
-                const dest = fileURLToPath(new URL("./dist/client/lib/", import.meta.url));
-                copyDir(src, dest);
+                var root = fileURLToPath(new URL("./", import.meta.url));
+                var distPath = fileURLToPath(new URL("./dist/", import.meta.url));
+                copyDir(root + "client/lib/", distPath + "client/lib/");
+                copyDir(root + "version.json", distPath + "version.json");
+                copyDir(root + "help.json", distPath + "help.json");
+                copyDir(root + "client/fonts/", distPath + "client/fonts/");
+                copyDir(root + "client/src/modules/database/", distPath + "client/src/modules/database/");
             },
         },
     ],
