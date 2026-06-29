@@ -13,8 +13,8 @@
  * @requires client/app/utils/base
  */
 
-import * as CONFIG_CONST from "../config/constants.js";
-import { removeFileExtension, isSafari } from "./base.js";
+import * as CONFIG_CONST from "../../config/constants.js";
+import { removeFileExtension, isSafari } from "../base.js";
 
 /**
  * Extracts the font name from a font file

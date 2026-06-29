@@ -38,9 +38,9 @@
 import * as CONFIG from "../../config/index.js";
 import { ICONS } from "../../config/icons.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
-import { getDropdownSelector } from "../components/dropdown-selector.js";
-import { getColorPicker } from "../components/custom-color-picker.js";
-import { PopupManager } from "../components/popup-manager.js";
+import { getDropdownSelector } from "../../components/dropdown-selector.js";
+import { getColorPicker } from "../../components/custom-color-picker.js";
+import { PopupManager } from "../../components/popup-manager.js";
 import {
     isVariableDefined,
     toBool,
@@ -67,9 +67,9 @@ import {
     changeLanguageSelectorItemLanguage,
     changeFontSelectorItemLanguage,
     handleSettingsClose,
-} from "../../utils/helpers-settings.js";
-import { setTitle } from "../../utils/helpers-reader.js";
-import { updateVersionData, getCurrentDisplayLanguage } from "../../utils/helpers-ui.js";
+} from "../../utils/helpers/settings.js";
+import { setTitle } from "../../utils/helpers/reader.js";
+import { updateVersionData, getCurrentDisplayLanguage } from "../../utils/helpers/ui.js";
 import { SETTINGS_SCHEMA, MENU_SCHEMA } from "./settings/schema.js";
 import { updateFontBaselineOffsets as _updateFontBaselineOffsets } from "./settings/font-baseline.js";
 

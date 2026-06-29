@@ -24,7 +24,7 @@ import {
     HSLToHex,
     pSBC,
     invertColor,
-} from "../client/app/utils/base/color.js";
+} from "../client/src/utils/base/color.js";
 import {
     padZero,
     truncateText,
@@ -33,10 +33,10 @@ import {
     convertUTCTimestampToLocalString,
     compareDates,
     constructNotificationMessageFromArray,
-} from "../client/app/utils/base/format.js";
-import { snakeToCamel, setDeep } from "../client/app/utils/base/path.js";
-import { toBool } from "../client/app/utils/base/toBool.js";
-import { isWindows, isMac } from "../client/app/utils/base/env.js";
+} from "../client/src/utils/base/format.js";
+import { snakeToCamel, setDeep } from "../client/src/utils/base/path.js";
+import { toBool } from "../client/src/utils/base/toBool.js";
+import { isWindows, isMac } from "../client/src/utils/base/env.js";
 
 let passed = 0;
 let failed = 0;

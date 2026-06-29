@@ -42,7 +42,7 @@ const {
     listPresets,
     applyPreset,
     resolvePresetFromURL,
-} = await import("../client/app/core/presets.js");
+} = await import("../client/src/core/presets.js");
 
 let passed = 0;
 let failed = 0;

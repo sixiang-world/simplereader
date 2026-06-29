@@ -18,13 +18,13 @@
  * @requires client/app/utils/helpers-reader
  */
 
-import * as CONFIG from "../config/index.js";
-import { ICONS } from "../config/icons.js";
+import * as CONFIG from "../../config/index.js";
+import { ICONS } from "../../config/icons.js";
 import { cbReg } from "../../../shared/core/callback/callback-registry.js";
-import { reader } from "../modules/features/reader.js";
-import { PopupManager } from "../modules/components/popup-manager.js";
-import { isVariableDefined, toBool } from "./base.js";
-import { setTitle } from "./helpers-reader.js";
+import { reader } from "../../modules/reader/reader.js";
+import { PopupManager } from "../../components/popup-manager.js";
+import { isVariableDefined, toBool } from "../base.js";
+import { setTitle } from "./reader.js";
 
 // ===============================
 // Loading Screen Related Variables

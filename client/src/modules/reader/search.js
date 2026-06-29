@@ -13,7 +13,7 @@
  */
 
 import * as CONFIG from "../../config/index.js";
-import { setHistory } from "../../utils/helpers-reader.js";
+import { setHistory } from "../../utils/helpers/reader.js";
 import { flowReader } from "./flow-reader.js";
 
 /** @type {HTMLElement|null} The search dialog element */

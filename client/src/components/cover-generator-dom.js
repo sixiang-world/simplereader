@@ -20,7 +20,7 @@
 import { getClamps } from "../../lib/clamps.js";
 import { RUNTIME_VARS } from "../../config/variables-dom.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
-import { TextProcessor } from "../text/text-processor.js";
+import { TextProcessor } from "../modules/text/text-processor.js";
 import { calculateRectangleSimilarity, getFontOffsets, debounce } from "../../utils/base.js";
 
 /**

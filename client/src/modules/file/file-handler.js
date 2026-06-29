@@ -25,13 +25,13 @@
 
 import * as CONFIG from "../../config/index.js";
 import { Logger } from "../../../../shared/utils/logger.js";
-import { reader } from "../features/reader.js";
+import { reader } from "../reader/reader.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { FileProcessor } from "./file-processor.js";
 import { EpubConverter } from "../epub/epub-converter.js";
-import { PopupManager } from "../components/popup-manager.js";
-import { getFootnotes } from "../features/footnotes.js";
+import { PopupManager } from "../../components/popup-manager.js";
+import { getFootnotes } from "../reader/footnotes.js";
 import {
     removeFileExtension,
     randomFloatFromInterval,
@@ -52,21 +52,21 @@ import {
     resetUI,
     resetVars,
     getCurrentDisplayLanguage,
-} from "../../utils/helpers-ui.js";
+} from "../../utils/helpers/ui.js";
 import {
     getIsFromLocal,
     getIsOnServer,
     setIsFromLocal,
     setIsOnServer,
     setBookLastReadTimestamp,
-} from "../../utils/helpers-bookshelf.js";
+} from "../../utils/helpers/bookshelf.js";
 import {
     GetScrollPositions,
     getHistory,
     getHistoryAndSetChapterTitleActive,
     setTitle,
-} from "../../utils/helpers-reader.js";
-import { validateFontFile } from "../../utils/helpers-fonts.js";
+} from "../../utils/helpers/reader.js";
+import { validateFontFile } from "../../utils/helpers/fonts.js";
 
 /**
  * @class FileHandler

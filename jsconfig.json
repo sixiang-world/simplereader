@@ -30,7 +30,6 @@
     "dist",
     "archive",
     "build-tools",
-    "client/app/lib/**",
-    "client/app/debug/**"
+    "client/lib/**"
   ]
 }

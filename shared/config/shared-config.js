@@ -5,7 +5,7 @@
  * @requires client/app/config/constants
  */
 
-import { CONST_FONT, CONST_FILE } from "../../client/app/config/constants.js";
+import { CONST_FONT, CONST_FILE } from "../../client/src/config/constants.js";
 
 /**
  * Definitions of the backend variables

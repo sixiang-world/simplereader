@@ -18,7 +18,7 @@
  */
 
 import assert from "node:assert/strict";
-import { HookRegistry } from "../client/app/core/hooks.js";
+import { HookRegistry } from "../client/src/core/hooks.js";
 
 let passed = 0;
 let failed = 0;

@@ -7,7 +7,7 @@
  * @requires client/app/modules/features/reader
  */
 
-import { reader } from "../features/reader.js";
+import { reader } from "../reader/reader.js";
 
 /**
  * @class TextProcessorDOM

@@ -5,7 +5,7 @@
     "version": "1.7.0",
     "background": {
         "scripts": [
-            "client/app/extension/activate.js"
+            "client/src/extension/activate.js"
         ],
         "type": "module"
     },
@@ -18,7 +18,7 @@
                 "file://*/*.txt*"
             ],
             "js": [
-                "client/app/extension/contentScript.js"
+                "client/src/extension/contentScript.js"
             ],
             "all_frames": true,
             "run_at": "document_start"

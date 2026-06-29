@@ -13,15 +13,15 @@
 import * as CONFIG from "../../config/index.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 import { FileProcessorCore } from "../../../../shared/core/file/file-processor-core.js";
-import { CoverAnimation } from "../components/cover-animation.js";
-import { getFootnotes } from "../features/footnotes.js";
+import { CoverAnimation } from "../../components/cover-animation.js";
+import { getFootnotes } from "../reader/footnotes.js";
 import {
     randomFloatFromInterval,
     addFootnotesToDOM,
     getBookCoverCanvas,
     pairAnchorsAndFootnotes,
 } from "../../utils/base.js";
-import { createWorker } from "../../utils/helpers-worker.js";
+import { createWorker } from "../../utils/helpers/worker.js";
 
 /**
  * Chunked file processor
