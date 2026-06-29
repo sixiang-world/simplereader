@@ -16,12 +16,18 @@ SimpleTextReader is a browser-based TXT/EPUB reader with a vanilla JS client and
 
 | Command | What it does |
 |---|---|
+| `npm install` | Install Vite + TypeScript + jschardet (root package.json). |
+| `npm run dev` | Start Vite dev server (default port 3000). Hot-reloads on save. |
+| `npm run build` | Production build → `dist/`. Caddy should serve `dist/`. |
+| `npm run preview` | Preview the production build locally. |
+| `npm run typecheck` | Run `tsc --noEmit` for JSDoc-based type checking (jsconfig.json). |
+| `npm run test` | Run the Node-native .mjs test suite (`test/test-*.mjs`). |
 | `python build-tools/build.py` | Build Chrome/Firefox extensions and Docker image; outputs to `dist/`. |
 | `python build-tools/build.py -v <version>` | Build with an explicit version number. |
 | `python build-tools/generate_changelog.py` | Generate `CHANGELOG.md` from git history. |
 | `docker build -t simplereader .` | Build the production Docker image. |
 
-The client requires no build step for local development. Open `client/index.html` or serve via the Node server.
+The client is now a Vite project (since v2 refactor). Previously it was pure static ES modules with no bundler — that mode is no longer supported. Open `index.html` via `npm run dev` for development, or deploy the `dist/` output from `npm run build` for production.
 
 ## Coding Style & Naming Conventions
 

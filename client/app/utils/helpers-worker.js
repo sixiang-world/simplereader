@@ -247,7 +247,10 @@ export async function importDependencies(absolutePaths, baseUrl) {
                 const moduleUrl = resolveUrl(path, baseUrl, "module");
 
                 logger.log("Importing module:", { path, moduleUrl });
-                const module = await import(moduleUrl);
+                // /* @vite-ignore */ because moduleUrl is resolved at runtime
+                // (the path is computed from absolutePath + baseUrl via
+                // resolveWorkerUrl, which Vite cannot statically analyze).
+                const module = await import(/* @vite-ignore */ moduleUrl);
 
                 return extractDefaultExport(module);
             })
