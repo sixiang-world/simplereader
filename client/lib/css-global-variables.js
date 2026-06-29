@@ -9,7 +9,7 @@
  * @License: MIT
  * @Modified: Converted to ES Module and optimized by Henry Xu
  *
- * @module client/app/lib/css-global-variables
+ * @module client/lib/css-global-variables
  */
 
 /**

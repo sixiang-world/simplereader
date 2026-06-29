@@ -171,7 +171,7 @@ pnpm run dev
 # Production build (outputs to dist/)
 pnpm run build
 
-# Run all 124 tests (5 test files)
+# Run all 163 tests (5 test files)
 pnpm run test
 ```
 
@@ -204,7 +204,7 @@ client/
   manifests/                # Extension manifests (Chrome / Firefox / PWA)
 shared/                     # Shared core logic (client/server-agnostic)
 archive/                    # Historical code archives (server/, debug/, etc.)
-test/                       # 124 Node.js test cases
+test/                       # 163 Node.js test cases
 ```
 
 ---

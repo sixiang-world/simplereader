@@ -21,7 +21,7 @@
  * @License: MIT
  * @Modified: Converted to ES Module and optimized by Henry Xu
  *
- * @module client/app/lib/clamps
+ * @module client/lib/clamps
  */
 
 /**

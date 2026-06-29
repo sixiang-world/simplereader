@@ -130,7 +130,9 @@ if __name__ == "__main__":
         needed_chars = ''.join(sorted(set(args.chars)))
     else:
         # Define the files to scan
-        files_to_scan = [root_dir / "./client/css/variables.css",
+        # (v2 refactor) client/css/ was moved to client/src/styles/ during the
+        # refactor — update the variables.css path accordingly.
+        files_to_scan = [root_dir / "./client/src/styles/variables.css",
                          root_dir / "./help.json",
                          root_dir / "./version.json"]
 

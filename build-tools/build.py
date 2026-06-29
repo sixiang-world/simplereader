@@ -379,22 +379,41 @@ class Builder:
             return False
 
     def _copy_extension_files(self, dist_dir):
-        """Copy necessary files for extension build"""
-        # Copy directories
-        dirs_to_copy = ['client/css', 'client/fonts',
-                        'client/images', 'client/app', 'shared']
+        """Copy necessary files for extension build.
+
+        (v2 refactor) The directory layout changed:
+          - client/app/      → client/src/   (source code, ES modules)
+          - client/css/      → client/src/styles/   (CSS)
+          - client/app/lib/  → client/lib/   (third-party vendor libs)
+          - server/          → archive/server/  (archived; not part of the
+            browser extension bundle, so we don't copy it)
+
+        The browser extension ships all client-side code + shared/ (which is
+        pure JS, shared between client and the now-archived server). It does
+        NOT include archive/, build-tools/, test/, or node_modules/.
+        """
+        # Directories to copy into the extension bundle.
+        # - client/src/      : the application source (HTML imports ./client/src/modules/init-webpage.js)
+        # - client/lib/      : third-party libs loaded as classic <script> tags (jQuery, tippy, etc.)
+        # - client/fonts/    : web fonts
+        # - client/images/   : static images
+        # - client/manifests/: PWA manifest (Chrome/Firefox manifests are already copied separately)
+        # - shared/          : pure JS shared between client and (archived) server; needed at runtime
+        dirs_to_copy = ['client/src', 'client/lib', 'client/fonts',
+                        'client/images', 'client/manifests', 'shared']
         files_to_exclude = ['FZSKBXKK.woff2',
                             'KX_47043_14.woff', 'LXGWWenKaiScreen.woff2']
         for dir_name in dirs_to_copy:
-            copytree(self.root_dir / dir_name,
+            src = self.root_dir / dir_name
+            if not src.exists():
+                print(f'[WARN] Source directory missing, skipping: {src}')
+                continue
+            copytree(src,
                      dist_dir / dir_name,
                      dirs_exist_ok=True,
                      ignore=lambda dir, files: [
                          f for f in files if f in files_to_exclude]
                      )
-
-        # Debug directory has been archived in v2 refactor — no longer under client/
-        # rmtree(dist_dir / 'client/app/debug', ignore_errors=True)
 
         # Copy individual files
         files_to_copy = ['index.html', 'version.json', 'help.json']
