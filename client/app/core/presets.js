@@ -53,7 +53,14 @@ export function loadAllPresets() {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return {};
         const parsed = JSON.parse(raw);
-        return typeof parsed === "object" && parsed !== null ? parsed : {};
+        // Reject non-plain-object values (arrays, primitives, null).
+        // `typeof [] === "object"` would pass a naive check, so we also
+        // verify it's not an Array and not null.
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+            console.warn("[presets] Stored value is not a plain object, ignoring.");
+            return {};
+        }
+        return parsed;
     } catch (e) {
         console.warn("[presets] Failed to load presets from localStorage:", e);
         return {};
