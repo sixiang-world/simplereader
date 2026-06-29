@@ -5,7 +5,6 @@
  * @module client/app/app
  * @requires client/app/config/index
  * @requires shared/core/callback/callback-registry
- * @requires client/app/modules/api/server-connector
  * @requires client/app/modules/features/bookshelf
  * @requires client/app/modules/features/fontpool
  * @requires client/app/modules/features/settings
@@ -19,7 +18,6 @@
 
 import * as CONFIG from "./config/index.js";
 import { cbReg } from "../../shared/core/callback/callback-registry.js";
-import { initServerConnector } from "./modules/api/server-connector.js";
 import { initBookshelf } from "./modules/features/bookshelf.js";
 import { initFontpool } from "./modules/features/fontpool.js";
 import { initSettings } from "./modules/features/settings.js";
@@ -194,16 +192,6 @@ onReady(() => {
     //Listen for hash changes and remove the hashbang immediately
     $(window).on("hashchange popstate", removeHashbang);
     if (window.consoleTime) console.timeEnd("[time] Remove Hashbang");
-
-    /**
-     * Start cloud library when the DOM is loaded
-     * Only if backend server is available
-     * No need to await
-     */
-    if (window.consoleTime) console.time("[time][background] Initialize Server Connector");
-    initServerConnector().then(() => {
-        if (window.consoleTime) console.timeEnd("[time][background] Initialize Server Connector");
-    });
 
     /**
      * Set up the extension message listener

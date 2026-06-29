@@ -23,7 +23,6 @@
  * @requires client/app/utils/helpers-ui
  * @requires client/app/utils/helpers-bookshelf
  * @requires client/app/utils/helpers-reader
- * @requires client/app/utils/helpers-server
  * @requires client/app/utils/helpers-worker
  */
 
@@ -59,8 +58,8 @@ import {
     getIsOnServer,
 } from "../../utils/helpers-bookshelf.js";
 import { getProgressText, removeHistory, getIsBookFinished } from "../../utils/helpers-reader.js";
-import { fetchAuthenticatedFile } from "../../utils/helpers-server.js";
-import { createWorker } from "../../utils/helpers-worker.js";
+// (v2 refactor) createWorker import removed — the only worker (bookshelf-db-worker)
+// was deleted along with saveProcessedBookFromServer.
 
 /**
  * @class BookshelfDB
@@ -96,8 +95,9 @@ class BookshelfDB extends DBManager {
             objectStores: CONFIG.CONST_DB.DB_STORES,
             errorCallback: () => bookshelf.disable(),
             initCallback: async () => {
-                // await this.removeAllBooks();
-                await this.removeAllCloudBooks();
+                // No-op since v2 refactor: cloud-library cleanup is no longer
+                // needed (server/ has been archived). Kept as an empty hook so
+                // the DBManager constructor contract is preserved.
             },
         });
     }
@@ -152,81 +152,6 @@ class BookshelfDB extends DBManager {
                     [this.#objectStoreNames.bookProcessed]: (inputData) => ({
                         name: inputData.name,
                         encoding: inputData.encoding,
-                    }),
-                },
-            });
-
-            return true;
-        } catch (error) {
-            console.error("Error putting book:", error);
-            throw error;
-        }
-    }
-
-    /**
-     * Stores a processed book from server in the database
-     * @async
-     * @param {string} name - Book filename
-     * @param {Object} data - Processed book data from server
-     * @param {Object} data.name - Book filename
-     * @param {Object} data.type - Book type
-     * @param {Object} data.metadata - Book metadata
-     * @param {Object} data.content - Book content
-     * @returns {Promise<IDBValidKey>} Key of stored book
-     * @throws {Error} When database initialization fails or transaction fails
-     */
-    async putProcessedBookFromServer(name, data) {
-        if (!(await this.init())) {
-            throw new Error("Init local db error!");
-        }
-
-        // Get the language of the book
-        let isEastern = data.metadata.isEastern ?? null;
-        let encoding = data.metadata.encoding ?? null;
-        if (isEastern === null || encoding === null) {
-            ({ isEastern, encoding } = await TextProcessor.getLanguageAndEncodingFromBook(data));
-        }
-
-        try {
-            const bookData = {
-                name,
-                data: data.metadata.path,
-                isFromLocal: data.metadata.isFromLocal ?? false,
-                isOnServer: data.metadata.isOnServer ?? true,
-                isEastern,
-                encoding,
-                metadata: data.metadata,
-                content: data.content,
-            };
-
-            await this.put(bookData, {
-                stores: {
-                    [this.#objectStoreNames.bookfiles]: (inputData) => ({
-                        name: inputData.name,
-                        data: inputData.data,
-                        isFromLocal: inputData.isFromLocal,
-                        isOnServer: inputData.isOnServer,
-                        processed: inputData.metadata.processed,
-                        pageBreakOnTitle: inputData.metadata.pageBreakOnTitle ?? true,
-                        isEastern: inputData.isEastern,
-                        createdAt: inputData.metadata.createdAt,
-                    }),
-                    [this.#objectStoreNames.bookProcessed]: (inputData) => ({
-                        name: inputData.name,
-                        is_eastern_lan: inputData.metadata.is_eastern_lan,
-                        encoding: inputData.encoding,
-                        bookAndAuthor: inputData.metadata.bookAndAuthor,
-                        title_page_line_number_offset: inputData.metadata.titlePageLineNumberOffset,
-                        seal_rotate_en: inputData.metadata.sealRotateEn,
-                        seal_left: parseFloat(inputData.metadata.sealLeft),
-                        file_content_chunks: inputData.content.fileContentChunks,
-                        all_titles: inputData.content.allTitles,
-                        all_titles_ind: inputData.content.allTitlesInd,
-                        footnotes: inputData.content.footnotes,
-                        footnote_processed_counter: parseInt(inputData.metadata.footnoteProcessedCounter),
-                        page_breaks: inputData.content.pageBreaks,
-                        total_pages: parseInt(inputData.metadata.totalPages),
-                        processedAt: inputData.metadata.processedAt,
                     }),
                 },
             });
@@ -406,17 +331,6 @@ class BookshelfDB extends DBManager {
     }
 
     /**
-     * Retrieves all cloud-stored books from the database
-     * @async
-     * @returns {Promise<Array>} Array of cloud-stored books
-     * @throws {Error} When database initialization fails or transaction fails
-     */
-    async getAllCloudBooks() {
-        const books = await this.getAllBooks();
-        return books.filter((book) => book.isOnServer);
-    }
-
-    /**
      * Checks if a book exists in the database
      * @async
      * @param {string} name - Book filename
@@ -466,30 +380,6 @@ class BookshelfDB extends DBManager {
             return true;
         } catch (error) {
             console.error("Error removing all books:", error);
-            throw error;
-        }
-    }
-
-    /**
-     * Removes all cloud-stored books that aren't local
-     * @async
-     * @throws {Error} When database initialization fails or transaction fails
-     */
-    async removeAllCloudBooks() {
-        if (!(await this.init())) {
-            throw new Error("Init local db error!");
-        }
-
-        try {
-            const cloudBooks = await this.getAllCloudBooks();
-
-            for (const book of cloudBooks) {
-                await this.delete([this.#objectStoreNames.bookfiles, this.#objectStoreNames.bookProcessed], book.name);
-            }
-
-            return true;
-        } catch (error) {
-            console.error("Error removing all cloud books:", error);
             throw error;
         }
     }
@@ -673,89 +563,24 @@ const bookshelf = {
                 // Check if the book exists in db
                 const existsLocally = await this.isBookExist(fname);
 
-                // check if the book exists in db
                 if (!existsLocally) {
-                    // search book in allBooksInfo
-                    // const toProcessBookInfo = CONFIG.VARS.ALL_BOOKS_INFO.find(x => x.name === fname);
-                    const toProcessBookInfo = CONFIG.VARS.ALL_BOOKS_INFO[fname];
-                    this.logger.log("toProcessBookInfo", toProcessBookInfo);
-
-                    if (toProcessBookInfo) {
-                        try {
-                            const toProcessBookFileObj = await fetchAuthenticatedFile(fname, true);
-                            this.logger.log("toProcessBookFileObj", toProcessBookFileObj);
-
-                            if (toProcessBookFileObj?.metadata?.processed) {
-                                // For processed server books, directly use server data
-                                fetchedBook = {
-                                    name: fname,
-                                    data: toProcessBookFileObj.metadata.path,
-                                    isFromLocal: toProcessBookFileObj.metadata.isFromLocal ?? false,
-                                    isOnServer: toProcessBookFileObj.metadata.isOnServer ?? true,
-                                    isEastern: toProcessBookFileObj.metadata.isEastern,
-                                    encoding: toProcessBookFileObj.metadata.encoding,
-                                    processed: toProcessBookFileObj.metadata.processed,
-                                    pageBreakOnTitle: toProcessBookFileObj.metadata.pageBreakOnTitle ?? true,
-                                    createdAt: toProcessBookFileObj.metadata.createdAt,
-                                    is_eastern_lan: toProcessBookFileObj.metadata.is_eastern_lan,
-                                    bookAndAuthor: toProcessBookFileObj.metadata.bookAndAuthor,
-                                    title_page_line_number_offset:
-                                        toProcessBookFileObj.metadata.titlePageLineNumberOffset,
-                                    seal_rotate_en: toProcessBookFileObj.metadata.sealRotateEn,
-                                    seal_left: toProcessBookFileObj.metadata.sealLeft,
-                                    file_content_chunks: toProcessBookFileObj.content.fileContentChunks,
-                                    all_titles: toProcessBookFileObj.content.allTitles,
-                                    all_titles_ind: toProcessBookFileObj.content.allTitlesInd,
-                                    footnotes: toProcessBookFileObj.content.footnotes,
-                                    footnote_processed_counter: toProcessBookFileObj.metadata.footnoteProcessedCounter,
-                                    page_breaks: toProcessBookFileObj.content.pageBreaks,
-                                    total_pages: toProcessBookFileObj.metadata.totalPages,
-                                    processedAt: toProcessBookFileObj.metadata.processedAt,
-                                };
-
-                                // Asynchronously save to local database, but do not wait for completion
-                                this.saveProcessedBookFromServer(toProcessBookFileObj, false, false, false).catch(
-                                    (err) => console.warn("Background save to DB failed:", err)
-                                );
-                            } else {
-                                await this.saveBook(
-                                    toProcessBookFileObj,
-                                    toProcessBookInfo.isFromLocal,
-                                    toProcessBookInfo.isOnServer,
-                                    false,
-                                    false,
-                                    false
-                                );
-
-                                // For unprocessed books, still need to get from database
-                                fetchedBook = await this.db.getBook(fname);
-                            }
-                        } catch (e) {
-                            hideLoadingScreen(false);
-                            PopupManager.showNotification({
-                                iconName: "ERROR",
-                                text: `${CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToOpen} "${truncateText(
-                                    fname
-                                )}"`,
-                                iconColor: "error",
-                            });
-                            throw new Error(`openBook error: "${fname}"`);
-                        }
-                    } else {
-                        hideLoadingScreen(false);
-                        PopupManager.showNotification({
-                            iconName: "ERROR",
-                            text: `${CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToOpen} "${truncateText(
-                                fname
-                            )}"`,
-                            iconColor: "error",
-                        });
-                        throw new Error(`openBook error: "${fname}"`);
-                    }
-                } else {
-                    // Local book directly from database
-                    fetchedBook = await this.db.getBook(fname);
+                    // Since v2 refactor the cloud-server pipeline has been
+                    // removed — there is no fallback if the book is not in
+                    // the local IndexedDB. Surface the error to the user.
+                    hideLoadingScreen(false);
+                    PopupManager.showNotification({
+                        iconName: "ERROR",
+                        text: `${CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToOpen} "${truncateText(
+                            fname
+                        )}"`,
+                        iconColor: "error",
+                    });
+                    throw new Error(`openBook error: book not found locally: "${fname}"`);
                 }
+
+                // Local book directly from database
+                fetchedBook = await this.db.getBook(fname);
+
                 this.logger.log("fetchedBook", fetchedBook);
 
                 if (typeof fetchedBook?.data === "string") {
@@ -921,115 +746,6 @@ const bookshelf = {
             }
         }
         return file;
-    },
-
-    /**
-     * Saves a processed book from server to IndexedDB storage
-     * @async
-     * @param {Object} processedBook - Processed book data from server
-     * @param {boolean} [refreshBookshelf=true] - Whether to refresh bookshelf display
-     * @param {boolean} [hardRefresh=true] - Whether to perform hard refresh
-     * @param {boolean} [sortBookshelf=true] - Whether to sort bookshelf
-     * @param {boolean} [inFileProcessingCallback=false] - Whether to call file load callback
-     * @returns {Promise<Object>} The saved processed book
-     */
-    async saveProcessedBookFromServer(
-        processedBook,
-        refreshBookshelf = true,
-        hardRefresh = true,
-        sortBookshelf = true,
-        inFileProcessingCallback = false
-    ) {
-        if (!this.enabled) {
-            return null;
-        }
-
-        if (!processedBook.type.includes("application/json")) {
-            console.error("Invalid processed book type: ", processedBook.type);
-            return null;
-        }
-
-        // Validate processedBook
-        if (
-            !processedBook.metadata ||
-            !processedBook.metadata.processed ||
-            !processedBook.content ||
-            !processedBook.content.allTitles ||
-            !processedBook.content.allTitlesInd ||
-            !processedBook.content.fileContentChunks ||
-            !processedBook.content.footnotes ||
-            !processedBook.content.pageBreaks
-        ) {
-            console.error("Invalid processed book: ", processedBook);
-            return null;
-        }
-
-        if (processedBook[this._CACHE_FLAG_]) {
-            // console.log("Openning cache-book, so not save.");
-            return processedBook;
-        }
-
-        // Save file to cache db first
-        try {
-            this.logger.log("Starting to save book", processedBook.name);
-            // await this.db.putProcessedBookFromServer(processedBook.name, processedBook);
-
-            if (!this.worker) {
-                throw new Error("Worker not initialized");
-            }
-
-            await new Promise((resolve, reject) => {
-                this.logger.log("Setting up worker message handler");
-
-                const messageData = {
-                    type: "saveProcessedBookFromServer",
-                    payload: {
-                        processedBook,
-                    },
-                };
-
-                this.logger.log("Preparing message data", messageData);
-
-                this.worker.onmessage = (e) => {
-                    this.logger.log("Received worker message", e.data);
-                    if (e.data.success) {
-                        resolve();
-                    } else {
-                        console.error("Worker reported error:", e.data.error);
-                        console.error("Error stack:", e.data.stack);
-                        reject(new Error(e.data.error));
-                    }
-                };
-
-                this.logger.log("Posting message to worker");
-                this.worker.postMessage(messageData);
-                this.logger.log("Message posted to worker");
-            });
-
-            this.logger.log("Worker save completed");
-
-            if (!(await this.db.isBookExist(processedBook.name))) {
-                PopupManager.showNotification({
-                    iconName: "ERROR",
-                    text: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToSave,
-                    iconColor: "error",
-                });
-                throw new Error(`saveBook error (localStorage full): "${processedBook.name}"`);
-            }
-
-            // Refresh Bookshelf in DropZone
-            if (refreshBookshelf) await resetUI(refreshBookshelf, hardRefresh, sortBookshelf, inFileProcessingCallback);
-
-            this.logger.log("saveProcessedBookFromServer complete");
-
-            // Trigger saveProcessedBookComplete event
-            cbReg.go("saveProcessedBookComplete");
-        } catch (e) {
-            console.error("Error in saveProcessedBookFromServer:", e);
-            console.error("Error stack:", e.stack);
-        }
-
-        return processedBook;
     },
 
     /**
@@ -2417,11 +2133,6 @@ const bookshelf = {
                 await this.openBook(name, forceRefresh);
             });
 
-            // Listen for reopenBook event
-            cbReg.add("reopenBook", async () => {
-                await this.reopenBook();
-            });
-
             // Listen for closeBook event
             cbReg.add("closeBook", () => {
                 CONFIG.VARS.IS_BOOK_OPENED = false;
@@ -2434,21 +2145,9 @@ const bookshelf = {
                 await this.db.updateProcessedBook(e.name, e);
             });
 
-            // Listen for saveProcessedBookFromServer event
-            cbReg.add("saveProcessedBookFromServer", async (e) => {
-                const { processedBook, refreshBookshelf, hardRefresh, sortBookshelf, inFileProcessingCallback } = e;
-                try {
-                    await this.saveProcessedBookFromServer(
-                        processedBook,
-                        refreshBookshelf,
-                        hardRefresh,
-                        sortBookshelf,
-                        inFileProcessingCallback
-                    );
-                } catch (error) {
-                    console.error("Error saving processed book:", error);
-                }
-            });
+            // (v2 refactor) The saveProcessedBookFromServer listener and the
+            // reopenBook listener have been removed: server-connector.js was
+            // archived, so neither event is fired anymore.
 
             // Listen for toggleFilterBar event
             cbReg.add("toggleFilterBar", () => {
@@ -2648,8 +2347,8 @@ const bookshelf = {
             //     CONFIG.DOM_ELEMENT.DROPZONE.dataset.title = CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_dropZone;
             // });
 
-            // Create worker
-            this.worker = createWorker("client/app/modules/database/bookshelf-db-worker.js", import.meta.url);
+            // (v2 refactor) The bookshelf-db-worker.js was deleted along with
+            // saveProcessedBookFromServer — it was the worker's only consumer.
 
             cbReg.go("startBookshelfLoop");
 
