@@ -109,4 +109,4 @@ The `modules/` directory contains the core application logic, organized into spe
 
 - The `modules/` directory is the heart of the application, containing both core functionality and high-level features.
 - Each subdirectory is designed to be modular, making it easier to debug, extend, or refactor specific parts of the application.
-- (v2 refactor) The `api/` subdirectory was removed when the server was archived. All client-server communication now happens via the future-direction config-sync hook (see `client/app/core/` after the hooks commit).
+- (v2 refactor) The `api/` subdirectory was removed when the server was archived. All client-server communication now happens via the future-direction config-sync hook (see `client/src/core/` after the hooks commit).

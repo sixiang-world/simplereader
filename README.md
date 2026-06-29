@@ -178,7 +178,7 @@ pnpm run dev
 # 生产构建（输出到 dist/）
 pnpm run build
 
-# 运行全部 124 个测试（5 个测试文件）
+# 运行全部 163 个测试（5 个测试文件）
 pnpm run test
 ```
 
@@ -211,7 +211,7 @@ client/
   manifests/                # 浏览器扩展清单（Chrome / Firefox / PWA）
 shared/                     # 前后端共享的核心逻辑
 archive/                    # 历史存档（server/, debug/ 等）
-test/                       # 124 个 Node.js 测试用例
+test/                       # 163 个 Node.js 测试用例
 ```
 
 ---

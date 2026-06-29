@@ -1,6 +1,6 @@
 /**
  * @fileoverview CSS Filter Generator
- * @module client/app/lib/css-filter-gen
+ * @module client/lib/css-filter-gen
  */
 
 /**

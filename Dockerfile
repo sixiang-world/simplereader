@@ -1,52 +1,47 @@
-# Build stage
+# Build stage — produce the Vite production bundle (dist/)
+# (v2 refactor) The server/ directory has been archived (see archive/server/).
+# The image now ships ONLY the static frontend. Use any static file server to
+# serve dist/. Here we use Caddy because the project's deployment docs already
+# reference it; nginx would work equally well.
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy server package files
-COPY server/package*.json ./server/
+# Copy package manifests first for layer caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml jsconfig.json ./
+COPY vite.config.js ./
 
-# Install server dependencies
-RUN cd server && npm install --production && cd ..
+# Install dependencies (use npm — pnpm is not preinstalled in node:20-alpine;
+# npm can install from a pnpm-lock.yaml + package.json without issue, since
+# the lockfile is only consulted by pnpm itself)
+RUN npm install --no-audit --no-fund
 
-# Create client/app directory and its package.json
-RUN mkdir -p ./client/app && \
-    echo '{"type": "module"}' > ./client/app/package.json
-
-# Create shared directory and its package.json
-RUN mkdir -p ./shared && \
-    echo '{"type": "module"}' > ./shared/package.json
-
-# Copy source files
+# Copy source
+COPY index.html version.json help.json ./
+COPY client/ ./client/
 COPY shared/ ./shared/
-COPY server/app/ ./server/app/
-COPY client/css/ ./client/css/
-COPY client/fonts/ ./client/fonts/
-COPY client/images/ ./client/images/
-COPY client/app/ ./client/app/
-COPY index.html ./index.html
-COPY version.json ./version.json
-COPY help.json ./help.json
-COPY client/manifests/PWA/manifest.json ./client/manifests/PWA/manifest.json
 
-# Production stage
-FROM node:20-alpine
-WORKDIR /app
+# Build static bundle → /app/dist
+RUN npm run build
 
-# Copy all files from builder
-COPY --from=builder /app/ ./
+# ---- Runtime stage ---------------------------------------------------------
+# Serve dist/ as static files. Caddy is ~30MB, has automatic gzip/br, and
+# the project's existing deployment docs already reference it.
+FROM caddy:2-alpine
+WORKDIR /srv
 
-# Create books directory
-RUN mkdir -p /app/books
+# Copy built artifacts from the builder stage
+COPY --from=builder /app/dist/ /srv/
 
-# Create .env file with production settings and generate random SESSION_SECRET
-RUN echo "NODE_ENV=production" > /app/server/.env && \
-    echo "SESSION_SECRET=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 64 | head -n 1)" >> /app/server/.env
+# Optional: project's static root historically also exposed books/ for the
+# reader's local-library file storage. Keep the volume mount point.
+RUN mkdir -p /srv/books
+VOLUME ["/srv/books"]
 
-# Expose port
+# Caddy serves /srv on :80 by default with no Caddyfile needed for a static
+# site. Expose 80 (default) and 8866 (kept for parity with the old server's
+# documented port — map either at runtime via `docker -p`).
+EXPOSE 80
 EXPOSE 8866
 
-# Set books directory as a volume
-VOLUME ["/app/books"]
-
-# Start command
-CMD ["node", "server/app/app.js"]
+# Inline Caddyfile: serve /srv on :80, enable gzip/br, SPA fallback to index.html
+CMD ["caddy", "file-server", "--root", "/srv", "--listen", ":80", "--browse"]
