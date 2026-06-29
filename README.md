@@ -164,4 +164,56 @@ henryxrl/simpletextreader:latest
 
 ---
 
+## 开发
+
+本项目使用 **Vite** 作为构建工具，**pnpm** 作为包管理器。
+
+```bash
+# 安装依赖
+pnpm install
+
+# 启动开发服务器（默认端口 3000）
+pnpm run dev
+
+# 生产构建（输出到 dist/）
+pnpm run build
+
+# 运行全部 124 个测试（5 个测试文件）
+pnpm run test
+```
+
+### 项目结构（v2 重构）
+
+```
+client/
+  src/                      # 源码（ES modules）
+    app.js                  # 应用入口
+    init-webpage.js         # 页面初始化（语言/主题/SVG 图标）
+    config/                 # 配置常量、运行时变量、Schema
+    core/                   # 架构扩展：Hook 系统、预设管理、配置同步
+    components/             # 可复用 UI 组件
+    modules/
+      reader/               # 阅读器核心（分页、脚注、搜索、跳转）
+      bookshelf/            # 书架管理
+      settings/             # 设置（状态管理 + Schema + 字体基线）
+      font/                 # 字体池
+      file/                 # 文件处理与编码检测
+      text/                 # 文本处理
+      database/             # IndexedDB 存储
+      epub/                 # EPUB 解析与转换
+    utils/                  # 工具函数
+      base/                 # 基础工具（颜色、DOM、格式、路径等）
+      helpers/              # 功能模块帮助函数
+    styles/                 # CSS（variables.css, main.css, reader.css 等）
+  lib/                      # 第三方库（jQuery, tippy, JSZip, jschardet…）
+  fonts/                    # 字体文件
+  images/                   # 图片资源
+  manifests/                # 浏览器扩展清单（Chrome / Firefox / PWA）
+shared/                     # 前后端共享的核心逻辑
+archive/                    # 历史存档（server/, debug/ 等）
+test/                       # 124 个 Node.js 测试用例
+```
+
+---
+
 ### 本项目仅用于学习交流使用，请勿用于商业用途
