@@ -1,6 +1,37 @@
 {
-    "version": "1.6.12",
+    "version": "1.7.0",
     "changelog": {
+        "1.7.0": {
+            "date": "2026-06-29",
+            "changes": {
+                "zh": [
+                    "**URL 设置覆盖** — 通过 URL query 参数临时覆盖任意设置，不写入 localStorage",
+                    "**分享配置 URL** — 设置菜单新增一键复制当前配置的 URL 链接",
+                    "**CI 自动测试** — 新增 GitHub Actions workflow，push/PR 自动运行单元测试",
+                    "修复 checkbox URL 参数解析：`0`/`no`/`off` 正确解析为 `false`",
+                    "修复 `ui_language=auto` 语义在 URL 覆盖后保留，分享链路上不丢失",
+                    "修复 URL 覆盖后隐藏设置重新计算派生值",
+                    "修复颜色/范围/下拉选择 URL 参数校验，拒绝非法值",
+                    "修复分享 URL 复制按钮在语言切换时实时刷新标签",
+                    "修复复制按钮快速连点不再卡在「✓ 已复制」状态",
+                    "修复分享 URL 保留原始 URL 中的 hash 和非设置参数",
+                    "优化生成 URL 跳过隐藏设置、查找 O(n²)→O(n)"
+                ],
+                "en": [
+                    "**URL settings override** — temporarily override any setting via URL query parameters without persisting to localStorage",
+                    "**Share config URL** — new 'Share Config' section in settings to copy your current config as a sharable URL",
+                    "**CI automated testing** — new GitHub Actions workflow runs unit tests on push/PR",
+                    "Fixed checkbox URL parsing: `0`/`no`/`off` correctly resolve to `false`",
+                    "Fixed `ui_language=auto` semantic preserved after URL override",
+                    "Fixed hidden settings recalculation after URL overrides",
+                    "Fixed color/range/select URL parameter validation rejecting invalid values",
+                    "Fixed share URL copy button labels refresh on language switch",
+                    "Fixed copy button no longer sticks on '✓ Copied' state",
+                    "Fixed share URL preserving hash and non-setting query params",
+                    "Optimized URL generation skipping hidden settings, O(n²)→O(n) lookup"
+                ]
+            }
+        },
         "1.6.12": {
             "date": "2026-06-19",
             "changes": {
