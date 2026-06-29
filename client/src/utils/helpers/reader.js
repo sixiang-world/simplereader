@@ -16,7 +16,7 @@
  */
 
 import * as CONFIG from "../../config/index.js";
-import { cbReg } from "../../../shared/core/callback/callback-registry.js";
+import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 import { isInViewport, isInContainerViewport, getScrollY } from "../base.js";
 
 /**

@@ -14,8 +14,8 @@
  * @requires client/app/utils/base
  */
 
-import * as CONFIG from "../../../config/index.js";
-import { HSLToHex, hexToHSL, toBool } from "../../../utils/base.js";
+import * as CONFIG from "../../config/index.js";
+import { HSLToHex, hexToHSL, toBool } from "../../utils/base.js";
 
 /**
  * Array of setting definitions used to configure the application's settings UI and logic.

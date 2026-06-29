@@ -70,8 +70,8 @@ import {
 } from "../../utils/helpers/settings.js";
 import { setTitle } from "../../utils/helpers/reader.js";
 import { updateVersionData, getCurrentDisplayLanguage } from "../../utils/helpers/ui.js";
-import { SETTINGS_SCHEMA, MENU_SCHEMA } from "./settings/schema.js";
-import { updateFontBaselineOffsets as _updateFontBaselineOffsets } from "./settings/font-baseline.js";
+import { SETTINGS_SCHEMA, MENU_SCHEMA } from "../../config/schema/settings-schema.js";
+import { updateFontBaselineOffsets as _updateFontBaselineOffsets } from "./font-baseline.js";
 
 /**
  * Class representing the settings menu interface.

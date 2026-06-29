@@ -13,10 +13,10 @@
  * @requires client/app/utils/base
  */
 
-import * as CONFIG from "../../config/index.js";
-import { ICONS } from "../../config/icons.js";
-import { Logger } from "../../../../shared/utils/logger.js";
-import { toBool, fetchHelpText, handleGlobalWheel } from "../../utils/base.js";
+import * as CONFIG from "../config/index.js";
+import { ICONS } from "../config/icons.js";
+import { Logger } from "../../../shared/utils/logger.js";
+import { toBool, fetchHelpText, handleGlobalWheel } from "../utils/base.js";
 
 /**
  * Popup manager class for displaying popups and custom notifications

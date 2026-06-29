@@ -15,7 +15,7 @@
  */
 
 import { TextProcessor } from "../modules/text/text-processor.js";
-import { calculateRectangleSimilarity, getFontOffsets } from "../../utils/base.js";
+import { calculateRectangleSimilarity, getFontOffsets } from "../utils/base.js";
 
 /**
  * CoverGenerator class for creating dynamic book covers
