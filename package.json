@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node test/test-issue-12.mjs && node test/test-url-settings.mjs"
+    "test": "node test/test-issue-12.mjs && node test/test-url-settings.mjs && node test/test-base-submodules.mjs && node test/test-hooks.mjs && node test/test-presets.mjs"
   },
   "devDependencies": {
     "@types/jquery": "^3.5.31",
