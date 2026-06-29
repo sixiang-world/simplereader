@@ -1,23 +1,29 @@
 /**
  * @fileoverview Webpage initialization script
  *
- * This script first sets up SVG sprite, then determines the language settings for the web application based on the user's browser settings
- * and local storage preferences. It sets the language attributes on the HTML document element accordingly.
+ * This script runs FIRST (loaded by index.html as a classic module before
+ * app.js) to set the document language and theme attributes BEFORE first
+ * paint, preventing FOUC (flash of unstyled content). It also injects the
+ * SVG sprite so icon-rendered UI doesn't flash unstyled.
  *
- * The script respects user language settings if the `respectUserLangSetting` flag is set to true.
- * Otherwise, it defaults to the browser's language settings.
+ * The script respects user language settings if the `respectUserLangSetting`
+ * flag is set to true. Otherwise, it defaults to the browser's language.
  *
- * The script also checks if the page was opened as no-UI mode from extension, and sets the `isOpenedAsNoUI` attribute on the HTML document element accordingly.
+ * The script also checks if the page was opened as no-UI mode from the
+ * browser extension, and sets the `openedAsNoUI` attribute on the HTML
+ * document element accordingly.
+ *
+ * (v2 refactor) Removed ~155 lines of @deprecated loadFontsInBackground
+ * code — the real implementation lives in app.js. The unused
+ * setupReaderUISplitViewParams function was also removed.
  *
  * @module client/app/modules/features/init-webpage
  * @requires client/app/config/icons
- * @requires shared/core/callback/callback-registry
  * @requires client/app/utils/base
  */
 
 import { createSvgSprite } from "../../config/icons.js";
-import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
-import { toBool, createStylesheet } from "../../utils/base.js";
+import { toBool } from "../../utils/base.js";
 
 /**
  * Toggle console.time
@@ -29,7 +35,6 @@ window.consoleTime = false;
  */
 (function () {
     if (window.consoleTime) console.time("[time] Initialize Webpage");
-    // setupReaderUISplitViewParams();
     setupLanguageSettings();
     setupUITheme();
     setupSVGSprite();
@@ -44,17 +49,6 @@ window.consoleTime = false;
             console.error("[ERROR] Initializing failed:", error);
         });
 })();
-
-/**
- * Setup reader UI splitview params
- */
-function setupReaderUISplitViewParams() {
-    const root = document.documentElement;
-    const savedTOCWidth = localStorage.getItem("toc-width");
-    if (savedTOCWidth) {
-        root.style.setProperty("--sidebar-splitview-sidebar-width", `${savedTOCWidth}vw`);
-    }
-}
 
 /**
  * Setup language settings
@@ -101,166 +95,6 @@ function setupUITheme() {
     const uiMode = toBool(localStorage.getItem("UIMode"), false) ?? true;
     const theme = uiMode ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", theme);
-}
-
-/**
- * Load fonts in the background
- * @deprecated Moved to app.js. Leave this function here for reference.
- */
-async function loadFontsInBackground() {
-    // Define fonts
-    window.localFonts = ["fzskbxk"];
-    window.localCSSFonts = ["kinghwa", "wenkai", "zhuque"];
-    window.remoteCSSFonts = ["QIJIC"];
-    const allCSSFonts = [...window.localCSSFonts, ...window.remoteCSSFonts];
-    const allFonts = [...window.localFonts, ...allCSSFonts];
-
-    // Global font status tracker
-    window.FONT_STATUS = {}; // Stores: { "font-name": "loading" | "loaded" | "failed" }
-
-    // Initialize all fonts as "loading"
-    allFonts.forEach((font) => (window.FONT_STATUS[font] = "loading"));
-
-    // Load split font CSS files
-    if (window.consoleTime) console.time("[time][background] All fonts loaded");
-    const splitFontCSSFiles = [
-        ...window.localCSSFonts.map((font) => `./client/fonts/local-${font}.css`),
-        ...window.remoteCSSFonts.map((font) => `./client/fonts/remote-${font}.css`),
-    ];
-    Promise.allSettled([
-        Promise.allSettled(
-            splitFontCSSFiles.map(async (href, index) => {
-                const font = allCSSFonts[index];
-                try {
-                    const res = await fetch(href);
-                    if (res.ok) {
-                        createStylesheet(href);
-                        window.FONT_STATUS[font] = "loaded";
-                        _finalizeSingleFontLoading(font);
-                    } else {
-                        window.FONT_STATUS[font] = "failed";
-                        console.warn(`[FAILED] "${font}" failed to load`);
-                    }
-                } catch (e) {
-                    window.FONT_STATUS[font] = "failed";
-                    console.warn(`[FAILED] "${font}" failed to load`, e);
-                }
-            })
-        ),
-
-        // Load local fonts
-        Promise.allSettled(
-            window.localFonts.map(async (font) => {
-                if (window.consoleTime) console.time(`[time][background] Load Font "${font}"`);
-
-                try {
-                    await document.fonts.load(`12px ${font}`);
-                    window.FONT_STATUS[font] = "loaded";
-                    _finalizeSingleFontLoading(font);
-                } catch (e) {
-                    window.FONT_STATUS[font] = "failed";
-                    console.warn(`[FAILED] "${font}" failed to load`, e);
-                } finally {
-                    if (window.consoleTime) console.timeEnd(`[time][background] Load Font "${font}"`);
-                }
-            })
-        ),
-    ]).then(() => {
-        // Now wait for full loading confirmation
-        if (window.consoleTime) console.timeEnd("[time][background] All fonts loaded");
-        console.log("Final font status:", window.FONT_STATUS);
-        requestAnimationFrame(() => {
-            cbReg.go("updateAllBookCovers");
-        });
-    });
-
-    /**
-     * Finalizes font loading status and updates the UI accordingly.
-     * @param {string} font - The font to finalize.
-     */
-    function _finalizeSingleFontLoading(font) {
-        if (window.FONT_STATUS[font] !== "failed") {
-            // Remove loading indicators
-            document.querySelectorAll(`option[value="${font}"], li[rel="${font}"]`).forEach((el) => {
-                // Reset data-status attributes
-                el.setAttribute("data-status", "");
-                el.removeAttribute("data-status");
-                el.offsetHeight; // Forces reflow (if needed)
-
-                // If it's an <li>, check for .option-actions and remove loading-button
-                if (el.matches("li[rel]")) {
-                    el.querySelectorAll(".option-actions").forEach((optionAction) => {
-                        if (optionAction.querySelector(".option-action.loading-button")) {
-                            optionAction.remove();
-                        }
-                    });
-                }
-            });
-
-            // Switch to full UI font
-            // if (font === "wenkai") {
-            //     _switchToFullUIFont();
-            // }
-
-            // Trigger custom event
-            requestAnimationFrame(() => {
-                cbReg.go("updateAllBookCovers");
-            });
-        }
-
-        console.log(`"${font}" is fully loaded`);
-    }
-
-    /**
-     * Switch the UI font from the subset version to the full version dynamically
-     */
-    function _switchToFullUIFont() {
-        console.log("[INFO] Switching UI font to full version...");
-
-        // Firefox-specific fix: Temporarily hide text to prevent multiple flashes
-        const isFirefox = navigator.userAgent.includes("Firefox");
-        if (isFirefox) {
-            document.body.style.visibility = "hidden"; // Hide text to prevent flash
-        }
-
-        // Inject new @font-face rule for full UI font
-        const newFontFaceRule = `
-            @font-face {
-                font-family: "ui";
-                src: local("霞鹜文楷 屏幕阅读版"), local("霞鹜文楷 GB 屏幕阅读版"), local("LXGW WenKai Screen"),
-                    local("LXGW WenKai GB Screen"), url(/client/fonts/LXGWWenKaiScreen.woff2) format("woff2");
-                font-display: swap;
-            }
-        `;
-        document.styleSheets[0].insertRule(newFontFaceRule, document.styleSheets[0].cssRules.length);
-
-        // Slight delay to let rendering stabilize before forcing the font switch
-        requestAnimationFrame(() => {
-            setTimeout(() => {
-                document.body.style.fontFamily = "ui"; // Apply full font
-
-                if (isFirefox) {
-                    setTimeout(() => {
-                        document.body.style.visibility = "visible"; // Restore text
-                    }, 50); // Delay un-hiding to ensure stability
-                }
-
-                console.log("[INFO] UI font switched successfully.");
-
-                // // Optional: Remove old subset font rule AFTER transition
-                // setTimeout(() => {
-                //     const existingRules = getStylesheet().cssRules;
-                //     for (let i = 0; i < existingRules.length; i++) {
-                //         if (existingRules[i].cssText.includes("font-family: ui")) {
-                //             console.log("[INFO] Deleting existing subsetted font rule...");
-                //             document.styleSheets[0].deleteRule(i);
-                //             break;
-                //         }
-                //     }
-                // }, 500); // Ensure a smooth transition before removing the subset font
-            }, 50); // Small delay before applying font to prevent flickering
-        });
-    }
 }
 
 /**
