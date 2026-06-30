@@ -280,6 +280,16 @@
     --ui_separator_shortcuts_en: "Keyboard Shortcuts";
     --ui_separator_share_zh: "分享配置";
     --ui_separator_share_en: "Share Config";
+    --ui_separator_t2s_zh: "繁简转换";
+    --ui_separator_t2s_en: "T2S Conversion";
+    --ui_t2s_mode_zh: "繁体转简体";
+    --ui_t2s_mode_en: "Trad → Simp Chinese";
+    --ui_t2s_mode_note_zh: "打开繁体中文书籍时自动转换为简体";
+    --ui_t2s_mode_note_en: "Auto-convert traditional Chinese books to simplified on open";
+    --ui_t2s_auto_detect_zh: "自动检测繁体";
+    --ui_t2s_auto_detect_en: "Auto-detect Traditional";
+    --ui_t2s_auto_detect_note_zh: "仅当检测到繁体字符时才转换（推荐开启）";
+    --ui_t2s_auto_detect_note_en: "Only convert when traditional characters are detected (recommended)";
 
     /* UI font settings strings */
     --ui_font_group_system: "";
@@ -1211,6 +1221,21 @@
 }
 #settingLabel-setting_separator_share::before {
     content: var(--ui_separator_share);
+}
+#settingLabel-setting_separator_t2s::before {
+    content: var(--ui_separator_t2s);
+}
+#settingLabel-setting_t2s_mode::before {
+    content: var(--ui_t2s_mode);
+}
+#tooltip-setting_t2s_mode::before {
+    content: var(--ui_t2s_mode_note);
+}
+#settingLabel-setting_t2s_auto_detect::before {
+    content: var(--ui_t2s_auto_detect);
+}
+#tooltip-setting_t2s_auto_detect::before {
+    content: var(--ui_t2s_auto_detect_note);
 }
 #settingLabel-about_title::before {
     content: var(--ui_setting_tab_about_title);

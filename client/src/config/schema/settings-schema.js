@@ -510,8 +510,9 @@ const SETTINGS_SCHEMA = [
         persist: true,
     },
 
-    // ==== Advanced Tab (T2S) ====
-    // Traditional → Simplified Chinese conversion mode.
+    // ==== T2S (Traditional → Simplified Chinese) ====
+    // Lives in the "general" tab (merged from the former "advanced" tab
+    // which had no i18n label and showed as a blank tab button).
     // Controlled by client/src/core/t2s.js. The hook reads these settings
     // from localStorage on every file:afterProcess invocation.
     // - "off"    : no conversion (default)
@@ -520,7 +521,7 @@ const SETTINGS_SCHEMA = [
     {
         key: "t2s_mode",
         type: "select",
-        tab: "advanced",
+        tab: "general",
         label: "setting_t2s_mode",
         bind: "CONFIG.CONST_CONFIG.T2S_MODE",
         default: CONFIG.CONST_CONFIG.T2S_MODE_DEFAULT,
@@ -531,7 +532,7 @@ const SETTINGS_SCHEMA = [
     {
         key: "t2s_auto_detect",
         type: "checkbox",
-        tab: "advanced",
+        tab: "general",
         label: "setting_t2s_auto_detect",
         note: true,
         bind: "CONFIG.CONST_CONFIG.T2S_AUTO_DETECT",
@@ -624,8 +625,13 @@ const MENU_SCHEMA = [
                 items: ["log_mode", "show_line_numbers"],
             },
             {
-                section: "setting_separator_share",
+                section: "setting_separator_t2s",
                 order: 4,
+                items: ["t2s_mode", "t2s_auto_detect"],
+            },
+            {
+                section: "setting_separator_share",
+                order: 5,
                 items: ["__config_share_url"],
             },
         ],
@@ -638,17 +644,6 @@ const MENU_SCHEMA = [
                 section: "setting_separator_shortcuts",
                 order: 1,
                 items: ["arrow_left", "arrow_right", "page_up", "page_down", "esc"],
-            },
-        ],
-    },
-    {
-        id: "advanced",
-        order: 5,
-        content: [
-            {
-                section: "setting_separator_t2s",
-                order: 1,
-                items: ["t2s_mode", "t2s_auto_detect"],
             },
         ],
     },
