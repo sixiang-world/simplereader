@@ -642,6 +642,17 @@ const MENU_SCHEMA = [
         ],
     },
     {
+        id: "advanced",
+        order: 5,
+        content: [
+            {
+                section: "setting_separator_t2s",
+                order: 1,
+                items: ["t2s_mode", "t2s_auto_detect"],
+            },
+        ],
+    },
+    {
         id: "about",
         order: 100,
         custom: true, // Custom/manual tab, not from SETTINGS_SCHEMA

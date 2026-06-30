@@ -288,13 +288,16 @@ async function processTxtFile(filePath) {
  */
 async function processEpubFile(filePath) {
     const fileBuffer = fs.readFileSync(filePath);
-    const fileBlob = new Blob([fileBuffer]);
     const fileName = path.basename(filePath);
 
-    // Build a File-like object (EpubConverter expects a File/Blob with .name).
-    const fileLike = Object.assign(fileBlob, { name: fileName });
+    // Build a File object (Node 18+ has a global File constructor that
+    // accepts [buffer], name, and options). This is cleaner than the
+    // previous Object.assign(fileBlob, { name }) which mutated a Blob
+    // to add a non-standard property. EpubConverter expects a File/Blob
+    // with a .name field.
+    const file = new File([fileBuffer], fileName, { type: "application/epub+zip" });
 
-    const result = await EpubConverter.convert(fileLike);
+    const result = await EpubConverter.convert(file);
 
     return {
         metadata: {
