@@ -43,6 +43,72 @@ if (typeof globalThis.Blob === "undefined") {
     throw new Error("[preprocess-books] Blob is not available. Use Node.js 18+.");
 }
 
+// Polyfill DOMParser for EpubConverter (P0-7 fix).
+//
+// EpubConverter uses `new DOMParser().parseFromString(str, mimeType)` to
+// parse EPUB internal files. DOMParser is a browser API not available in
+// Node.js. Without this polyfill, EPUB preprocessing crashes immediately
+// with "DOMParser is not defined".
+//
+// EpubConverter passes three different MIME types, each with different
+// requirements:
+//   - "application/xml"       → container.xml, OPF, NCX.
+//     These use XML namespaces (dc:title, opf:manifest, etc.) and the
+//     code calls getElementsByTagNameNS("*", ...) + reads .textContent.
+//     @xmldom/xmldom supports these well.
+//   - "application/xhtml+xml" → spine item HTML content.
+//   - "text/html"             → spine item HTML (fallback for malformed XHTML).
+//     The code uses querySelector / querySelectorAll heavily.
+//     @xmldom/xmldom does NOT support querySelector; linkedom does.
+//
+// So we dispatch to @xmldom/xmldom for XML and linkedom for HTML/XHTML.
+// The returned document object must support the methods EpubConverter
+// actually calls: getElementsByTagNameNS, getElementsByTagName,
+// querySelector, querySelectorAll, getAttribute, getElementsByTagName,
+// textContent, childNodes, firstChild.
+const _xmldom = (await import("@xmldom/xmldom")).default || (await import("@xmldom/xmldom"));
+const _xmldomParser = new _xmldom.DOMParser();
+const _linkedom = (await import("linkedom")).default || (await import("linkedom"));
+
+/**
+ * A DOMParser-shaped wrapper that dispatches to @xmldom/xmldom for XML
+ * and linkedom for HTML/XHTML, based on the MIME type passed to
+ * parseFromString.
+ *
+ * This is NOT a full DOMParser polyfill — it only implements the methods
+ * that EpubConverter actually calls. If you need it for other code, you
+ * may need to extend it.
+ */
+class DOMParserPolyfill {
+    /**
+     * Parse a string into a DOM document.
+     * @param {string} str
+     * @param {string} mimeType - One of: application/xml, application/xhtml+xml, text/html
+     * @returns {Document}
+     */
+    parseFromString(str, mimeType) {
+        if (mimeType === "application/xml") {
+            return _xmldomParser.parseFromString(str, mimeType);
+        }
+        // application/xhtml+xml and text/html → linkedom
+        // linkedom's parseHTML returns { document, ...other globals }.
+        // We only need the document.
+        const { document } = _linkedom.parseHTML(str);
+        return document;
+    }
+}
+
+globalThis.DOMParser = DOMParserPolyfill;
+
+// Polyfill Node constants (TEXT_NODE, ELEMENT_NODE, etc.).
+// EpubConverter.#extractInlineHtml uses `child.nodeType === Node.TEXT_NODE`.
+// Both @xmldom/xmldom and linkedom use the standard DOM nodeType values
+// (1=element, 3=text), but neither exposes them as a global `Node`. We
+// expose linkedom's Node (which has the standard constants).
+if (typeof globalThis.Node === "undefined") {
+    globalThis.Node = _linkedom.Node;
+}
+
 // Resolve repo root from this file's location: build-tools/preprocess-books.mjs
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
