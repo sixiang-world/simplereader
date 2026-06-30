@@ -391,6 +391,52 @@ await test("hook: mode=light + autoDetect=true converts trad books", async () =>
     assert.equal(result.bookData.processedLines[0], "<p>我爱我的国家</p>");
 });
 
+await test("REGRESSION i1: autoDetect works with OBJECT-typed processedLines", async () => {
+    // i1 regression guard: _sampleForDetection previously pushed raw
+    // objects into the parts array, which became "[object Object]"
+    // after join(" "). containsTraditional then never found trad chars
+    // in the sample, so auto-detect skipped conversion even for trad
+    // books. This test verifies the hook extracts .content from
+    // object-typed processedLines during detection.
+    reset();
+    setMode("light");
+    setAutoDetect(true); // ← the bug path
+    registerT2SHook();
+    const bookData = {
+        metadata: { title: "愛國論" },
+        processedLines: [
+            // Modern TextProcessorCore.process output shape (objects).
+            { type: "heading", tag: "h2", content: "第一章 引言", charCount: 6, lineNumber: 3, elementType: "h" },
+            { type: "paragraph", tag: "p", content: "我愛我的國家", charCount: 7, lineNumber: 4, elementType: "p" },
+        ],
+    };
+    const result = await hooks.run("file:afterProcess", { bookData, file: {} });
+    // Auto-detect must find the trad chars in .content and convert.
+    assert.equal(result.bookData.metadata.title, "爱国论");
+    assert.equal(result.bookData.processedLines[0].content, "第一章 引言");
+    assert.equal(result.bookData.processedLines[1].content, "我爱我的国家");
+});
+
+await test("REGRESSION i1: autoDetect correctly skips simp-only OBJECT-typed books", async () => {
+    // i1 companion test: verify the fix doesn't cause false positives.
+    // A simp-only book with object-typed processedLines should still
+    // be skipped by auto-detect (no conversion needed).
+    reset();
+    setMode("light");
+    setAutoDetect(true);
+    registerT2SHook();
+    const bookData = {
+        metadata: { title: "你好" },
+        processedLines: [
+            { type: "paragraph", tag: "p", content: "这是一段简体中文", charCount: 9, lineNumber: 1, elementType: "p" },
+        ],
+    };
+    const result = await hooks.run("file:afterProcess", { bookData, file: {} });
+    // Auto-detect found no trad chars in .content → no conversion.
+    assert.equal(result.bookData.metadata.title, "你好");
+    assert.equal(result.bookData.processedLines[0].content, "这是一段简体中文");
+});
+
 await test("hook: mode=heavy converts via OpenCC (or falls back to light)", async () => {
     reset();
     setMode("heavy");
