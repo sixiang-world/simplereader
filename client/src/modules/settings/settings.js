@@ -1267,18 +1267,12 @@ const settings = {
             }
         }
 
-        // URL parameter override: schema-driven, properly typed, memory-only
-        for (const [key, value] of Object.entries(
-            parseURLSettings(SETTINGS_SCHEMA, new URLSearchParams(window.location.search))
-        )) {
-            this.values[key] = value;
-        }
-
         // Preset override via ?scheme= URL parameter.
         //
-        // Runs AFTER parseURLSettings() so individual URL params (?key=value)
-        // take precedence over preset values, but BEFORE applySettings() so
-        // the preset's keys are visible to the apply pipeline.
+        // Runs BEFORE parseURLSettings() so individual URL params (?key=value)
+        // take precedence over preset values. This matches the spec:
+        //   ?scheme=NAME&p_fontSize=2em
+        // should apply the preset, then override p_fontSize to 2em.
         //
         // Resolution rules (see client/src/core/presets.js):
         //   - ?scheme=0       → restore factory defaults from SETTINGS_SCHEMA
@@ -1292,8 +1286,8 @@ const settings = {
         if (presetName === FACTORY_DEFAULT_MARKER) {
             // Restore all settings to factory defaults from SETTINGS_SCHEMA.
             // This is NOT a preset lookup — it creates a fresh default values
-            // object. We still apply it as a shallow merge so that URL
-            // ?key=value overrides (applied above) survive.
+            // object. URL ?key=value overrides (applied below) will then
+            // take precedence over the restored defaults.
             for (const def of SETTINGS_SCHEMA) {
                 if (def.key === "ui_language") continue; // handled below
                 this.values[def.key] = this.defaults[def.key];
@@ -1301,6 +1295,15 @@ const settings = {
         } else if (presetName) {
             // Apply named preset as a shallow merge over current values.
             this.values = applyPreset(this.values, presetName);
+        }
+
+        // URL parameter override: schema-driven, properly typed, memory-only.
+        // Runs AFTER preset application so individual URL params (?key=value)
+        // take precedence over preset values.
+        for (const [key, value] of Object.entries(
+            parseURLSettings(SETTINGS_SCHEMA, new URLSearchParams(window.location.search))
+        )) {
+            this.values[key] = value;
         }
 
         // Special case: ui_language URL override also needs to activate the language live
