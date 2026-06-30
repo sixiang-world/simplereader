@@ -25,6 +25,7 @@ import { initReader } from "./modules/reader/reader.js";
 import { FileHandler } from "./modules/file/file-handler.js";
 import { SidebarSplitView } from "./components/sidebar-splitview.js";
 import { registerT2SHook } from "./core/t2s.js";
+import { pullOnBoot, mergeSyncedConfig, isSyncEnabled } from "./core/config-sync.js";
 import {
     isVariableDefined,
     removeHashbang,
@@ -145,6 +146,27 @@ import {
     // The hook reads its mode from localStorage on every file:afterProcess
     // invocation, so it's safe to register once at boot.
     registerT2SHook();
+
+    // Pull synced config from textdb.hunluan.space (if sync is configured).
+    //
+    // This runs AFTER settings.enable() so local settings take precedence
+    // — sync data only fills in keys that aren't already set locally.
+    // Sync failures (network errors, 404, parse errors) are caught and
+    // logged inside pullOnBoot; they do NOT block app boot.
+    if (isSyncEnabled()) {
+        try {
+            const syncData = await pullOnBoot();
+            if (syncData && typeof syncData === "object") {
+                const settings = (await import("./modules/settings/settings.js")).settings;
+                if (settings && settings.values) {
+                    settings.values = mergeSyncedConfig(settings.values, syncData);
+                    settings.applySettings();
+                }
+            }
+        } catch (err) {
+            console.warn("[app] Config sync pull failed:", err.message);
+        }
+    }
 
     // Parallel execution of initBookshelf & initFontpool
     if (window.consoleTime) console.time("[time][background] Initialize Bookshelf");

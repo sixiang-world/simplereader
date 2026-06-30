@@ -55,6 +55,7 @@ import {
     applyPreset,
     FACTORY_DEFAULT_MARKER,
 } from "../../core/presets.js";
+import { pushOnSettingsChange, isSyncEnabled } from "../../core/config-sync.js";
 import { refreshShareButtonLabels } from "../../utils/label-refresh.js";
 import {
     setRangeValue,
@@ -1725,6 +1726,13 @@ const settings = {
             if (shareInput) {
                 shareInput.value = this.generateConfigURL();
             }
+        }
+
+        // Trigger a debounced background push to the config-sync
+        // endpoint (textdb.hunluan.space). No-op if sync is not
+        // configured (no token in localStorage).
+        if (isSyncEnabled()) {
+            pushOnSettingsChange({ ...this.values });
         }
     },
 
