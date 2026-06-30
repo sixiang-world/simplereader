@@ -510,37 +510,55 @@ const SETTINGS_SCHEMA = [
         persist: true,
     },
 
-    // ==== T2S (Traditional → Simplified Chinese) ====
-    // Lives in the "general" tab (merged from the former "advanced" tab
-    // which had no i18n label and showed as a blank tab button).
-    // Controlled by client/src/core/t2s.js. The hook reads these settings
-    // from localStorage on every file:afterProcess invocation.
-    // - "off"    : no conversion (default)
-    // - "light"  : character-level JSON map (fast, no network)
-    // - "heavy"  : OpenCC Wasm (vocabulary-level, ~1MB lazy-loaded)
+    // ==== T2S (Traditional -> Simplified Chinese) ====
+    // Two mutually exclusive checkboxes:
+    //   - t2s_lite : character-level JSON map (fast, no network)
+    //   - t2s_pro  : OpenCC Wasm (vocabulary-level, ~1MB lazy-loaded)
+    // Enabling one disables the other automatically.
+    // Both off = no conversion; either on = auto-detect traditional chars.
     {
-        key: "t2s_mode",
-        type: "select",
-        tab: "general",
-        label: "setting_t2s_mode",
-        bind: "CONFIG.CONST_CONFIG.T2S_MODE",
-        default: CONFIG.CONST_CONFIG.T2S_MODE_DEFAULT,
-        options: ["off", "light", "heavy"],
-        optionLabels: ["Off", "Light (char-level)", "Heavy (OpenCC Wasm)"],
-        persist: true,
-    },
-    {
-        key: "t2s_auto_detect",
+        key: "t2s_lite",
         type: "checkbox",
         tab: "general",
-        label: "setting_t2s_auto_detect",
+        label: "setting_t2s_lite",
         note: true,
-        bind: "CONFIG.CONST_CONFIG.T2S_AUTO_DETECT",
-        default: CONFIG.CONST_CONFIG.T2S_AUTO_DETECT_DEFAULT,
+        bind: "CONFIG.CONST_CONFIG.T2S_LITE",
+        default: CONFIG.CONST_CONFIG.T2S_LITE_DEFAULT,
         persist: true,
+        onApply: function (value) {
+            if (value) {
+                this.values.t2s_pro = false;
+                try { localStorage.setItem("t2s_pro", "false"); } catch (_) {}
+                const el = document.getElementById("setting_t2s_pro");
+                if (el) {
+                    el.checked = false;
+                    el.style.setProperty("--checked", "0");
+                }
+            }
+        },
     },
-];
-
+    {
+        key: "t2s_pro",
+        type: "checkbox",
+        tab: "general",
+        label: "setting_t2s_pro",
+        note: true,
+        bind: "CONFIG.CONST_CONFIG.T2S_PRO",
+        default: CONFIG.CONST_CONFIG.T2S_PRO_DEFAULT,
+        persist: true,
+        onApply: function (value) {
+            if (value) {
+                this.values.t2s_lite = false;
+                try { localStorage.setItem("t2s_lite", "false"); } catch (_) {}
+                const el = document.getElementById("setting_t2s_lite");
+                if (el) {
+                    el.checked = false;
+                    el.style.setProperty("--checked", "0");
+                }
+            }
+        },
+    },
+]
 /**
  * Array of menu schema definitions describing the UI layout of the settings menu.
  *
@@ -627,7 +645,7 @@ const MENU_SCHEMA = [
             {
                 section: "setting_separator_t2s",
                 order: 4,
-                items: ["t2s_mode", "t2s_auto_detect"],
+                items: ["t2s_lite", "t2s_pro"],
             },
             {
                 section: "setting_separator_share",
@@ -655,3 +673,10 @@ const MENU_SCHEMA = [
 ];
 
 export { SETTINGS_SCHEMA, MENU_SCHEMA };
+
+
+
+
+
+
+

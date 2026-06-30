@@ -1,7 +1,7 @@
 /**
  * @fileoverview Traditional → Simplified Chinese conversion (T2S).
  *
- * Provides two mutually-exclusive conversion modes:
+ * Provides two mutually-exclusive checkbox settings:
  *
  *   - **light**: A pure-JS character-level lookup against a static
  *     JSON table (~800+ common one-to-one pairs). Fast, no network
@@ -13,21 +13,21 @@
  * == Setting schema ==
  *
  * Controlled by two settings (defined in settings-schema.js):
- *   - `t2s_mode`        : "off" | "light" | "heavy"   (default: "off")
- *   - `t2s_auto_detect` : boolean                      (default: true)
+ *   - `t2s_lite` : boolean  (default: true)  — char-level JSON map
+ *   - `t2s_pro`  : boolean  (default: false) — OpenCC Wasm
  *
- * Mode switching is mutually exclusive — selecting "light" disables
- * "heavy" and vice versa. Setting to "off" disables both.
+ * Both false = no conversion; either true = conversion + auto-detect.
+ * If both are true (e.g. from an old share config), 	2s_lite wins.
  *
  * == Hook integration ==
  *
  * This module registers a `file:afterProcess` hook that:
- *   1. Reads the current T2S settings (from localStorage, since
- *      settings.js is the source of truth for runtime config).
- *   2. If `t2s_mode === "off"`, returns the bookData unchanged.
- *   3. If `t2s_auto_detect === true`, samples the bookData text to
- *      check whether it actually contains traditional characters.
- *      If not, skips conversion (saves the OpenCC load).
+
+
+ *   2. If both lite and pro are off, returns the bookData unchanged.
+ *   3. Samples the bookData text to check whether it actually contains
+ *      traditional characters. If not, skips conversion (saves OpenCC load).
+
  *   4. Otherwise, runs the configured converter on the bookData text
  *      content and returns the (mutated) bookData.
  *
@@ -64,28 +64,33 @@ import T2S_MAP from "./t2s-map.json" with { type: "json" };
 import { getConverter as getOpenCCConverter } from "./t2s-opencc.js";
 
 // localStorage keys (mirrors settings-schema.js).
-const SETTING_KEY_MODE = "t2s_mode";
-const SETTING_KEY_AUTO_DETECT = "t2s_auto_detect";
+const SETTING_KEY_LITE = "t2s_lite";
+const SETTING_KEY_PRO = "t2s_pro";
 
 /**
  * Read the current T2S settings. Reads directly from localStorage so
  * the hook works even before settings.js is fully initialized.
  *
- * @returns {{ mode: "off"|"light"|"heavy", autoDetect: boolean }}
+ * Both false = no conversion; either true = conversion + auto-detect.
+ * If both are true (e.g. from an old share config), lite wins.
+ *
+ * @returns {{ lite: boolean, pro: boolean }}
  * @private
  */
 function _readSettings() {
-    let mode = "off";
-    let autoDetect = true;
+    let lite = true;   // default: lite on
+    let pro = false;
     try {
-        const stored = localStorage.getItem(SETTING_KEY_MODE);
-        if (stored === "light" || stored === "heavy") mode = stored;
-        const ad = localStorage.getItem(SETTING_KEY_AUTO_DETECT);
-        if (ad === "false" || ad === "0") autoDetect = false;
+        const storedLite = localStorage.getItem(SETTING_KEY_LITE);
+        if (storedLite === "false" || storedLite === "0") lite = false;
+        const storedPro = localStorage.getItem(SETTING_KEY_PRO);
+        if (storedPro === "true" || storedPro === "1") pro = true;
+        // If both are true (e.g. old share config), lite wins
+        if (lite && pro) pro = false;
     } catch (_e) {
         // localStorage unavailable (SSR / restricted context).
     }
-    return { mode, autoDetect };
+    return { lite, pro };
 }
 
 /**
@@ -299,18 +304,18 @@ function _sampleForDetection(bookData) {
  */
 async function _fileAfterProcessHook(ctx) {
     if (!ctx || !ctx.bookData) return ctx;
-    const { mode, autoDetect } = _readSettings();
-    if (mode === "off") return ctx;
+    const { lite, pro } = _readSettings();
+    // Both off = no conversion
+    if (!lite && !pro) return ctx;
 
-    // Auto-detect: skip if no traditional characters present.
-    if (autoDetect) {
-        const sample = _sampleForDetection(ctx.bookData);
-        if (!containsTraditional(sample)) return ctx;
-    }
+    // Auto-detect is implicit when either mode is enabled.
+    // Skip if no traditional characters present.
+    const sample = _sampleForDetection(ctx.bookData);
+    if (!containsTraditional(sample)) return ctx;
 
-    if (mode === "light") {
+    if (lite) {
         await _walkAndConvert(ctx.bookData, convertLight);
-    } else if (mode === "heavy") {
+    } else if (pro) {
         await _walkAndConvert(ctx.bookData, convertHeavy);
     }
 
@@ -364,47 +369,53 @@ export function unregisterT2SHook() {
  * @param {"off"|"light"|"heavy"} mode
  * @public
  */
-export function setMode(mode) {
-    if (mode !== "off" && mode !== "light" && mode !== "heavy") {
-        throw new Error(`[t2s] Invalid mode "${mode}". Must be "off", "light", or "heavy".`);
+export function setLite(enabled) {
+    if (enabled) {
+        // Lite enabled -> ensure pro is off
+        try { localStorage.setItem(SETTING_KEY_PRO, "false"); } catch (_) {}
     }
     try {
-        localStorage.setItem(SETTING_KEY_MODE, mode);
+        localStorage.setItem(SETTING_KEY_LITE, enabled ? "true" : "false");
     } catch (e) {
-        console.warn("[t2s] Failed to persist mode:", e);
+        console.warn("[t2s] Failed to persist lite mode:", e);
     }
 }
 
 /**
- * Enable or disable auto-detection.
+ * Enable or disable pro mode.
  * @param {boolean} enabled
  * @public
  */
-export function setAutoDetect(enabled) {
+export function setPro(enabled) {
+    if (enabled) {
+        // Pro enabled -> ensure lite is off
+        try { localStorage.setItem(SETTING_KEY_LITE, "false"); } catch (_) {}
+    }
     try {
-        localStorage.setItem(SETTING_KEY_AUTO_DETECT, enabled ? "true" : "false");
+        localStorage.setItem(SETTING_KEY_PRO, enabled ? "true" : "false");
     } catch (e) {
-        console.warn("[t2s] Failed to persist auto-detect:", e);
+        console.warn("[t2s] Failed to persist pro mode:", e);
     }
 }
 
 /**
- * Get the current mode. Reads from localStorage.
- * @returns {"off"|"light"|"heavy"}
- * @public
- */
-export function getMode() {
-    return _readSettings().mode;
-}
-
-/**
- * Get the current auto-detect setting.
+ * Check if lite mode is enabled.
  * @returns {boolean}
  * @public
  */
-export function getAutoDetect() {
-    return _readSettings().autoDetect;
+export function isLite() {
+    return _readSettings().lite;
+}
+
+/**
+ * Check if pro mode is enabled.
+ * @returns {boolean}
+ * @public
+ */
+export function isPro() {
+    return _readSettings().pro;
 }
 
 // Export the raw map for tests that want to inspect it.
 export const T2S_MAP_EXPORTED = T2S_MAP;
+
