@@ -70,9 +70,16 @@ const STORAGE_KEY = "reader_presets";
  */
 const FACTORY_DEFAULTS = {
     "Infinite Scroll": {
-        p_infiniteScroll: "true",
-        p_infiniteScrollEasyTrigger: "true",
-        p_anonymousMode: "true",
+        // Keys MUST match SETTINGS_SCHEMA entries exactly so that
+        // settings.js's saveSettings() persists them to localStorage
+        // under the same key the schema's loadSettingWithFallback()
+        // reads on the next boot. Using the wrong keys (e.g. the older
+        // camelCase `p_infiniteScroll` style) means the preset values
+        // are written into settings.values but never persisted, and
+        // are silently overwritten on the next loadSettings() call.
+        infinite_scroll_mode: "true",
+        infinite_scroll_easy_mode: "true",
+        anonymous_mode: "true",
     },
 };
 
