@@ -1,6 +1,39 @@
 {
-    "version": "1.7.0",
+    "version": "2.0.0",
     "changelog": {
+        "2.0.0": {
+            "date": "2026-06-30",
+            "changes": {
+                "zh": [
+                    "**繁简转换 (T2S)** — 内置 OpenCC 繁简映射 2928 对，支持轻型（本地映射表）和重型（OpenCC JS 完整版 CDN）两种模式",
+                    "**排版预设系统** — 内置 6 种预设（默认/阅读/简洁/护眼/杂志/代码），支持 URL 参数切换（?scheme=0/1/Name）",
+                    "**构建预分页** — 构建时自动预分页 EPUB/TXT 书籍，大幅减少首次加载计算量",
+                    "**配置同步** — 支持跨设备配置同步，pullOnBoot 非阻塞加载，mergeSyncedConfig 过滤未知键",
+                    "**生产构建优化** — Vite 构建自动复制 Worker 依赖到 dist/，修复 CSS 路径和 Worker URL 解析",
+                    "**全面测试覆盖** — 285 个单元测试（11 个测试文件），涵盖 T2S、预设、预分页、Hook、配置同步、Worker 解析等",
+                    "修复 OpenCC CDN URL 指向 opencc-js@1.1.7（HTTP 200 验证）",
+                    "修复 锬 等占位映射（仅 1 个，映射 錟→锬），其余 2927 对均正确",
+                    "修复 Auto-detect 模式下 processedLines 对象行采样",
+                    "修复 EPUB DOMParser polyfill（预分页兼容 Node.js）",
+                    "修复 settings 对象从 settings.js 正确导出",
+                    "修复配置同步中的未知键反馈回路"
+                ],
+                "en": [
+                    "**T2S (Traditional to Simplified)** — Built-in OpenCC mapping with 2928 pairs, supports lightweight (local map) and heavy (OpenCC JS full via CDN) modes",
+                    "**Typography preset system** — 6 built-in presets (Default/Reading/Compact/Eye-care/Magazine/Code), switchable via URL params (?scheme=0/1/Name)",
+                    "**Build-time pre-pagination** — EPUB/TXT books pre-paginated at build time, drastically reducing first-load computation",
+                    "**Config sync** — Cross-device configuration sync with non-blocking pullOnBoot and unknown-key filtering in mergeSyncedConfig",
+                    "**Production build optimization** — Vite build auto-copies Worker deps to dist/, fixes CSS path and Worker URL resolution",
+                    "**Comprehensive test coverage** — 285 unit tests (11 test files) covering T2S, presets, pre-pagination, hooks, config sync, worker resolution, and more",
+                    "Fixed OpenCC CDN URL pointing to opencc-js@1.1.7 (HTTP 200 verified)",
+                    "Fixed placeholder mapping for 锬 (only 1, maps 錟→锬), remaining 2927 pairs correct",
+                    "Fixed processedLines object row sampling in auto-detect mode",
+                    "Fixed EPUB DOMParser polyfill for Node.js pre-pagination compatibility",
+                    "Fixed settings object export from settings.js",
+                    "Fixed unknown-key feedback loop in config sync"
+                ]
+            }
+        },
         "1.7.0": {
             "date": "2026-06-29",
             "changes": {
