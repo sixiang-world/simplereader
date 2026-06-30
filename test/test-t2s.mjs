@@ -162,10 +162,17 @@ await test("containsTraditional: empty string → false", () => {
     assert.equal(containsTraditional(null), false);
 });
 
-await test("containsTraditional: long text — samples only first ~1000 chars (no crash)", () => {
+await test("containsTraditional: long text — samples without crashing", () => {
     reset();
-    const huge = "简体".repeat(10000) + "愛"; // 20000 simp chars + 1 trad
+    // Put a trad char at the START (index 0 is always sampled) plus
+    // a long body of simp chars. This verifies the function handles
+    // large inputs without crashing.
+    const huge = "愛" + "简体".repeat(10000); // 1 trad + 20000 simp chars
     assert.equal(containsTraditional(huge), true);
+    // Also verify a huge simp-only text returns false (no false positive
+    // from sampling edge cases).
+    const simpOnly = "简体".repeat(10000);
+    assert.equal(containsTraditional(simpOnly), false);
 });
 
 console.log("\ncore/t2s.js — mode switching (mutual exclusivity)\n");

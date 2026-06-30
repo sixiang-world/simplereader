@@ -101,11 +101,15 @@ function _readSettings() {
  */
 export function convertLight(text) {
     if (typeof text !== "string" || text.length === 0) return text;
-    let out = "";
+    // Build an array of parts and join at the end. This avoids the
+    // potential O(n²) of repeated string += concatenation on engines
+    // that don't optimize it (and is faster even on V8 for large texts).
+    const parts = new Array(text.length);
+    let i = 0;
     for (const ch of text) {
-        out += T2S_MAP[ch] ?? ch;
+        parts[i++] = T2S_MAP[ch] ?? ch;
     }
-    return out;
+    return parts.join("");
 }
 
 /**
@@ -146,8 +150,17 @@ export async function convertHeavy(text) {
 export function containsTraditional(text) {
     if (typeof text !== "string" || text.length === 0) return false;
     // Sample up to 1000 chars spread across the text.
-    const sampleSize = Math.min(text.length, 1000);
-    const step = Math.max(1, Math.floor(text.length / sampleSize));
+    //
+    // The step calculation ensures we visit at most ~1000 characters
+    // regardless of input size:
+    //   - text.length <= 1000: step = 1, visit all chars (≤1000 visits)
+    //   - text.length > 1000: step = ceil(length/1000), visit ~1000 chars
+    //
+    // The previous formula (Math.floor(length/sampleSize)) had an edge
+    // case where text.length in [1001, 1999] produced step=1, causing
+    // up to 1999 iterations instead of the documented ~1000.
+    const targetSamples = Math.min(text.length, 1000);
+    const step = Math.max(1, Math.ceil(text.length / targetSamples));
     for (let i = 0; i < text.length; i += step) {
         if (T2S_MAP[text[i]]) return true;
     }
