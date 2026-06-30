@@ -98,6 +98,18 @@ This folder contains third-party libraries and external utilities used in the pr
 
 ---
 
+### 11. `opencc/`
+
+**full.js**
+
+**Description**: The opencc-js UMD bundle providing OpenCC (Open Chinese Convert) vocabulary-level Traditional → Simplified Chinese conversion. The bundle includes the full dictionary data (~1.15MB).
+
+**Original Source**: [opencc-js GitHub](https://github.com/nk2028/opencc-js)
+
+**Notes**: Downloaded from jsDelivr CDN (version 1.3.2) and hosted locally to avoid browser tracking-prevention blocking third-party CDN requests. Lazy-loaded on first Pro mode conversion via `<script>` tag injection.
+
+---
+
 ## Notes
 
 - Be cautious when modifying files in this directory. Any changes to third-party libraries should be clearly documented here and within the code itself.

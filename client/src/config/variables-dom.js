@@ -89,7 +89,7 @@ export const RUNTIME_VARS = {
         toBool(document.documentElement.getAttribute("respectUserLangSetting")),
     RESPECT_USER_LANG_SETTING_DEFAULT: false,
     WEB_LANG: document.documentElement.getAttribute("webLANG"),
-    APP_VERSION: "1.0.0",
+    APP_VERSION: "2.0.1",
     APP_VERSION_DATE: "2023-07-09",
     APP_CHANGELOG: {},
     FONT_BASELINE_OFFSETS: {},

@@ -525,15 +525,10 @@ const SETTINGS_SCHEMA = [
         bind: "CONFIG.CONST_CONFIG.T2S_LITE",
         default: CONFIG.CONST_CONFIG.T2S_LITE_DEFAULT,
         persist: true,
+        mutualExclusiveWith: "t2s_pro",
         onApply: function (value) {
             if (value) {
                 this.values.t2s_pro = false;
-                try { localStorage.setItem("t2s_pro", "false"); } catch (_) {}
-                const el = document.getElementById("setting_t2s_pro");
-                if (el) {
-                    el.checked = false;
-                    el.style.setProperty("--checked", "0");
-                }
             }
         },
     },
@@ -546,15 +541,10 @@ const SETTINGS_SCHEMA = [
         bind: "CONFIG.CONST_CONFIG.T2S_PRO",
         default: CONFIG.CONST_CONFIG.T2S_PRO_DEFAULT,
         persist: true,
+        mutualExclusiveWith: "t2s_lite",
         onApply: function (value) {
             if (value) {
                 this.values.t2s_lite = false;
-                try { localStorage.setItem("t2s_lite", "false"); } catch (_) {}
-                const el = document.getElementById("setting_t2s_lite");
-                if (el) {
-                    el.checked = false;
-                    el.style.setProperty("--checked", "0");
-                }
             }
         },
     },

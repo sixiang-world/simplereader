@@ -1,6 +1,27 @@
 {
-    "version": "2.0.0",
+    "version": "2.0.1",
     "changelog": {
+        "2.0.1": {
+            "date": "2026-07-01",
+            "changes": {
+                "zh": [
+                    "**修复 T2S 繁简转换四大问题**",
+                    "— 设置互斥竞态：勾选 Pro 模式时 Lite 的 onApply 在持久化前覆盖 Pro 值",
+                    "— OpenCC CDN 被跟踪防护拦截：下载至本地 `client/lib/opencc/full.js` 彻底消除第三方依赖",
+                    "— 渲染时序：T2S Hook 在内容显示后才执行，用户看到繁体文本才需刷新才变简体",
+                    "— 工作线程覆盖：剩余内容处理完成后 `FILE_CONTENT_CHUNKS` 被原始数据覆盖触发繁体重渲染",
+                    "修复 OpenCC 动态 `import()` 路径：UMD 模块无法通过 `import()` 加载，简化为 `<script>` 标签注入"
+                ],
+                "en": [
+                    "**Fixed four critical T2S conversion issues**",
+                    "— Setting mutual exclusion race: Lite's onApply overrides Pro before persist",
+                    "— OpenCC CDN blocked by tracking prevention: download to `client/lib/opencc/full.js`",
+                    "— Render timing: T2S hook ran after content display (needs refresh)",
+                    "— Worker overwrite: remaining content processing replaced converted data with raw data",
+                    "Fixed dynamic import() for UMD module, simplified to script-tag injection"
+                ]
+            }
+        },
         "2.0.0": {
             "date": "2026-06-30",
             "changes": {

@@ -426,21 +426,23 @@ export class FileHandler {
          * @returns {Promise<void>}
          */
         async function finalProcessing() {
-            // Hide loading screen
+            // Ensure the file is valid before proceeding
+            if (!CONFIG.VARS.FILENAME) {
+                throw new Error("Error processing file. No filename found.");
+            }
+
+            // Data is ready — run file:afterProcess hooks (T2S et al.)
+            // BEFORE showing content so the user sees converted text
+            // on the very first render, not after a reload.
+            await FileHandler.#applyFileAfterProcessHook();
+
+            // Hide loading screen and show the (now-converted) content
             FileHandler.#deferUIUpdate(() => {
                 hideDropZone(false);
                 hideLoadingScreen(false);
                 showContent();
             });
             await cbReg.go("fileAfter");
-
-            if (!CONFIG.VARS.FILENAME) {
-                throw new Error("Error processing file. No filename found.");
-            }
-
-            // Run the file:afterProcess hook pipeline (T2S, etc.).
-            // See FileHandler.#applyFileAfterProcessHook for the contract.
-            await FileHandler.#applyFileAfterProcessHook();
 
             // Trigger saveProcessedBook event
             cbReg.go("saveProcessedBook", {
@@ -572,6 +574,10 @@ export class FileHandler {
             // console.log("CONFIG.VARS.PAGE_BREAKS: ", CONFIG.VARS.PAGE_BREAKS);
             // console.log("CONFIG.VARS.TOTAL_PAGES: ", CONFIG.VARS.TOTAL_PAGES);
 
+            // Convert initial chunk data (T2S etc.) before the first render
+            // so the user sees converted text immediately, not after a reload.
+            await FileHandler.#applyFileAfterProcessHook();
+
             // Update UI with initial content
             const initialUIStart = performance.now();
 
@@ -645,6 +651,11 @@ export class FileHandler {
                         CONFIG.VARS.PAGE_BREAKS = remainingResult.pageBreaks;
                         CONFIG.VARS.TOTAL_PAGES = CONFIG.VARS.PAGE_BREAKS.length;
                         // console.log(CONFIG.VARS.PAGE_BREAKS);
+
+                        // Run T2S (and other file:afterProcess hooks) on the
+                        // freshly merged remaining data BEFORE updating the UI,
+                        // so the user sees converted text immediately.
+                        await FileHandler.#applyFileAfterProcessHook();
 
                         // Set processing flag to false
                         CONFIG.VARS.IS_PROCESSING = false;
@@ -760,6 +771,10 @@ export class FileHandler {
                 return pairedFootnotes[markerCode]?.[index] || CONFIG.CONST_FOOTNOTE.NOTFOUND;
             });
 
+            // Run the file:afterProcess hook pipeline (T2S, etc.) BEFORE
+            // showing content so the user sees converted text on re-open.
+            await FileHandler.#applyFileAfterProcessHook();
+
             // Process TOC
             reader.initTOC();
             reader.processTOC();
@@ -779,11 +794,6 @@ export class FileHandler {
             hideLoadingScreen();
             showContent();
             await cbReg.go("fileAfter");
-
-            // Run the file:afterProcess hook pipeline (T2S, etc.) so that
-            // books re-opened from the bookshelf also get converted.
-            // See FileHandler.#applyFileAfterProcessHook for the contract.
-            await FileHandler.#applyFileAfterProcessHook();
         } else if (book?.is_epub) {
             const epubFile = new File([book?.data], book.name, { type: "application/epub+zip" });
             await FileHandler.handleEpubFile(epubFile);
@@ -953,6 +963,10 @@ export class FileHandler {
                 console.log("[EPUB-handle] Skipping history (no titles in this EPUB)");
             }
 
+            // Run the file:afterProcess hook pipeline (T2S, etc.) BEFORE
+            // showing content so the user sees converted text on re-open.
+            await FileHandler.#applyFileAfterProcessHook();
+
             // Finalize UI
             console.log("[EPUB-handle] Hiding loading screen...");
             hideDropZone(false);
@@ -961,11 +975,6 @@ export class FileHandler {
             console.log("[EPUB-handle] UI finalized, triggering fileAfter...");
             await cbReg.go("fileAfter");
             console.log("[EPUB-handle] Done.");
-
-            // Run the file:afterProcess hook pipeline (T2S, etc.) so that
-            // EPUBs also get post-processed. See
-            // FileHandler.#applyFileAfterProcessHook for the contract.
-            await FileHandler.#applyFileAfterProcessHook();
 
             const elapsed = (performance.now() - metrics.startTime) / 1000;
             console.log(`[EPUB] Book opened in ${elapsed.toFixed(3)}s: "${bookName}" by ${author}`);
