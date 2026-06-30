@@ -438,43 +438,9 @@ export class FileHandler {
                 throw new Error("Error processing file. No filename found.");
             }
 
-            // Run the file:afterProcess hook pipeline.
-            //
-            // This is the canonical transform hook for post-processing
-            // the bookData before it gets saved to the bookshelf and
-            // rendered. Currently used by:
-            //   - client/src/core/t2s.js — Traditional→Simplified Chinese
-            //
-            // The hook receives `{ bookData, file }` and may return a
-            // mutated bookData. We mirror the result back into the
-            // CONFIG.VARS so downstream consumers (saveProcessedBook,
-            // reader) see the converted content.
-            const bookDataSnapshot = {
-                metadata: {
-                    title: CONFIG.VARS.BOOK_AND_AUTHOR?.bookName ?? "",
-                    author: CONFIG.VARS.BOOK_AND_AUTHOR?.author ?? "",
-                },
-                processedLines: CONFIG.VARS.FILE_CONTENT_CHUNKS,
-                titles: CONFIG.VARS.ALL_TITLES,
-                footnotes: CONFIG.VARS.FOOTNOTES,
-            };
-            const hookCtx = await hooks.run("file:afterProcess", {
-                bookData: bookDataSnapshot,
-                file: { name: CONFIG.VARS.FILENAME },
-            });
-            if (hookCtx && hookCtx.bookData) {
-                CONFIG.VARS.FILE_CONTENT_CHUNKS = hookCtx.bookData.processedLines ?? CONFIG.VARS.FILE_CONTENT_CHUNKS;
-                CONFIG.VARS.ALL_TITLES = hookCtx.bookData.titles ?? CONFIG.VARS.ALL_TITLES;
-                CONFIG.VARS.FOOTNOTES = hookCtx.bookData.footnotes ?? CONFIG.VARS.FOOTNOTES;
-                if (hookCtx.bookData.metadata && CONFIG.VARS.BOOK_AND_AUTHOR) {
-                    if (typeof hookCtx.bookData.metadata.title === "string") {
-                        CONFIG.VARS.BOOK_AND_AUTHOR.bookName = hookCtx.bookData.metadata.title;
-                    }
-                    if (typeof hookCtx.bookData.metadata.author === "string") {
-                        CONFIG.VARS.BOOK_AND_AUTHOR.author = hookCtx.bookData.metadata.author;
-                    }
-                }
-            }
+            // Run the file:afterProcess hook pipeline (T2S, etc.).
+            // See FileHandler.#applyFileAfterProcessHook for the contract.
+            await FileHandler.#applyFileAfterProcessHook();
 
             // Trigger saveProcessedBook event
             cbReg.go("saveProcessedBook", {
@@ -813,6 +779,11 @@ export class FileHandler {
             hideLoadingScreen();
             showContent();
             await cbReg.go("fileAfter");
+
+            // Run the file:afterProcess hook pipeline (T2S, etc.) so that
+            // books re-opened from the bookshelf also get converted.
+            // See FileHandler.#applyFileAfterProcessHook for the contract.
+            await FileHandler.#applyFileAfterProcessHook();
         } else if (book?.is_epub) {
             const epubFile = new File([book?.data], book.name, { type: "application/epub+zip" });
             await FileHandler.handleEpubFile(epubFile);
@@ -991,6 +962,11 @@ export class FileHandler {
             await cbReg.go("fileAfter");
             console.log("[EPUB-handle] Done.");
 
+            // Run the file:afterProcess hook pipeline (T2S, etc.) so that
+            // EPUBs also get post-processed. See
+            // FileHandler.#applyFileAfterProcessHook for the contract.
+            await FileHandler.#applyFileAfterProcessHook();
+
             const elapsed = (performance.now() - metrics.startTime) / 1000;
             console.log(`[EPUB] Book opened in ${elapsed.toFixed(3)}s: "${bookName}" by ${author}`);
 
@@ -1060,6 +1036,71 @@ export class FileHandler {
             PopupManager.pendingUIUpdates.add(updateFn);
         } else {
             updateFn();
+        }
+    }
+
+    /**
+     * Run the file:afterProcess hook pipeline and mirror the (possibly
+     * mutated) result back into CONFIG.VARS.
+     *
+     * This is the canonical transform hook for post-processing the
+     * bookData before it gets saved to the bookshelf and rendered.
+     * Currently used by:
+     *   - client/src/core/t2s.js — Traditional→Simplified Chinese
+     *
+     * The hook receives `{ bookData, file }` and may return a mutated
+     * bookData. We mirror the result back into CONFIG.VARS so downstream
+     * consumers (saveProcessedBook, reader) see the converted content.
+     *
+     * Must be called from EVERY code path that finalizes a book open:
+     *   - finalProcessing() (TXT path)
+     *   - handleProcessedBook() (re-open from bookshelf)
+     *   - handleEpubFile() (EPUB path)
+     *
+     * Hook errors are isolated by hooks.run() — a misbehaving hook will
+     * be logged and skipped, leaving CONFIG.VARS unchanged.
+     *
+     * @private
+     * @static
+     * @returns {Promise<void>}
+     */
+    static async #applyFileAfterProcessHook() {
+        // Defensive: if FILENAME is missing we can't construct the file
+        // context, but still run the hook so it can observe the (incomplete)
+        // state. Most hooks will early-return on missing bookData.
+        if (!CONFIG.VARS.FILENAME) return;
+
+        const bookDataSnapshot = {
+            metadata: {
+                title: CONFIG.VARS.BOOK_AND_AUTHOR?.bookName ?? "",
+                author: CONFIG.VARS.BOOK_AND_AUTHOR?.author ?? "",
+            },
+            processedLines: CONFIG.VARS.FILE_CONTENT_CHUNKS,
+            titles: CONFIG.VARS.ALL_TITLES,
+            footnotes: CONFIG.VARS.FOOTNOTES,
+        };
+        const hookCtx = await hooks.run("file:afterProcess", {
+            bookData: bookDataSnapshot,
+            file: { name: CONFIG.VARS.FILENAME },
+        });
+        if (hookCtx && hookCtx.bookData) {
+            if (hookCtx.bookData.processedLines) {
+                CONFIG.VARS.FILE_CONTENT_CHUNKS = hookCtx.bookData.processedLines;
+            }
+            if (hookCtx.bookData.titles) {
+                CONFIG.VARS.ALL_TITLES = hookCtx.bookData.titles;
+            }
+            if (hookCtx.bookData.footnotes) {
+                CONFIG.VARS.FOOTNOTES = hookCtx.bookData.footnotes;
+            }
+            if (hookCtx.bookData.metadata && CONFIG.VARS.BOOK_AND_AUTHOR) {
+                if (typeof hookCtx.bookData.metadata.title === "string") {
+                    CONFIG.VARS.BOOK_AND_AUTHOR.bookName = hookCtx.bookData.metadata.title;
+                }
+                if (typeof hookCtx.bookData.metadata.author === "string") {
+                    CONFIG.VARS.BOOK_AND_AUTHOR.author = hookCtx.bookData.metadata.author;
+                }
+            }
         }
     }
 }
