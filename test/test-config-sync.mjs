@@ -353,23 +353,34 @@ await test("mergeSyncedConfig: null syncData → returns copy of current", () =>
     assert.deepEqual(merged, { a: 1 });
 });
 
-await test("mergeSyncedConfig: local values take precedence", () => {
+await test("mergeSyncedConfig: sync OVERRIDES local (P1-2 — sync wins)", () => {
+    // P1-2 fix: the previous implementation used "local wins, sync fills
+    // empty" which effectively disabled sync because loadSettings()
+    // populates every key with either localStorage value or schema default.
+    // The new semantics is "sync wins" — sync data overrides local values.
     reset();
-    const current = { a: "local" };
-    const sync = { a: "remote", b: "remote-only" };
+    const current = { a: "local", b: "local-only" };
+    const sync = { a: "remote", c: "remote-only" };
     const merged = mergeSyncedConfig(current, sync);
-    assert.equal(merged.a, "local"); // local wins
-    assert.equal(merged.b, "remote-only"); // sync fills in missing
+    assert.equal(merged.a, "remote"); // sync wins
+    assert.equal(merged.b, "local-only"); // local-only key preserved
+    assert.equal(merged.c, "remote-only"); // sync-only key added
 });
 
-await test("mergeSyncedConfig: empty/null local values are filled from sync", () => {
+await test("mergeSyncedConfig: null syncData → returns copy of current", () => {
     reset();
-    const current = { a: "", b: null, c: undefined };
-    const sync = { a: "sync-a", b: "sync-b", c: "sync-c" };
-    const merged = mergeSyncedConfig(current, sync);
-    assert.equal(merged.a, "sync-a");
-    assert.equal(merged.b, "sync-b");
-    assert.equal(merged.c, "sync-c");
+    const current = { a: 1, b: 2 };
+    const merged = mergeSyncedConfig(current, null);
+    assert.deepEqual(merged, { a: 1, b: 2 });
+    assert.notEqual(merged, current); // must be a new object, not the same ref
+});
+
+await test("mergeSyncedConfig: non-object syncData → returns copy of current", () => {
+    reset();
+    const current = { a: 1 };
+    assert.deepEqual(mergeSyncedConfig(current, "string"), { a: 1 });
+    assert.deepEqual(mergeSyncedConfig(current, 42), { a: 1 });
+    assert.deepEqual(mergeSyncedConfig(current, [1, 2, 3]), { a: 1 });
 });
 
 await test("mergeSyncedConfig: does not mutate input objects", () => {
