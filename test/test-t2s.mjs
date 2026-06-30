@@ -256,6 +256,105 @@ await test("hook: mode=light converts bookData text fields", async () => {
     assert.equal(result.bookData.footnotes[0].text, "注解");
 });
 
+await test("hook: mode=light converts OBJECT-typed processedLines (.content field)", async () => {
+    // This is the modern client worker output shape: each processedLine
+    // is an object returned by TextProcessorCore.process, with a .content
+    // string field holding the actual HTML/text. The hook MUST convert
+    // this, not skip it.
+    reset();
+    setMode("light");
+    setAutoDetect(false);
+    registerT2SHook();
+    const bookData = {
+        metadata: { title: "愛國論", author: "張三" },
+        processedLines: [
+            { type: "heading", tag: "h2", content: "第一章 引言", charCount: 6, lineNumber: 3, elementType: "h" },
+            { type: "paragraph", tag: "p", content: "我愛我的國家", charCount: 7, lineNumber: 4, elementType: "p" },
+            {
+                type: "paragraph",
+                tag: "p",
+                className: "first",
+                dropCap: { content: "愛" },
+                content: "國家的歷史",
+                charCount: 5,
+                lineNumber: 5,
+                elementType: "p",
+            },
+        ],
+    };
+    const result = await hooks.run("file:afterProcess", { bookData, file: {} });
+    assert.equal(result.bookData.processedLines[0].content, "第一章 引言");
+    assert.equal(result.bookData.processedLines[1].content, "我爱我的国家");
+    assert.equal(result.bookData.processedLines[2].content, "国家的历史");
+    assert.equal(result.bookData.processedLines[2].dropCap.content, "爱");
+});
+
+await test("hook: mode=light converts ARRAY-typed titles (FileProcessorCore shape)", async () => {
+    // FileProcessorCore produces titles as arrays:
+    //   [text, lineNumber, shortestTitle, isCustomOnly]
+    // The hook must convert t[0] and t[2], not look for t.text/t.line.
+    reset();
+    setMode("light");
+    setAutoDetect(false);
+    registerT2SHook();
+    const bookData = {
+        metadata: { title: "書名" },
+        processedLines: [],
+        titles: [
+            ["第一章 引言", 3, "引言", false],
+            ["第二章 論語", 10, "論語", false],
+        ],
+    };
+    const result = await hooks.run("file:afterProcess", { bookData, file: {} });
+    assert.equal(result.bookData.titles[0][0], "第一章 引言");
+    assert.equal(result.bookData.titles[0][2], "引言");
+    assert.equal(result.bookData.titles[1][0], "第二章 论语");
+    assert.equal(result.bookData.titles[1][2], "论语");
+});
+
+await test("hook: mode=light converts OBJECT-typed titles (EpubConverter shape)", async () => {
+    // EpubConverter produces titles as objects with .label / .lineNumber.
+    reset();
+    setMode("light");
+    setAutoDetect(false);
+    registerT2SHook();
+    const bookData = {
+        metadata: { title: "書名" },
+        processedLines: [],
+        titles: [
+            { text: "第一章 論語", line: "3", label: "論語" },
+        ],
+    };
+    const result = await hooks.run("file:afterProcess", { bookData, file: {} });
+    assert.equal(result.bookData.titles[0].text, "第一章 论语");
+    assert.equal(result.bookData.titles[0].label, "论语");
+    assert.equal(result.bookData.titles[0].line, "3"); // numbers aren't converted
+});
+
+await test("hook: mode=light converts footnotes with .content and .original fields", async () => {
+    reset();
+    setMode("light");
+    setAutoDetect(false);
+    registerT2SHook();
+    const bookData = {
+        metadata: { title: "書名" },
+        processedLines: [],
+        footnotes: [
+            {
+                type: "footnote",
+                marker: "①",
+                markerCode: "9312",
+                lineNumber: 5,
+                content: "這是註解內容",
+                original: "①這是註解內容",
+            },
+        ],
+    };
+    const result = await hooks.run("file:afterProcess", { bookData, file: {} });
+    assert.equal(result.bookData.footnotes[0].content, "这是注解内容");
+    assert.equal(result.bookData.footnotes[0].original, "①这是注解内容");
+});
+
 await test("hook: mode=light + autoDetect=true skips simp-only books", async () => {
     reset();
     setMode("light");

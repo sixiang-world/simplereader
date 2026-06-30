@@ -33,16 +33,23 @@
  *
  * == What gets converted ==
  *
- * The hook walks `bookData` looking for string fields:
- *   - `bookData.metadata.title`
- *   - `bookData.metadata.author`
- *   - `bookData.processedLines[]` (HTML strings — converted in place)
- *   - `bookData.titles[]` (TOC entries — `.text` and `.line` converted)
- *   - `bookData.footnotes[]` (footnote text — converted in place)
+ * The hook walks `bookData` looking for text content in:
+ *   - `bookData.metadata.title` / `bookData.metadata.author`
+ *   - `bookData.processedLines[]` — supports BOTH shapes:
+ *       - plain HTML strings (legacy / build-time title & end page)
+ *       - objects `{type, tag, content, dropCap?}` (modern client worker
+ *         output from TextProcessorCore.process). The `.content` field
+ *         is converted in place; if present, `.dropCap.content` is too.
+ *   - `bookData.titles[]` — supports BOTH shapes:
+ *       - arrays `[text, lineNumber, shortestTitle?, isCustomOnly?]`
+ *         (FileProcessorCore output)
+ *       - objects `{text, line, label?}` (EpubConverter output)
+ *   - `bookData.footnotes[]` — objects with `.content` / `.text` /
+ *     `.original` fields.
  *
- * HTML in `processedLines` is converted character-by-character; the
- * markup tags themselves are ASCII and won't be touched by either
- * converter.
+ * HTML inside `processedLines[].content` is converted character-by-
+ * character; the markup tags themselves are ASCII and won't be touched
+ * by either converter.
  *
  * @module client/src/core/t2s
  */
@@ -171,20 +178,44 @@ async function _walkAndConvert(bookData, convertFn) {
         }
     }
 
-    // Processed HTML lines (each is a string)
+    // Processed HTML lines. Entries can be either:
+    //   - Plain strings (legacy / build-time title & end page HTML)
+    //   - Objects with a `.content` string field (modern client worker output;
+    //     see TextProcessorCore.process which returns {type, tag, content, ...}).
+    //     Some paragraph objects also have a `.dropCap.content` field for the
+    //     drop-cap letter, which should also be converted.
     if (Array.isArray(bookData.processedLines)) {
         for (let i = 0; i < bookData.processedLines.length; i++) {
-            if (typeof bookData.processedLines[i] === "string") {
-                bookData.processedLines[i] = await convertFn(bookData.processedLines[i]);
+            const line = bookData.processedLines[i];
+            if (typeof line === "string") {
+                bookData.processedLines[i] = await convertFn(line);
+            } else if (line && typeof line === "object") {
+                if (typeof line.content === "string") {
+                    line.content = await convertFn(line.content);
+                }
+                // dropCap.content is the initial letter(s) rendered as a
+                // drop cap. It may contain a trad char so convert it too.
+                if (line.dropCap && typeof line.dropCap.content === "string") {
+                    line.dropCap.content = await convertFn(line.dropCap.content);
+                }
             }
         }
     }
 
-    // TOC titles
+    // TOC titles. The title entries come in two shapes:
+    //   - Arrays: [text, lineNumber, shortestTitle, isCustomOnly]
+    //     (used by FileProcessorCore.processChunkStatic)
+    //   - Objects: { text, line, ... }
+    //     (used by EpubConverter; also defensive against future shape changes)
     if (Array.isArray(bookData.titles)) {
         for (const t of bookData.titles) {
-            if (t && typeof t === "object") {
+            if (Array.isArray(t)) {
+                // [text, lineNumber, shortestTitle?, isCustomOnly?]
+                if (typeof t[0] === "string") t[0] = await convertFn(t[0]);
+                if (typeof t[2] === "string") t[2] = await convertFn(t[2]);
+            } else if (t && typeof t === "object") {
                 if (typeof t.text === "string") t.text = await convertFn(t.text);
+                if (typeof t.label === "string") t.label = await convertFn(t.label);
                 if (typeof t.line === "string") t.line = await convertFn(t.line);
             }
         }
@@ -196,6 +227,7 @@ async function _walkAndConvert(bookData, convertFn) {
             if (f && typeof f === "object") {
                 if (typeof f.text === "string") f.text = await convertFn(f.text);
                 if (typeof f.content === "string") f.content = await convertFn(f.content);
+                if (typeof f.original === "string") f.original = await convertFn(f.original);
             }
         }
     }
