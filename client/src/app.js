@@ -24,6 +24,7 @@ import { initSettings } from "./modules/settings/settings.js";
 import { initReader } from "./modules/reader/reader.js";
 import { FileHandler } from "./modules/file/file-handler.js";
 import { SidebarSplitView } from "./components/sidebar-splitview.js";
+import { registerT2SHook } from "./core/t2s.js";
 import {
     isVariableDefined,
     removeHashbang,
@@ -139,6 +140,11 @@ import {
     if (window.consoleTime) console.time("[time][background] Initialize Settings");
     initSettings();
     if (window.consoleTime) console.timeEnd("[time][background] Initialize Settings");
+
+    // Register the T2S (Traditional→Simplified Chinese) hook.
+    // The hook reads its mode from localStorage on every file:afterProcess
+    // invocation, so it's safe to register once at boot.
+    registerT2SHook();
 
     // Parallel execution of initBookshelf & initFontpool
     if (window.consoleTime) console.time("[time][background] Initialize Bookshelf");
