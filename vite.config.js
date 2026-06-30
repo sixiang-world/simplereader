@@ -86,11 +86,60 @@ export default defineConfig({
             closeBundle() {
                 var root = fileURLToPath(new URL("./", import.meta.url));
                 var distPath = fileURLToPath(new URL("./dist/", import.meta.url));
+                // ── Classic <script> libs and static data ──
                 copyDir(root + "client/lib/", distPath + "client/lib/");
                 copyDir(root + "version.json", distPath + "version.json");
                 copyDir(root + "help.json", distPath + "help.json");
                 copyDir(root + "client/fonts/", distPath + "client/fonts/");
+                // ── Web Workers and their runtime-imported deps ──
+                //
+                // Vite only bundles modules statically reachable from
+                // index.html. Web Workers loaded via `new Worker(url)`
+                // and their internal dynamic `import()` / importDependencies()
+                // calls are NOT statically analyzable, so Vite leaves them
+                // as-is. The worker files and every module they import
+                // (transitively) must be copied to dist/ verbatim, preserving
+                // the source directory layout so the relative import paths
+                // resolve at runtime.
+                //
+                // Dependency map (verified by tracing imports):
+                //   client/src/modules/database/db-worker.js
+                //     └→ import("../../utils/helpers/worker.js")
+                //         └→ import("../../../../shared/utils/logger.js")
+                //   client/src/modules/file/file-processor-worker.js
+                //     └→ import("../../utils/helpers/worker.js")        (above)
+                //     └→ importDependencies([
+                //           "shared/core/file/file-processor-core.js",
+                //           "client/src/config/constants.js",
+                //           "client/src/config/variables.js",
+                //           "shared/utils/logger.js",                   (above)
+                //         ])
+                //         file-processor-core.js static-imports:
+                //           shared/adapters/text-decoder.js
+                //           shared/core/text/text-processor-core.js
+                //           shared/core/text/pagination-calculator.js
+                //           shared/core/text/title-pattern-detector.js
+                //           client/src/utils/base.js (barrel → base/*.js)
+                //         text-processor-core.js static-imports:
+                //           shared/adapters/jschardet.js
+                //           shared/core/text/regex-rules.js
+                //           shared/core/text/bracket-processor.js
+                //           client/src/config/constants.js             (above)
+                //           client/src/config/variables.js            (above)
+                //         title-pattern-detector.js → regex-rules.js  (above)
+                //         bracket-processor.js → logger.js            (above)
+                //
+                // The simplest correct fix is to copy the entire `shared/`
+                // tree (all transitive deps live there) plus the specific
+                // `client/src/` subtrees the workers touch. Copying all of
+                // `client/src/` would also work but is unnecessarily broad.
                 copyDir(root + "client/src/modules/database/", distPath + "client/src/modules/database/");
+                copyDir(root + "client/src/modules/file/", distPath + "client/src/modules/file/");
+                copyDir(root + "client/src/utils/helpers/worker.js", distPath + "client/src/utils/helpers/worker.js");
+                copyDir(root + "client/src/utils/base.js", distPath + "client/src/utils/base.js");
+                copyDir(root + "client/src/utils/base/", distPath + "client/src/utils/base/");
+                copyDir(root + "client/src/config/", distPath + "client/src/config/");
+                copyDir(root + "shared/", distPath + "shared/");
             },
         },
     ],

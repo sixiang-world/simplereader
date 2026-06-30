@@ -617,19 +617,43 @@ export function createStylesheet(href) {
 
 
 /**
- * Retrieves the stylesheet object for a given name
+ * Retrieves the stylesheet object for a given name.
+ *
+ * In dev mode, each source CSS file (variables.css, reader.css, etc.)
+ * is served as a separate <link> stylesheet, so looking up by filename
+ * works directly.
+ *
+ * In Vite production builds, ALL CSS is bundled into a single
+ * `assets/index.css` file. The source filenames no longer exist as
+ * separate stylesheets. To handle this, when the requested `name` is
+ * not found, we fall back to the bundled stylesheet (identified by
+ * containing "assets/" and ending in ".css"). This lets callers that
+ * need to read/modify CSS rules (e.g. font @font-face lookup in
+ * settings.js) keep working in production.
+ *
  * @param {string} name - The name of the stylesheet to retrieve
  * @returns {CSSStyleSheet | null} The stylesheet object, or null if not found.
  */
 export function getStylesheet(name = "variables.css") {
+    let fallback = null;
     for (const sheet of document.styleSheets) {
         try {
             if (sheet.href && sheet.href.includes(name)) {
                 return sheet;
             }
+            // Track the Vite-bundled stylesheet as a fallback for when
+            // the named source file doesn't exist as a separate sheet
+            // (production build consolidates all CSS into assets/*.css).
+            if (
+                !fallback &&
+                sheet.href &&
+                /\/assets\/[^/]+\.css/.test(sheet.href)
+            ) {
+                fallback = sheet;
+            }
         } catch (e) {
             console.warn("Cannot access stylesheet:", sheet.href, e);
         }
     }
-    return null;
+    return fallback;
 }
