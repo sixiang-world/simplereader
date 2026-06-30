@@ -84,6 +84,39 @@ test("app.js imports `settings` from settings.js (not just initSettings)", () =>
     );
 });
 
+console.log("\nsettings.js — Issue 2 regression: sync pull must not overwrite user changes\n");
+
+test("REGRESSION i2: saveSettings sets `_userInteracted = true`", () => {
+    // Issue 2 fix: saveSettings must set a flag so the sync-pull handler
+    // in app.js can detect that the user has touched settings since boot
+    // and skip the merge (avoiding rolling back the user's changes).
+    assert.ok(
+        /this\._userInteracted\s*=\s*true/.test(src),
+        "Expected `this._userInteracted = true` in saveSettings not found. " +
+            "Without this flag, a slow sync pull can overwrite the user's " +
+            "in-flight settings changes."
+    );
+});
+
+test("REGRESSION i2: app.js checks `_userInteracted` before applying sync", () => {
+    const appPath = path.resolve(import.meta.dirname, "..", "client", "src", "app.js");
+    const appSrc = fs.readFileSync(appPath, "utf-8");
+    assert.ok(
+        /_userInteracted/.test(appSrc),
+        "Expected app.js to check `settingsSingleton._userInteracted` before " +
+            "applying synced config. Without this guard, a sync pull that " +
+            "resolves after the user has edited settings will roll back " +
+            "their changes."
+    );
+    // Verify the guard SKIPS the merge (not just references the flag).
+    assert.ok(
+        /if\s*\(\s*settingsSingleton\._userInteracted\s*\)\s*\{[^}]*return/.test(appSrc),
+        "Expected app.js to `return` early when `settingsSingleton._userInteracted` " +
+            "is true, skipping the sync merge. The flag must gate the merge, not " +
+            "just be logged."
+    );
+});
+
 // ── Summary ─────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

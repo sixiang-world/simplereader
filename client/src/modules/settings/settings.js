@@ -1637,6 +1637,14 @@ const settings = {
     saveSettings(toSetLanguage = false, forceSetLanguage = false, colorOnly = false) {
         // console.log("saveSettings", { toSetLanguage, forceSetLanguage });
 
+        // Mark that the user has interacted with settings. This flag is
+        // checked by the config-sync pull handler (app.js) to avoid
+        // overwriting the user's in-flight changes when a sync pull
+        // resolves after the user has already started editing. Without
+        // this guard, a slow sync pull (2-5s) could roll back the user's
+        // changes by replacing settings.values with the synced snapshot.
+        this._userInteracted = true;
+
         // Helper: update values from schema
         const updateValuesFromInputs = (filterType = null) => {
             // Loop through all settings from schema

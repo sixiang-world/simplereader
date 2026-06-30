@@ -156,19 +156,32 @@ import {
     // arrives. The user sees the app immediately with local settings;
     // synced settings (if any) replace them a moment later.
     //
+    // Issue 2 fix: guard against the sync pull overwriting the user's
+    // in-flight changes. If the user has already called saveSettings()
+    // (e.g. dragged a slider, toggled a checkbox) before the sync pull
+    // resolves, applying the synced snapshot would roll back their
+    // changes. We check settings._userInteracted (set by saveSettings)
+    // and skip the merge if the user has touched anything.
+    //
     // Sync failures (network errors, 404, parse errors) are caught and
     // logged; they do NOT affect the running app.
     if (isSyncEnabled()) {
         // Fire-and-forget — do NOT await.
         pullOnBoot()
             .then((syncData) => {
-                if (syncData && typeof syncData === "object") {
-                    // Use the imported settings singleton (P0-4 fix).
-                    if (settingsSingleton && settingsSingleton.values) {
-                        settingsSingleton.values = mergeSyncedConfig(settingsSingleton.values, syncData);
-                        settingsSingleton.applySettings();
-                    }
+                if (!syncData || typeof syncData !== "object") return;
+                // Use the imported settings singleton (P0-4 fix).
+                if (!settingsSingleton || !settingsSingleton.values) return;
+                // Issue 2 guard: if the user has interacted with settings
+                // since boot, skip the sync merge — their changes win.
+                if (settingsSingleton._userInteracted) {
+                    console.info(
+                        "[app] Config sync pull skipped: user has modified settings since boot."
+                    );
+                    return;
                 }
+                settingsSingleton.values = mergeSyncedConfig(settingsSingleton.values, syncData);
+                settingsSingleton.applySettings();
             })
             .catch((err) => {
                 console.warn("[app] Config sync pull failed:", err.message);
