@@ -45,6 +45,67 @@
 const STORAGE_KEY = "reader_presets";
 
 /**
+ * Built-in (factory) default presets.
+ *
+ * These are NOT stored in localStorage — they live in code so they
+ * survive `localStorage.clear()` and can be referenced by URL
+ * `?scheme=` params without needing the user to have saved them first.
+ *
+ * Currently exposed:
+ *
+ *   - `scheme=0` ("Default")        : Special — restore all settings to
+ *                                     factory defaults. Handled in
+ *                                     settings.js, NOT a preset lookup.
+ *   - `scheme=1` ("Infinite Scroll"): Override the scroll-related
+ *                                     settings to enable infinite-scroll
+ *                                     mode + easy trigger + anonymous
+ *                                     mode.
+ *
+ * The values use the same string encoding as user-saved presets
+ * (e.g. "true"/"false" for booleans, "1.5em" for ranges).
+ *
+ * @constant
+ * @type {Object<string, Object<string, string>>}
+ * @private
+ */
+const FACTORY_DEFAULTS = {
+    "Infinite Scroll": {
+        p_infiniteScroll: "true",
+        p_infiniteScrollEasyTrigger: "true",
+        p_anonymousMode: "true",
+    },
+};
+
+/**
+ * Get a factory-default preset by name.
+ *
+ * Returns the preset values object for known factory names, or `null`
+ * for unknown names. Does NOT consult localStorage — factory presets
+ * always exist in code.
+ *
+ * @param {string} name - The preset name (e.g. "Infinite Scroll").
+ * @returns {Object<string, string>|null} The preset values, or null.
+ * @public
+ */
+export function getDefaultPreset(name) {
+    if (typeof name !== "string" || name.length === 0) return null;
+    return FACTORY_DEFAULTS[name] ? { ...FACTORY_DEFAULTS[name] } : null;
+}
+
+/**
+ * List all factory-default preset names.
+ *
+ * Useful for UI that wants to display factory presets separately from
+ * user-saved presets.
+ *
+ * @returns {string[]} Array of factory preset names.
+ * @public
+ */
+export function listDefaultPresets() {
+    return Object.keys(FACTORY_DEFAULTS);
+}
+
+/**
  * Load all presets from localStorage.
  * @returns {Object<string, Object<string, string>>} Map of preset name -> settings.
  */
@@ -139,7 +200,8 @@ export function listPresets() {
  *          Returns a shallow copy of currentValues if the preset doesn't exist.
  */
 export function applyPreset(currentValues, presetName) {
-    const preset = getPreset(presetName);
+    // Check user-saved presets first, then fall back to factory defaults.
+    const preset = getPreset(presetName) ?? getDefaultPreset(presetName);
     if (!preset) {
         console.warn(`[presets] Preset "${presetName}" not found.`);
         return { ...currentValues };
@@ -148,31 +210,57 @@ export function applyPreset(currentValues, presetName) {
 }
 
 /**
+ * Special marker returned by {@link resolvePresetFromURL} when the URL
+ * contains `?scheme=0`. The caller (settings.js) should detect this
+ * value and reload factory defaults from SETTINGS_SCHEMA rather than
+ * looking up a preset.
+ *
+ * @constant
+ * @type {string}
+ * @public
+ */
+export const FACTORY_DEFAULT_MARKER = "__factory_default__";
+
+/**
  * Resolve a preset name from URL parameters.
  *
  * The URL contract: `?scheme=NAME` selects a preset. NAME can be:
- *   - A preset name (URL-encoded, e.g. `?scheme=夜间阅读`)
- *   - A 1-based index into the sorted preset list (e.g. `?scheme=1`)
+ *   - `"0"`            → restore all settings to factory defaults
+ *                        (returns {@link FACTORY_DEFAULT_MARKER}).
+ *   - A preset name    → resolved via localStorage first, then factory
+ *                        defaults (URL-encoded, e.g. `?scheme=夜间阅读`,
+ *                        `?scheme=Infinite Scroll`).
+ *   - A 1-based index  → resolves into the sorted user-saved preset
+ *                        list (factory presets are NOT in the index
+ *                        list — they are addressable by name only).
  *
  * Index-based selection is useful for sharing short URLs. The sort
  * order is alphabetical by preset name for determinism.
  *
  * @param {URLSearchParams} [urlParams] - Defaults to the current page's URL params.
- * @returns {string|null} The resolved preset name, or null if no ?scheme= param.
+ * @returns {string|null} The resolved preset name, {@link FACTORY_DEFAULT_MARKER}
+ *                        for scheme=0, or null if no ?scheme= param.
+ * @public
  */
 export function resolvePresetFromURL(urlParams) {
     const params = urlParams ?? new URLSearchParams(window.location.search);
     const raw = params.get("scheme");
     if (!raw) return null;
 
-    // Try as a name first.
-    const presets = loadAllPresets();
-    if (raw in presets) return raw;
+    // Special: scheme=0 → factory default marker.
+    if (raw === "0") return FACTORY_DEFAULT_MARKER;
 
-    // Try as a 1-based index.
+    // Try as a user-saved preset name first.
+    const userPresets = loadAllPresets();
+    if (raw in userPresets) return raw;
+
+    // Try as a factory-default preset name (e.g. "Infinite Scroll").
+    if (getDefaultPreset(raw)) return raw;
+
+    // Try as a 1-based index into the user-saved preset list.
     const idx = parseInt(raw, 10);
     if (!isNaN(idx) && idx >= 1) {
-        const names = Object.keys(presets).sort();
+        const names = Object.keys(userPresets).sort();
         if (idx <= names.length) return names[idx - 1];
     }
 

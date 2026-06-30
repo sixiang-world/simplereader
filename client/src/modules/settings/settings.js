@@ -50,6 +50,11 @@ import {
     setDeep,
 } from "../../utils/base.js";
 import { parseURLSettings } from "../../utils/url-settings.js";
+import {
+    resolvePresetFromURL,
+    applyPreset,
+    FACTORY_DEFAULT_MARKER,
+} from "../../core/presets.js";
 import { refreshShareButtonLabels } from "../../utils/label-refresh.js";
 import {
     setRangeValue,
@@ -1266,6 +1271,35 @@ const settings = {
             parseURLSettings(SETTINGS_SCHEMA, new URLSearchParams(window.location.search))
         )) {
             this.values[key] = value;
+        }
+
+        // Preset override via ?scheme= URL parameter.
+        //
+        // Runs AFTER parseURLSettings() so individual URL params (?key=value)
+        // take precedence over preset values, but BEFORE applySettings() so
+        // the preset's keys are visible to the apply pipeline.
+        //
+        // Resolution rules (see client/src/core/presets.js):
+        //   - ?scheme=0       → restore factory defaults from SETTINGS_SCHEMA
+        //   - ?scheme=NAME    → resolve user-saved or factory preset by name
+        //   - ?scheme=N (1+)  → resolve N-th user-saved preset (alphabetical)
+        //
+        // The merge is SHALLOW: preset keys override existing values, but
+        // non-preset keys are preserved. This lets a preset be a partial
+        // override (e.g. only colors) without nuking unrelated settings.
+        const presetName = resolvePresetFromURL(new URLSearchParams(window.location.search));
+        if (presetName === FACTORY_DEFAULT_MARKER) {
+            // Restore all settings to factory defaults from SETTINGS_SCHEMA.
+            // This is NOT a preset lookup — it creates a fresh default values
+            // object. We still apply it as a shallow merge so that URL
+            // ?key=value overrides (applied above) survive.
+            for (const def of SETTINGS_SCHEMA) {
+                if (def.key === "ui_language") continue; // handled below
+                this.values[def.key] = this.defaults[def.key];
+            }
+        } else if (presetName) {
+            // Apply named preset as a shallow merge over current values.
+            this.values = applyPreset(this.values, presetName);
         }
 
         // Special case: ui_language URL override also needs to activate the language live

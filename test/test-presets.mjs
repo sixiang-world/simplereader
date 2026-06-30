@@ -42,6 +42,9 @@ const {
     listPresets,
     applyPreset,
     resolvePresetFromURL,
+    getDefaultPreset,
+    listDefaultPresets,
+    FACTORY_DEFAULT_MARKER,
 } = await import("../client/src/core/presets.js");
 
 let passed = 0;
@@ -231,6 +234,125 @@ test("resolvePresetFromURL defaults to window.location.search when no params pas
             globalThis.window.location.search = origSearch;
         }
     }
+});
+
+console.log("\ncore/presets.js — factory default presets\n");
+
+test("getDefaultPreset: returns values for known factory name", () => {
+    reset();
+    const preset = getDefaultPreset("Infinite Scroll");
+    assert.ok(preset, "expected preset to be defined");
+    assert.equal(preset.p_infiniteScroll, "true");
+    assert.equal(preset.p_infiniteScrollEasyTrigger, "true");
+    assert.equal(preset.p_anonymousMode, "true");
+});
+
+test("getDefaultPreset: returns null for unknown name", () => {
+    reset();
+    assert.equal(getDefaultPreset("nonexistent"), null);
+    assert.equal(getDefaultPreset(""), null);
+    assert.equal(getDefaultPreset(null), null);
+    assert.equal(getDefaultPreset(undefined), null);
+});
+
+test("getDefaultPreset: returns a fresh copy (mutations don't persist)", () => {
+    reset();
+    const a = getDefaultPreset("Infinite Scroll");
+    a.p_infiniteScroll = "false";
+    const b = getDefaultPreset("Infinite Scroll");
+    assert.equal(b.p_infiniteScroll, "true"); // unaffected by mutation
+});
+
+test("listDefaultPresets: returns array of factory preset names", () => {
+    reset();
+    const names = listDefaultPresets();
+    assert.ok(Array.isArray(names));
+    assert.ok(names.includes("Infinite Scroll"));
+});
+
+test("applyPreset: factory preset is applied via name even when not in localStorage", () => {
+    reset();
+    // No localStorage entry for "Infinite Scroll" — but applyPreset should
+    // still find it via the factory default fallback.
+    const current = { p_fontSize: "1.5em", p_infiniteScroll: "false" };
+    const merged = applyPreset(current, "Infinite Scroll");
+    assert.equal(merged.p_fontSize, "1.5em"); // preserved
+    assert.equal(merged.p_infiniteScroll, "true"); // overridden by preset
+    assert.equal(merged.p_infiniteScrollEasyTrigger, "true"); // added by preset
+    assert.equal(merged.p_anonymousMode, "true"); // added by preset
+});
+
+test("applyPreset: shallow merge — preset keys override, non-preset keys preserved", () => {
+    reset();
+    savePreset("partial", { p_fontSize: "2em" }); // only one key
+    const current = {
+        p_fontSize: "1em",
+        p_lineHeight: "1.5em",
+        light_bgColor: "#FFFFFF",
+    };
+    const merged = applyPreset(current, "partial");
+    assert.equal(merged.p_fontSize, "2em"); // overridden
+    assert.equal(merged.p_lineHeight, "1.5em"); // preserved
+    assert.equal(merged.light_bgColor, "#FFFFFF"); // preserved
+});
+
+test("applyPreset: user preset takes precedence over factory preset of same name", () => {
+    reset();
+    // User saves a preset with the same name as a factory default.
+    savePreset("Infinite Scroll", { p_fontSize: "3em" });
+    const current = { p_fontSize: "1em", p_infiniteScroll: "false" };
+    const merged = applyPreset(current, "Infinite Scroll");
+    // User's value wins.
+    assert.equal(merged.p_fontSize, "3em");
+    // Factory-only key is NOT applied (because user preset replaced it).
+    assert.equal(merged.p_infiniteScroll, "false");
+});
+
+console.log("\ncore/presets.js — resolvePresetFromURL with factory defaults\n");
+
+test("resolvePresetFromURL: ?scheme=0 returns FACTORY_DEFAULT_MARKER", () => {
+    reset();
+    const params = new URLSearchParams("scheme=0");
+    assert.equal(resolvePresetFromURL(params), FACTORY_DEFAULT_MARKER);
+});
+
+test("resolvePresetFromURL: ?scheme=Infinite Scroll resolves to factory preset", () => {
+    reset();
+    const params = new URLSearchParams("scheme=Infinite Scroll");
+    assert.equal(resolvePresetFromURL(params), "Infinite Scroll");
+});
+
+test("resolvePresetFromURL: ?scheme=Infinite%20Scroll (URL-encoded) resolves", () => {
+    reset();
+    const params = new URLSearchParams("scheme=Infinite%20Scroll");
+    assert.equal(resolvePresetFromURL(params), "Infinite Scroll");
+});
+
+test("resolvePresetFromURL: ?scheme=1 still works for user-saved presets (backward compat)", () => {
+    reset();
+    savePreset("zebra", { x: 1 });
+    savePreset("alpha", { x: 2 });
+    savePreset("middle", { x: 3 });
+    const params = new URLSearchParams("scheme=1");
+    // Factory presets are addressable by NAME only — ?scheme=1 still
+    // refers to the first user-saved preset (alpha), preserving backward
+    // compatibility with existing shared URLs.
+    assert.equal(resolvePresetFromURL(params), "alpha");
+});
+
+test("resolvePresetFromURL: factory preset name takes precedence over index 0 (special)", () => {
+    reset();
+    // ?scheme=0 is ALWAYS the factory-default marker, never a name lookup.
+    // Even if a user saves a preset named "0", the marker wins.
+    savePreset("0", { x: 1 });
+    const params = new URLSearchParams("scheme=0");
+    assert.equal(resolvePresetFromURL(params), FACTORY_DEFAULT_MARKER);
+});
+
+test("resolvePresetFromURL: nonexistent name still returns null", () => {
+    reset();
+    const params = new URLSearchParams("scheme=nonexistent");
+    assert.equal(resolvePresetFromURL(params), null);
 });
 
 // ── Error resilience ────────────────────────────────────────────────────
