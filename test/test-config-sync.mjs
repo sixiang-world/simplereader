@@ -393,6 +393,92 @@ await test("mergeSyncedConfig: does not mutate input objects", () => {
     assert.deepEqual(merged, { a: 1, b: 2 });
 });
 
+console.log("\ncore/config-sync.js — Issue 3: allowedKeys filtering\n");
+
+await test("REGRESSION i3: allowedKeys filters out unknown keys from syncData", () => {
+    // Issue 3 fix: unknown keys (not in SETTINGS_SCHEMA) must be dropped
+    // from syncData during merge. This prevents a feedback loop where
+    // unknown keys accumulate in the sync store via push → pull → push.
+    reset();
+    const current = { p_fontSize: "1em", light_bgColor: "#FFF" };
+    const sync = {
+        p_fontSize: "2em", // known key — should be merged
+        light_bgColor: "#000", // known key — should be merged
+        unknownKey1: "garbage", // unknown — should be dropped
+        unknownKey2: 42, // unknown — should be dropped
+        _userInteracted: true, // unknown — should be dropped (defensive)
+    };
+    const allowed = new Set(["p_fontSize", "light_bgColor", "p_lineHeight"]);
+    const merged = mergeSyncedConfig(current, sync, allowed);
+    assert.equal(merged.p_fontSize, "2em"); // known, merged
+    assert.equal(merged.light_bgColor, "#000"); // known, merged
+    assert.equal(merged.unknownKey1, undefined); // unknown, dropped
+    assert.equal(merged.unknownKey2, undefined); // unknown, dropped
+    assert.equal(merged._userInteracted, undefined); // unknown, dropped
+});
+
+await test("REGRESSION i3: allowedKeys=null (default) keeps all keys (backward compat)", () => {
+    // The default (no allowedKeys) preserves the pre-Issue-3 behavior
+    // so existing callers and tests don't break. This is important for
+    // the test environment where we can't import SETTINGS_SCHEMA.
+    reset();
+    const current = { a: 1 };
+    const sync = { a: 2, unknownKey: "kept" };
+    const merged = mergeSyncedConfig(current, sync); // no allowedKeys
+    assert.equal(merged.a, 2);
+    assert.equal(merged.unknownKey, "kept"); // NOT filtered
+});
+
+await test("REGRESSION i3: allowedKeys=empty Set keeps all keys", () => {
+    // An empty Set is treated the same as null (no filtering). This
+    // avoids accidentally dropping everything if the caller passes an
+    // empty set by mistake.
+    reset();
+    const current = { a: 1 };
+    const sync = { a: 2, unknownKey: "kept" };
+    const merged = mergeSyncedConfig(current, sync, new Set());
+    assert.equal(merged.a, 2);
+    assert.equal(merged.unknownKey, "kept"); // NOT filtered
+});
+
+await test("REGRESSION i3: allowedKeys preserves local-only keys", () => {
+    // Keys in currentValues but NOT in syncData should always be
+    // preserved, regardless of allowedKeys.
+    reset();
+    const current = { a: 1, b: 2, c: 3 };
+    const sync = { a: 10 }; // only updates 'a'
+    const allowed = new Set(["a", "b", "c"]);
+    const merged = mergeSyncedConfig(current, sync, allowed);
+    assert.equal(merged.a, 10); // updated by sync
+    assert.equal(merged.b, 2); // preserved (local-only, in allowed)
+    assert.equal(merged.c, 3); // preserved (local-only, in allowed)
+});
+
+await test("REGRESSION i3: allowedKeys with syncData containing only unknown keys", () => {
+    // Edge case: syncData has ONLY unknown keys. The merge should
+    // return currentValues unchanged (all sync keys dropped).
+    reset();
+    const current = { a: 1, b: 2 };
+    const sync = { unknown1: "x", unknown2: "y" };
+    const allowed = new Set(["a", "b"]);
+    const merged = mergeSyncedConfig(current, sync, allowed);
+    assert.deepEqual(merged, { a: 1, b: 2 }); // unchanged
+    assert.equal(merged.unknown1, undefined);
+    assert.equal(merged.unknown2, undefined);
+});
+
+await test("REGRESSION i3: allowedKeys with non-Set value is ignored (no filtering)", () => {
+    // Defensive: if someone passes a non-Set value (array, string, etc.),
+    // we should NOT filter — fall back to the default behavior.
+    reset();
+    const current = { a: 1 };
+    const sync = { a: 2, unknown: "kept" };
+    // Pass an array instead of a Set — should be ignored.
+    const merged = mergeSyncedConfig(current, sync, ["a"]);
+    assert.equal(merged.a, 2);
+    assert.equal(merged.unknown, "kept"); // NOT filtered (array is not a Set)
+});
+
 // ── Summary ─────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);
