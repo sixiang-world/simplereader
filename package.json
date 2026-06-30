@@ -1,6 +1,6 @@
 {
   "name": "simplereader",
-  "version": "1.7.0",
+  "version": "2.0.1",
   "type": "module",
   "private": true,
   "description": "Browser-based TXT/EPUB reader (Vite-powered refactored edition)",

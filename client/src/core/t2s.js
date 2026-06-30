@@ -305,11 +305,8 @@ function _sampleForDetection(bookData) {
 async function _fileAfterProcessHook(ctx) {
     if (!ctx || !ctx.bookData) return ctx;
     const { lite, pro } = _readSettings();
-    // Both off = no conversion
     if (!lite && !pro) return ctx;
 
-    // Auto-detect is implicit when either mode is enabled.
-    // Skip if no traditional characters present.
     const sample = _sampleForDetection(ctx.bookData);
     if (!containsTraditional(sample)) return ctx;
 

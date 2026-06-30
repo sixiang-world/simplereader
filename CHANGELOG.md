@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.0.1] — 2026-07-01
+
+### 修复
+- **T2S Pro 模式设置互斥竞态条件** — `SETTINGS_SCHEMA` 中 `t2s_lite` 排在 `t2s_pro` 之前，导致 `saveSettings()` 遍历时 `t2s_lite` 的 `onApply` 在 `t2s_pro` 持久化之前将其覆盖。新增 `mutualExclusiveWith` 声明式互斥机制 + 预处理阶段自动同步 DOM 状态
+- **OpenCC CDN 被浏览器跟踪防护拦截** — Edge/Chromium 的 Tracking Prevention 阻止 jsDelivr CDN 请求。下载 `opencc-js@1.3.2` UMD bundle（~1.15MB）至 `client/lib/opencc/full.js`，切换为本地静态加载，完全消除第三方网络依赖
+- **T2S 渲染时序：转换在内容显示之后才执行** — 三个文件打开路径均存在 `showContent()`/`reader.showCurrentPageContent()` 在 T2S Hook 之前调用的问题，用户首次打开书籍看到的是未转换的繁体文本，需要刷新才能看到简体。修复后 Hook 在四个关键点均先于渲染执行（初始块、剩余内容合并、书架重开、EPUB 打开）
+- **T2S 剩余内容工作线程覆盖已转换数据** — 大文件处理时，剩余内容工作线程返回后 `CONFIG.VARS.FILE_CONTENT_CHUNKS` 被原始数据覆盖，触发 UI 重渲染显示繁体
+
+### 变更
+- **OpenCC 从 CDN 迁移至本地** — `t2s-opencc.js` 移除动态 `import()` 路径和 CDN URL，简化为纯 `<script>` 标签注入本地文件，消除 CDN 可用性、CSP、Tracking Prevention 等外部依赖风险
+
+### 测试
+- `test-opencc-cdn.mjs` 从 CDN URL 验证重写为本地文件完整性验证（文件存在、大小 ≥500KB、包含 OpenCC 全局赋值）
+- `test-t2s.mjs` 核心 19 个繁简转换测试持续通过
+
+---
+
 ## [2.0.0] — 2026-06-30
 
 ### 新增

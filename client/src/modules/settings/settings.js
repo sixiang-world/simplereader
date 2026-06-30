@@ -526,10 +526,30 @@ class SettingsMenu {
                 let el = null;
                 switch (def.type) {
                     case "checkbox":
+                        let checkboxCallback = this.settingsObj.saveSettings.bind(this.settingsObj);
+
+                        // Handle mutual exclusion: before saveSettings reads the DOM,
+                        // uncheck the sibling checkbox so its DOM state is correct.
+                        if (def.mutualExclusiveWith) {
+                            const siblingDef = this.settingsObj.schemaMap[def.mutualExclusiveWith];
+                            if (siblingDef) {
+                                const siblingLabel = siblingDef.inputRef || siblingDef.label;
+                                const originalCallback = checkboxCallback;
+                                checkboxCallback = () => {
+                                    const siblingEl = document.getElementById(siblingLabel);
+                                    if (siblingEl && siblingEl.checked) {
+                                        siblingEl.checked = false;
+                                        siblingEl.style.setProperty("--checked", "0");
+                                    }
+                                    originalCallback();
+                                };
+                            }
+                        }
+
                         el = createCheckboxItem(
                             def.label,
                             this.settingsObj.values[def.key],
-                            this.settingsObj.saveSettings.bind(this.settingsObj),
+                            checkboxCallback,
                             def.note || false
                         );
                         break;

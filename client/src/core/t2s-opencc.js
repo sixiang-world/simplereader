@@ -1,29 +1,30 @@
 /**
- * @fileoverview OpenCC loader for heavy-mode traditional→simplified
+ * @fileoverview OpenCC loader for heavy-mode traditional/simplified
  * Chinese conversion.
  *
  * OpenCC (https://github.com/BYVoid/OpenCC) is the de-facto standard
  * library for Chinese conversion with vocabulary-level accuracy.
  * The `opencc-js` package (https://github.com/nk2028/opencc-js)
  * provides a browser-compatible UMD build that bundles the dictionary
- * data (~560KB minified).
+ * data (~1MB).
  *
  * This module lazily loads OpenCC on first use — it does NOT block app
- * boot. The script is fetched on demand from a CDN (jsDelivr) and
- * cached for the session. Subsequent calls reuse the cached instance.
+ * boot. The script file is served from the app's own `client/lib/opencc/`
+ * directory, fetched on demand via a dynamic `<script>` tag. Subsequent
+ * calls reuse the cached instance.
  *
  * == Why lazy loading? ==
  *
- * The opencc-js full bundle is ~560KB. Loading it eagerly would add
- * ~560KB to the initial page weight and ~100-300ms of parse time.
- * Most users never need trad→simp conversion. Lazy loading keeps the
- * common path fast.
+ * The opencc-js bundle is ~1MB. Loading it eagerly would add ~1MB to the
+ * initial page weight. Most users never need trad→simp conversion, so
+ * lazy loading keeps the common path fast.
  *
- * == CDN fallback ==
+ * == Local vs CDN ==
  *
- * If the CDN is unreachable, conversion will fail gracefully (the hook
- * falls back to light mode, which is character-level only). This is
- * documented in the t2s module's contract.
+ * The file was downloaded from jsDelivr CDN. It is hosted locally (under
+ * `client/lib/opencc/`) to avoid browser tracking-prevention blocking
+ * third-party CDN requests. The file is updated manually by re-downloading
+ * when a newer version of opencc-js is desired.
  *
  * == Configuration ==
  *
@@ -35,24 +36,11 @@
  * @module client/src/core/t2s-opencc
  */
 
-// CDN URL for the opencc-js package. We use jsDelivr as it has good
-// global availability. The version is pinned for reproducibility.
-//
-// URL selection notes (P0-5 fix):
-//   - The package is `opencc-js` (NOT `opencc-wasm` — the file overview
-//     comment above mentions opencc-wasm, but the actual npm package we
-//     load is opencc-js, which is the de-facto browser build of OpenCC).
-//   - Version 1.0.5 (the previously-pinned version) does NOT exist on
-//     npm. The actual published versions are 0.0.x, 0.1.x, 0.2.0, and
-//     1.3.2 (latest as of 2024-12). Pinning a non-existent version made
-//     the loader always 404, so heavy mode always fell back to light.
-//   - The file path is `dist/umd/full.js`, NOT `dist/umd/index.js`.
-//     The umd/ directory contains three files: t2cn.js, cn2t.js, full.js.
-//     Only full.js bundles the dictionary data and exports the full
-//     OpenCC.Converter factory. The other two are partial builds that
-//     only do one direction and need a separate dictionary fetch.
-//   - Verified 200 OK + ~559KB size + exports `Converter` as of 2024-12.
-const OPENCC_JS_CDN = "https://cdn.jsdelivr.net/npm/opencc-js@1.3.2/dist/umd/full.js";
+// Local path to the opencc-js UMD bundle.
+// In dev, Vite serves the path as-is from the repo root.
+// In production, postbuild-copy-lib copies client/lib/ into dist/.
+// The path is relative to index.html (repo root).
+const OPENCC_JS_PATH = "./client/lib/opencc/full.js";
 
 /** @type {Promise<any>|null} Cached loader promise. */
 let _loaderPromise = null;
@@ -61,52 +49,47 @@ let _loaderPromise = null;
 let _converter = null;
 
 /**
- * Browser-friendly dynamic import shim. Uses `import()` if available,
- * falls back to injecting a `<script>` tag for legacy environments.
+ * Lazy-load OpenCC by injecting a `<script>` tag.
  *
  * The opencc-js UMD bundle exposes a global `OpenCC` after the script
  * loads. We wrap it in a Promise for ergonomics.
+ *
+ * Note: We do NOT use dynamic `import()` here because the UMD bundle is
+ * a classic script (not an ES module), and `import()` on a non-module
+ * script either fails or returns an empty module object depending on the
+ * browser. Script-tag injection is the reliable approach.
  *
  * @returns {Promise<any>} Resolves to the OpenCC namespace.
  * @private
  */
 async function _loadOpenCC() {
-    // Try dynamic import first (works for ESM-aware bundlers + Vite's
-    // import-attribute transpilation). The @vite-ignore comment tells
-    // Vite not to try to bundle this URL at build time — it's a runtime
-    // fetch from a CDN.
-    if (typeof globalThis.import === "function") {
-        try {
-            const mod = await import(/* @vite-ignore */ OPENCC_JS_CDN);
-            if (mod && (mod.Converter || mod.default)) {
-                return mod.default ?? mod;
-            }
-        } catch (_e) {
-            // Fall through to script-tag injection.
-        }
-    }
-
-    // Fallback: inject a script tag and wait for `window.OpenCC`.
     return new Promise((resolve, reject) => {
-        if (typeof document === "undefined") {
-            reject(new Error("[t2s-opencc] No DOM available to inject script"));
-            return;
-        }
+        // Already available (e.g. injected via bookmarklet or extension)
         if (typeof globalThis.OpenCC !== "undefined") {
             resolve(globalThis.OpenCC);
             return;
         }
+
         const script = document.createElement("script");
-        script.src = OPENCC_JS_CDN;
+        script.src = OPENCC_JS_PATH;
         script.async = true;
         script.onload = () => {
             if (typeof globalThis.OpenCC === "undefined") {
-                reject(new Error("[t2s-opencc] Script loaded but OpenCC global not found"));
+                reject(
+                    new Error(
+                        "[t2s-opencc] Script loaded but OpenCC global not found"
+                    )
+                );
                 return;
             }
             resolve(globalThis.OpenCC);
         };
-        script.onerror = () => reject(new Error(`[t2s-opencc] Failed to load script from ${script.src}`));
+        script.onerror = () =>
+            reject(
+                new Error(
+                    `[t2s-opencc] Failed to load script from ${script.src}`
+                )
+            );
         document.head.appendChild(script);
     });
 }
@@ -131,7 +114,10 @@ export async function getConverter(opts = {}) {
 
     if (!_loaderPromise) {
         _loaderPromise = _loadOpenCC().catch((err) => {
-            console.warn("[t2s-opencc] Failed to load OpenCC Wasm:", err.message);
+            console.warn(
+                "[t2s-opencc] Failed to load OpenCC:",
+                err.message
+            );
             _loaderPromise = null; // Allow retry on next call.
             throw err;
         });
@@ -177,15 +163,12 @@ export async function getConverter(opts = {}) {
  * @public
  */
 export async function isAvailable(timeoutMs = 2000) {
-    // Race the converter-load promise against a timeout. The previous
-    // implementation created an AbortController but never wired its signal
-    // to anything (getConverter doesn't accept a signal), so the abort
-    // was dead code. The Promise.race timeout is the actual cancellation
-    // mechanism — kept it, removed the dead AbortController.
     try {
         await Promise.race([
             getConverter({ direction: "t2s" }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), timeoutMs)),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("timeout")), timeoutMs)
+            ),
         ]);
         return true;
     } catch {

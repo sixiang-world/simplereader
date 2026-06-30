@@ -1,16 +1,14 @@
 /**
- * Regression test for P0-5: the OpenCC CDN URL must point to a real,
- * existing file. The previous code pinned opencc-js@1.0.5 (which
- * doesn't exist on npm) and used the path dist/umd/index.js (which
- * doesn't exist in the package). Both made heavy mode always 404
- * and fall back to light mode.
+ * Verification test for the locally-hosted opencc-js bundle.
  *
- * This test does TWO things:
- *   1. Statically inspects t2s-opencc.js source to verify the URL
- *      matches the expected pattern (correct package + version + path).
- *   2. (Optional, online-only) verifies the URL returns HTTP 200.
- *      Skipped if network is unavailable so the test passes in CI
- *      without internet.
+ * The opencc-js UMD bundle (opencc-js@1.3.2) was downloaded from jsDelivr CDN
+ * and placed in `client/lib/opencc/full.js` to avoid browser tracking-prevention
+ * blocking third-party CDN requests.
+ *
+ * This test verifies:
+ *   1. t2s-opencc.js references the local file path (not a CDN URL)
+ *   2. The local file exists on disk and has reasonable size
+ *   3. The local file is a valid UMD bundle that exports the OpenCC global
  *
  * Run: node test/test-opencc-cdn.mjs
  */
@@ -35,88 +33,64 @@ function test(name, fn) {
         });
 }
 
-const filePath = path.resolve(
-    import.meta.dirname,
-    "..",
-    "client",
-    "src",
-    "core",
-    "t2s-opencc.js"
-);
-const src = fs.readFileSync(filePath, "utf-8");
+const __dirname = import.meta.dirname;
+const ROOT = path.resolve(__dirname, "..");
 
-console.log("t2s-opencc.js — P0-5 regression: CDN URL must be valid\n");
+// The t2s-opencc.js source file.
+const SRC_PATH = path.resolve(ROOT, "client", "src", "core", "t2s-opencc.js");
+const src = fs.readFileSync(SRC_PATH, "utf-8");
 
-await test("source defines a CDN URL constant", () => {
+// The local bundle file.
+const BUNDLE_PATH = path.resolve(ROOT, "client", "lib", "opencc", "full.js");
+
+console.log("t2s-opencc.js — locally-hosted bundle verification\n");
+
+await test("source defines a file-path constant (not CDN URL)", () => {
     assert.ok(
-        /const\s+OPENCC_JS_CDN\s*=\s*["']https:\/\/[^"']+["']/.test(src),
-        "Expected `const OPENCC_JS_CDN = 'https://...'` not found."
+        /const\s+OPENCC_JS_PATH\s*=/.test(src),
+        "Expected `const OPENCC_JS_PATH = '...'` not found. " +
+            "The source should define OPENCC_JS_PATH pointing to the local bundle."
     );
 });
 
-await test("CDN URL points to jsDelivr (reliable global CDN)", () => {
+await test("source path points to client/lib/opencc/full.js", () => {
     assert.ok(
-        /cdn\.jsdelivr\.net/.test(src),
-        "CDN URL should use jsDelivr for global availability."
+        /client\/lib\/opencc\/full\.js/.test(src),
+        "Expected `client/lib/opencc/full.js` in the OPENCC_JS_PATH constant."
     );
 });
 
-await test("CDN URL uses the opencc-js package (not opencc-wasm)", () => {
+await test("source no longer references a CDN URL for loading", () => {
+    // The ONLY path in the source should be the local one. No jsDelivr URLs.
     assert.ok(
-        /opencc-js@\d+\.\d+\.\d+/.test(src),
-        "Expected `opencc-js@<version>` in CDN URL. " +
-            "The package is `opencc-js` on npm, NOT `opencc-wasm`."
+        !/cdn\.jsdelivr\.net/.test(src),
+        "Source should NOT contain jsDelivr URLs. The file is loaded locally."
     );
 });
 
-await test("CDN URL uses dist/umd/full.js path (bundles dict data)", () => {
-    // The umd/ directory has 3 files: t2cn.js, cn2t.js, full.js.
-    // Only full.js bundles the dictionary data and exports the full
-    // OpenCC.Converter factory. The other two are partial builds.
+await test("local bundle file exists on disk", () => {
     assert.ok(
-        /dist\/umd\/full\.js/.test(src),
-        "Expected `dist/umd/full.js` path in CDN URL. " +
-            "The umd/ directory has 3 files (t2cn.js, cn2t.js, full.js); " +
-            "only full.js bundles the dictionary data."
+        fs.existsSync(BUNDLE_PATH),
+        `Expected bundle file at ${BUNDLE_PATH} not found.`
     );
 });
 
-await test("CDN URL does NOT use the broken 1.0.5 version", () => {
+await test("local bundle file has reasonable size (≥500KB)", () => {
+    const stat = fs.statSync(BUNDLE_PATH);
     assert.ok(
-        !/opencc-js@1\.0\.5/.test(src),
-        "CDN URL still references the non-existent opencc-js@1.0.5. " +
-            "That version was never published to npm; the URL always 404s."
+        stat.size >= 500 * 1024,
+        `Bundle file is only ${Math.round(stat.size / 1024)}KB, expected at least 500KB.`
     );
+    console.log(`    ${Math.round(stat.size / 1024)}KB`);
 });
 
-await test("CDN URL does NOT use the broken dist/umd/index.js path", () => {
-    // Extract just the URL string (not comments) and verify it doesn't
-    // reference index.js. Comments may mention index.js to explain what
-    // NOT to use — that's fine.
-    const urlMatch = src.match(/["'](https:\/\/cdn\.jsdelivr\.net\/npm\/opencc-js@[^"']+)["']/);
-    assert.ok(urlMatch, "Could not extract CDN URL string from source");
-    const url = urlMatch[1];
+await test("local bundle file contains the OpenCC global assignment", () => {
+    const bundleContent = fs.readFileSync(BUNDLE_PATH, "utf-8");
     assert.ok(
-        !url.includes("dist/umd/index.js"),
-        `CDN URL "${url}" references dist/umd/index.js which does not exist ` +
-            "in the opencc-js package."
+        /OpenCC/.test(bundleContent),
+        "Bundle should contain the OpenCC global assignment.\n" +
+            "The UMD wrapper sets `globalThis.OpenCC = factory()`."
     );
-});
-
-// Optional online check — skip silently if network is unavailable.
-await test("CDN URL returns HTTP 200 (online check, may skip)", async () => {
-    const match = src.match(/["'](https:\/\/cdn\.jsdelivr\.net\/npm\/opencc-js@[^"']+)["']/);
-    if (!match) {
-        assert.fail("Could not extract CDN URL from source");
-    }
-    const url = match[1];
-    try {
-        const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(5000) });
-        assert.ok(res.ok, `CDN URL returned HTTP ${res.status}`);
-    } catch (e) {
-        // Network unavailable in CI — skip with a warning, don't fail.
-        console.log(`    (skipped: ${e.message})`);
-    }
 });
 
 // ── Summary ─────────────────────────────────────────────────────────────
