@@ -325,9 +325,20 @@ export function getLastPulledAt() {
 /**
  * Merge synced config into the current settings values.
  *
- * Local settings take precedence — sync data only fills in keys that
- * are not already set locally. This implements the "sync supplements
- * local" rule from the spec.
+ * Sync data OVERRIDES local values. This implements the "sync wins"
+ * rule, which matches user expectations for multi-device sync: when a
+ * user changes a setting on device A and syncs, they expect device B
+ * to pick up the new value — not to keep its old local default.
+ *
+ * The previous implementation used "local wins, sync fills empty" which
+ * effectively disabled sync because loadSettings() populates EVERY key
+ * with either the localStorage value or the schema default — there are
+ * no empty slots for sync to fill.
+ *
+ * Note: keys present in syncData but NOT in the current settings schema
+ * are still merged in. This is intentional — it lets future schema
+ * versions add new keys and have them sync without losing data. The
+ * settings UI will just ignore unknown keys.
  *
  * @param {Object<string,*>} currentValues - The current settings.values.
  * @param {Object<string,*>|null} syncData - The synced config (or null).
@@ -335,15 +346,10 @@ export function getLastPulledAt() {
  * @public
  */
 export function mergeSyncedConfig(currentValues, syncData) {
-    if (!syncData || typeof syncData !== "object") {
+    if (!syncData || typeof syncData !== "object" || Array.isArray(syncData)) {
         return { ...currentValues };
     }
-    const merged = { ...currentValues };
-    for (const [k, v] of Object.entries(syncData)) {
-        // Only fill in keys not already set locally.
-        if (merged[k] === undefined || merged[k] === null || merged[k] === "") {
-            merged[k] = v;
-        }
-    }
-    return merged;
+    // Sync overrides local. Shallow merge: sync values replace local
+    // values for the same key; local-only keys are preserved.
+    return { ...currentValues, ...syncData };
 }

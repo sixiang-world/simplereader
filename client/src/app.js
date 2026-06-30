@@ -149,25 +149,30 @@ import {
 
     // Pull synced config from textdb.hunluan.space (if sync is configured).
     //
-    // This runs AFTER settings.enable() so local settings take precedence
-    // — sync data only fills in keys that aren't already set locally.
+    // P1-3 fix: this runs NON-BLOCKING. The previous code did
+    // `await pullOnBoot()` which blocked initBookshelf/initFontpool
+    // — if textdb was slow (2-5s), app boot was delayed. Now we fire
+    // the pull in the background and apply the result whenever it
+    // arrives. The user sees the app immediately with local settings;
+    // synced settings (if any) replace them a moment later.
+    //
     // Sync failures (network errors, 404, parse errors) are caught and
-    // logged inside pullOnBoot; they do NOT block app boot.
+    // logged; they do NOT affect the running app.
     if (isSyncEnabled()) {
-        try {
-            const syncData = await pullOnBoot();
-            if (syncData && typeof syncData === "object") {
-                // Use the imported settings singleton. The previous code used
-                // `(await import('./settings.js')).settings` which returned
-                // undefined because settings wasn't exported — fixed in P0-4.
-                if (settingsSingleton && settingsSingleton.values) {
-                    settingsSingleton.values = mergeSyncedConfig(settingsSingleton.values, syncData);
-                    settingsSingleton.applySettings();
+        // Fire-and-forget — do NOT await.
+        pullOnBoot()
+            .then((syncData) => {
+                if (syncData && typeof syncData === "object") {
+                    // Use the imported settings singleton (P0-4 fix).
+                    if (settingsSingleton && settingsSingleton.values) {
+                        settingsSingleton.values = mergeSyncedConfig(settingsSingleton.values, syncData);
+                        settingsSingleton.applySettings();
+                    }
                 }
-            }
-        } catch (err) {
-            console.warn("[app] Config sync pull failed:", err.message);
-        }
+            })
+            .catch((err) => {
+                console.warn("[app] Config sync pull failed:", err.message);
+            });
     }
 
     // Parallel execution of initBookshelf & initFontpool
