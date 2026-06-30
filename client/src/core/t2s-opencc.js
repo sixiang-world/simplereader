@@ -1,32 +1,33 @@
 /**
- * @fileoverview OpenCC Wasm loader for heavy-mode traditional→simplified
+ * @fileoverview OpenCC loader for heavy-mode traditional→simplified
  * Chinese conversion.
  *
  * OpenCC (https://github.com/BYVoid/OpenCC) is the de-facto standard
  * library for Chinese conversion with vocabulary-level accuracy.
- * The `opencc-wasm` project (https://github.com/nk2028/opencc-wasm)
- * provides a browser-compatible Wasm build.
+ * The `opencc-js` package (https://github.com/nk2028/opencc-js)
+ * provides a browser-compatible UMD build that bundles the dictionary
+ * data (~560KB minified).
  *
  * This module lazily loads OpenCC on first use — it does NOT block app
- * boot. The Wasm binary is fetched on demand from a CDN (jsDelivr) and
+ * boot. The script is fetched on demand from a CDN (jsDelivr) and
  * cached for the session. Subsequent calls reuse the cached instance.
  *
  * == Why lazy loading? ==
  *
- * The OpenCC Wasm binary is ~1MB. Loading it eagerly would add ~1MB to
- * the initial page weight and ~200-500ms of parse time. Most users
- * never need trad→simp conversion. Lazy loading keeps the common path
- * fast.
+ * The opencc-js full bundle is ~560KB. Loading it eagerly would add
+ * ~560KB to the initial page weight and ~100-300ms of parse time.
+ * Most users never need trad→simp conversion. Lazy loading keeps the
+ * common path fast.
  *
  * == CDN fallback ==
  *
  * If the CDN is unreachable, conversion will fail gracefully (the hook
- * returns the original text unchanged). This is documented in the
- * t2s module's contract.
+ * falls back to light mode, which is character-level only). This is
+ * documented in the t2s module's contract.
  *
  * == Configuration ==
  *
- * We use the `t2s.json` config (Traditional → Simplified) which includes:
+ * We use OpenCC.Converter({ from: 'tw', to: 'cn' }) which performs:
  *   - Character-level conversion (same as light mode)
  *   - Vocabulary-level conversion (e.g. 詞彙 → 词汇, 軟體 → 软件)
  *   - Idiom conversion (e.g. 一網打盡 → 一网打尽)
@@ -34,9 +35,24 @@
  * @module client/src/core/t2s-opencc
  */
 
-// CDN URL for the opencc-wasm package. We use jsDelivr as it has good
+// CDN URL for the opencc-js package. We use jsDelivr as it has good
 // global availability. The version is pinned for reproducibility.
-const OPENCC_WASM_CDN = "https://cdn.jsdelivr.net/npm/opencc-js@1.0.5";
+//
+// URL selection notes (P0-5 fix):
+//   - The package is `opencc-js` (NOT `opencc-wasm` — the file overview
+//     comment above mentions opencc-wasm, but the actual npm package we
+//     load is opencc-js, which is the de-facto browser build of OpenCC).
+//   - Version 1.0.5 (the previously-pinned version) does NOT exist on
+//     npm. The actual published versions are 0.0.x, 0.1.x, 0.2.0, and
+//     1.3.2 (latest as of 2024-12). Pinning a non-existent version made
+//     the loader always 404, so heavy mode always fell back to light.
+//   - The file path is `dist/umd/full.js`, NOT `dist/umd/index.js`.
+//     The umd/ directory contains three files: t2cn.js, cn2t.js, full.js.
+//     Only full.js bundles the dictionary data and exports the full
+//     OpenCC.Converter factory. The other two are partial builds that
+//     only do one direction and need a separate dictionary fetch.
+//   - Verified 200 OK + ~559KB size + exports `Converter` as of 2024-12.
+const OPENCC_JS_CDN = "https://cdn.jsdelivr.net/npm/opencc-js@1.3.2/dist/umd/full.js";
 
 /** @type {Promise<any>|null} Cached loader promise. */
 let _loaderPromise = null;
@@ -48,18 +64,23 @@ let _converter = null;
  * Browser-friendly dynamic import shim. Uses `import()` if available,
  * falls back to injecting a `<script>` tag for legacy environments.
  *
- * The opencc-js package exposes a global `OpenCC` after the script
+ * The opencc-js UMD bundle exposes a global `OpenCC` after the script
  * loads. We wrap it in a Promise for ergonomics.
  *
  * @returns {Promise<any>} Resolves to the OpenCC namespace.
  * @private
  */
 async function _loadOpenCC() {
-    // Try dynamic import first (works for ESM-aware bundlers).
+    // Try dynamic import first (works for ESM-aware bundlers + Vite's
+    // import-attribute transpilation). The @vite-ignore comment tells
+    // Vite not to try to bundle this URL at build time — it's a runtime
+    // fetch from a CDN.
     if (typeof globalThis.import === "function") {
         try {
-            const mod = await import(/* @vite-ignore */ `${OPENCC_WASM_CDN}/dist/umd/index.js`);
-            if (mod && (mod.Converter || mod.default)) return mod.default ?? mod;
+            const mod = await import(/* @vite-ignore */ OPENCC_JS_CDN);
+            if (mod && (mod.Converter || mod.default)) {
+                return mod.default ?? mod;
+            }
         } catch (_e) {
             // Fall through to script-tag injection.
         }
@@ -76,7 +97,7 @@ async function _loadOpenCC() {
             return;
         }
         const script = document.createElement("script");
-        script.src = `${OPENCC_WASM_CDN}/dist/umd/index.js`;
+        script.src = OPENCC_JS_CDN;
         script.async = true;
         script.onload = () => {
             if (typeof globalThis.OpenCC === "undefined") {
@@ -156,14 +177,16 @@ export async function getConverter(opts = {}) {
  * @public
  */
 export async function isAvailable(timeoutMs = 2000) {
+    // Race the converter-load promise against a timeout. The previous
+    // implementation created an AbortController but never wired its signal
+    // to anything (getConverter doesn't accept a signal), so the abort
+    // was dead code. The Promise.race timeout is the actual cancellation
+    // mechanism — kept it, removed the dead AbortController.
     try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         await Promise.race([
             getConverter({ direction: "t2s" }),
             new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), timeoutMs)),
         ]);
-        clearTimeout(timer);
         return true;
     } catch {
         return false;
