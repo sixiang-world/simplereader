@@ -162,6 +162,72 @@ await test("preprocessBooks: output JSON has valid HTML in processedLines", asyn
     }
 });
 
+await test("REGRESSION P0-6: no single-char garbage strings in processedLines", async () => {
+    // P0-6 regression guard: the previous code did
+    //   processedLines: [...titlePageLines, ...result.htmlLines, ...endPageLines]
+    // where endPageLines was a STRING (from generateEndPage). Spreading a
+    // string with ... splits it into individual characters, producing 72+
+    // garbage single-char entries. This test verifies no such garbage
+    // exists in the output.
+    const booksDir = path.join(tmpDir, "regression-books");
+    const outDir = path.join(tmpDir, "regression-out");
+    fs.mkdirSync(booksDir, { recursive: true });
+    fs.writeFileSync(
+        path.join(booksDir, "regression-test.txt"),
+        "第一章 测试\n\n这是一段测试文本。\n\n第二章 结束\n\n内容结束。\n",
+        "utf-8"
+    );
+    await preprocessBooks({ booksDir, outDir });
+    const data = JSON.parse(fs.readFileSync(path.join(outDir, "regression-test.json"), "utf-8"));
+
+    const stringLines = data.processedLines.filter((l) => typeof l === "string");
+    const singleCharStrings = stringLines.filter((s) => s.length === 1);
+    assert.equal(
+        singleCharStrings.length,
+        0,
+        `Found ${singleCharStrings.length} single-char string(s) in processedLines — ` +
+            `this indicates the endPageLines string-spread bug is back. ` +
+            `Sample: ${JSON.stringify(singleCharStrings.slice(0, 5))}`
+    );
+});
+
+await test("REGRESSION P0-6: no duplicate title page content in processedLines", async () => {
+    // P0-6 regression guard: the previous code spread titlePageLines as
+    // raw strings AND result.htmlLines (which already contains the title
+    // page as objects, prepended by processChunkStatic). This duplicated
+    // the title page. This test verifies no duplicate content exists.
+    const booksDir = path.join(tmpDir, "dupe-books");
+    const outDir = path.join(tmpDir, "dupe-out");
+    fs.mkdirSync(booksDir, { recursive: true });
+    fs.writeFileSync(
+        path.join(booksDir, "dupe-test.txt"),
+        "第一章 测试\n\n内容。\n",
+        "utf-8"
+    );
+    await preprocessBooks({ booksDir, outDir });
+    const data = JSON.parse(fs.readFileSync(path.join(outDir, "dupe-test.json"), "utf-8"));
+
+    // Extract all content strings (from both string and object entries).
+    const contents = data.processedLines.map((l) =>
+        typeof l === "string" ? l : l?.content ?? ""
+    );
+    // Count non-trivial duplicates (length > 5 to skip whitespace).
+    const counts = {};
+    for (const c of contents) {
+        if (c.trim().length > 5) {
+            counts[c] = (counts[c] ?? 0) + 1;
+        }
+    }
+    const dupes = Object.entries(counts).filter(([, n]) => n > 1);
+    assert.equal(
+        dupes.length,
+        0,
+        `Found ${dupes.length} duplicate content(s) in processedLines — ` +
+            `this indicates the title page is being added twice. ` +
+            `Duplicates: ${JSON.stringify(dupes.slice(0, 3))}`
+    );
+});
+
 // ── Cleanup ────────────────────────────────────────────────────────────
 
 try {
