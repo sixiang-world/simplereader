@@ -132,18 +132,39 @@ async function processTxtFile(filePath) {
         FileProcessorCore.getBookNameAndAuthor(fileName);
     const bookAndAuthor = { bookName, author, bookNameRE, authorRE };
 
-    // Generate title page lines.
+    // Generate title page lines. These are raw HTML strings; processChunkStatic
+    // will convert them to objects {type, tag, content, ...} via
+    // TextProcessorCore.process and prepend them to result.htmlLines.
     const titlePageLines = FileProcessorCore.generateTitlePage(
         { bookName, author },
         {} // styles — empty for build-time
     );
     const titlePageTitles = titlePageLines.map((_, i) => ["", i]);
 
+    // Generate end page. generateEndPage returns a SINGLE HTML string; we
+    // wrap it in a 1-element array to match the processChunkStatic contract
+    // (extraContent.endPageLines must be an Array<string>). The matching
+    // endPageTitles is a 1-element array of [label, lineNumber, label, false],
+    // mirroring what the client worker produces (see file-processor.js
+    // #generateEndPage). processChunkStatic will mutate endPageTitles[0][1]
+    // to the correct line number, so the placeholder 0 is fine here.
+    const endPageLineHtml = FileProcessorCore.generateEndPage(0);
+    const endPageLines = [endPageLineHtml];
+    const endPageLabel = "(end)"; // build-time placeholder; client uses ui_endPage
+    const endPageTitles = [[endPageLabel, 0, endPageLabel, false]];
+
     // Process the entire file as one chunk (build-time = no streaming).
-    // NOTE: do NOT pass `extraContent.endPageLines`/`endPageTitles` — the
-    // processChunkStatic code path requires both arrays to be non-empty
-    // when present (it does `endPageTitles[0][1] = ...`). The end page
-    // is generated separately below and appended to processedLines.
+    // processChunkStatic prepends titlePageLines and appends endPageLines
+    // to result.htmlLines (converting both to objects via
+    // TextProcessorCore.process). It also pushes titlePageTitles and
+    // endPageTitles to result.titles.
+    //
+    // P0-6 fix: previously we did NOT pass endPageLines/endPageTitles
+    // (because passing endPageTitles:[] crashed on endPageTitles[0][1]),
+    // and instead tried to spread the end page string into processedLines
+    // with `...endPageLines` — which splits a string into individual
+    // characters, producing 72+ garbage single-char entries. Now we pass
+    // both arrays correctly so processChunkStatic handles them.
     const config = buildConfigShim({
         isEasternLan: processor.isEasternLan,
         bookAndAuthor,
@@ -152,6 +173,8 @@ async function processTxtFile(filePath) {
         extraContent: {
             titlePageLines,
             titlePageTitles,
+            endPageLines,
+            endPageTitles,
         },
         title_page_line_number_offset: 3,
         pageBreakOnTitle: true,
@@ -166,13 +189,14 @@ async function processTxtFile(filePath) {
         logMode: false,
     });
 
-    // Generate end page (single HTML string; not added to TOC).
-    const endPageLines = FileProcessorCore.generateEndPage(result.htmlLines.length);
-
     return {
         metadata: { title: bookName, author },
-        processedLines: [...titlePageLines, ...result.htmlLines, ...endPageLines],
-        titles: [...titlePageTitles, ...result.titles],
+        // result.htmlLines already contains: title page (objects) + body
+        // (objects) + end page (objects). Do NOT spread titlePageLines or
+        // endPageLines separately — that would duplicate the title page
+        // and/or split the end page string into chars.
+        processedLines: result.htmlLines,
+        titles: result.titles,
         titles_ind: result.titles_ind,
         footnotes: result.footnotes,
         page_breaks: result.pageBreaks,
