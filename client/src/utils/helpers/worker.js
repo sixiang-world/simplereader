@@ -113,6 +113,14 @@ function resolveWorkerUrl(absolutePath, baseUrl) {
             const resultParts = [...baseParts.slice(0, equivalentIndex), ...absParts];
             return base.origin + "/" + resultParts.join("/");
         }
+
+        // Vite production build: the caller (index.js) lives under
+        // /assets/, so baseParts has no equivalent path. The absolutePath
+        // (e.g. "client/src/modules/database/db-worker.js") is relative
+        // to the site root. Resolve it directly against the origin.
+        // Without this, the fallback "append" logic produces garbage
+        // like /assets/index.js/client/src/.../db-worker.js.
+        return base.origin + "/" + absParts.join("/");
     }
 
     // Priority 2: Try to find the position where absParts matches a subarray in baseParts
