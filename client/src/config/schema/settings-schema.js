@@ -509,6 +509,35 @@ const SETTINGS_SCHEMA = [
         default: CONFIG.CONST_CONFIG.SHORTCUTS.esc_default,
         persist: true,
     },
+
+    // ==== Advanced Tab (T2S) ====
+    // Traditional → Simplified Chinese conversion mode.
+    // Controlled by client/src/core/t2s.js. The hook reads these settings
+    // from localStorage on every file:afterProcess invocation.
+    // - "off"    : no conversion (default)
+    // - "light"  : character-level JSON map (fast, no network)
+    // - "heavy"  : OpenCC Wasm (vocabulary-level, ~1MB lazy-loaded)
+    {
+        key: "t2s_mode",
+        type: "select",
+        tab: "advanced",
+        label: "setting_t2s_mode",
+        bind: "CONFIG.CONST_CONFIG.T2S_MODE",
+        default: CONFIG.CONST_CONFIG.T2S_MODE_DEFAULT,
+        options: ["off", "light", "heavy"],
+        optionLabels: ["Off", "Light (char-level)", "Heavy (OpenCC Wasm)"],
+        persist: true,
+    },
+    {
+        key: "t2s_auto_detect",
+        type: "checkbox",
+        tab: "advanced",
+        label: "setting_t2s_auto_detect",
+        note: true,
+        bind: "CONFIG.CONST_CONFIG.T2S_AUTO_DETECT",
+        default: CONFIG.CONST_CONFIG.T2S_AUTO_DETECT_DEFAULT,
+        persist: true,
+    },
 ];
 
 /**

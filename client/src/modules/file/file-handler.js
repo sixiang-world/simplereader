@@ -27,6 +27,7 @@ import * as CONFIG from "../../config/index.js";
 import { Logger } from "../../../../shared/utils/logger.js";
 import { reader } from "../reader/reader.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
+import { hooks } from "../../core/hooks.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { FileProcessor } from "./file-processor.js";
 import { EpubConverter } from "../epub/epub-converter.js";
@@ -435,6 +436,44 @@ export class FileHandler {
 
             if (!CONFIG.VARS.FILENAME) {
                 throw new Error("Error processing file. No filename found.");
+            }
+
+            // Run the file:afterProcess hook pipeline.
+            //
+            // This is the canonical transform hook for post-processing
+            // the bookData before it gets saved to the bookshelf and
+            // rendered. Currently used by:
+            //   - client/src/core/t2s.js — Traditional→Simplified Chinese
+            //
+            // The hook receives `{ bookData, file }` and may return a
+            // mutated bookData. We mirror the result back into the
+            // CONFIG.VARS so downstream consumers (saveProcessedBook,
+            // reader) see the converted content.
+            const bookDataSnapshot = {
+                metadata: {
+                    title: CONFIG.VARS.BOOK_AND_AUTHOR?.bookName ?? "",
+                    author: CONFIG.VARS.BOOK_AND_AUTHOR?.author ?? "",
+                },
+                processedLines: CONFIG.VARS.FILE_CONTENT_CHUNKS,
+                titles: CONFIG.VARS.ALL_TITLES,
+                footnotes: CONFIG.VARS.FOOTNOTES,
+            };
+            const hookCtx = await hooks.run("file:afterProcess", {
+                bookData: bookDataSnapshot,
+                file: { name: CONFIG.VARS.FILENAME },
+            });
+            if (hookCtx && hookCtx.bookData) {
+                CONFIG.VARS.FILE_CONTENT_CHUNKS = hookCtx.bookData.processedLines ?? CONFIG.VARS.FILE_CONTENT_CHUNKS;
+                CONFIG.VARS.ALL_TITLES = hookCtx.bookData.titles ?? CONFIG.VARS.ALL_TITLES;
+                CONFIG.VARS.FOOTNOTES = hookCtx.bookData.footnotes ?? CONFIG.VARS.FOOTNOTES;
+                if (hookCtx.bookData.metadata && CONFIG.VARS.BOOK_AND_AUTHOR) {
+                    if (typeof hookCtx.bookData.metadata.title === "string") {
+                        CONFIG.VARS.BOOK_AND_AUTHOR.bookName = hookCtx.bookData.metadata.title;
+                    }
+                    if (typeof hookCtx.bookData.metadata.author === "string") {
+                        CONFIG.VARS.BOOK_AND_AUTHOR.author = hookCtx.bookData.metadata.author;
+                    }
+                }
             }
 
             // Trigger saveProcessedBook event
