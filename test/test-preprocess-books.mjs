@@ -228,6 +228,70 @@ await test("REGRESSION P0-6: no duplicate title page content in processedLines",
     );
 });
 
+await test("REGRESSION P0-7: .epub file processing works (was crashing on DOMParser)", async () => {
+    // P0-7 regression guard: the previous code crashed on any .epub file
+    // because EpubConverter uses `new DOMParser()` which is a browser API
+    // not available in Node.js. The build script now polyfills DOMParser
+    // using @xmldom/xmldom (for XML) and linkedom (for HTML/XHTML).
+    //
+    // This test creates a minimal but valid EPUB and verifies it processes
+    // without crashing. We can't use the real `epub` npm package here
+    // (not installed), so we build the EPUB by hand using the `node:zlib`
+    // module's deflate.
+    const { execSync } = await import("node:child_process");
+    const booksDir = path.join(tmpDir, "epub-books");
+    const outDir = path.join(tmpDir, "epub-out");
+    fs.mkdirSync(booksDir, { recursive: true });
+    const epubPath = path.join(booksDir, "test.epub");
+
+    // Build a minimal EPUB using Python's zipfile (available on most systems).
+    // If Python is unavailable, skip the test.
+    const pythonScript = `
+import zipfile, sys, os
+epub_path = sys.argv[1]
+with zipfile.ZipFile(epub_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+    zf.writestr("mimetype", "application/epub+zip", zipfile.ZIP_STORED)
+    zf.writestr("META-INF/container.xml", '''<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>''')
+    zf.writestr("OEBPS/content.opf", '''<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Test EPUB</dc:title><dc:creator>Tester</dc:creator><dc:language>zh-TW</dc:language>
+  </metadata>
+  <manifest><item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>''')
+    zf.writestr("OEBPS/ch1.xhtml", '''<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch1</title></head>
+<body><h1>第一章</h1><p>這是測試內容。</p></body></html>''')
+`;
+    try {
+        execSync(`python3 -c '${pythonScript.replace(/'/g, "'\\''")}' '${epubPath}'`, {
+            stdio: "pipe",
+        });
+    } catch (_e) {
+        // Python not available — skip with a note, don't fail.
+        console.log("    (skipped: python3 not available to build test EPUB)");
+        return;
+    }
+
+    const result = await preprocessBooks({ booksDir, outDir });
+    assert.equal(result.succeeded, 1, `Expected 1 success, got ${result.succeeded}`);
+    assert.equal(result.failed, 0, `Expected 0 failures, got ${result.failed}`);
+
+    const outPath = path.join(outDir, "test.json");
+    assert.ok(fs.existsSync(outPath), `Expected output file at ${outPath}`);
+
+    const data = JSON.parse(fs.readFileSync(outPath, "utf-8"));
+    assert.ok(data.metadata, "metadata field missing");
+    assert.equal(data.metadata.title, "Test EPUB");
+    assert.ok(Array.isArray(data.processedLines));
+    assert.ok(data.processedLines.length > 0, "processedLines should be non-empty");
+    assert.ok(Array.isArray(data.titles));
+});
+
 // ── Cleanup ────────────────────────────────────────────────────────────
 
 try {
