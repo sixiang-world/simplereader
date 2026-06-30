@@ -435,6 +435,57 @@ await test("T2S_MAP_EXPORTED: all values are single chars and differ from keys",
     }
 });
 
+await test("REGRESSION P1-4/5/6: no char maps to '锬' except 錟 (was 140 corrupted)", () => {
+    // P1-4 regression guard: the previous hand-curated map had 140 chars
+    // in the U+936x–U+93FF range (釒 radical) all mapping to '锬' due to a
+    // bug in the generation script. Only 錟 should map to 锬.
+    reset();
+    const yanGroup = Object.entries(T2S_MAP_EXPORTED).filter(([, v]) => v === "锬");
+    assert.ok(
+        yanGroup.length <= 2,
+        `Expected <= 2 chars mapping to '锬', got ${yanGroup.length}: ${yanGroup.map(([k]) => k).join(", ")}`
+    );
+});
+
+await test("REGRESSION P1-5: 嚴 → 严 (was wrongly mapped to 颜)", () => {
+    // P1-5 regression guard: 嚴 (strict) must map to 严, not 颜 (face/color).
+    reset();
+    assert.equal(T2S_MAP_EXPORTED["嚴"], "严");
+    assert.equal(T2S_MAP_EXPORTED["顏"], "颜"); // 顏 is the correct source for 颜
+});
+
+await test("REGRESSION P1-6: high-frequency chars are present (龍, 點, 題, 間, etc.)", () => {
+    // P1-6 regression guard: the previous map was missing many common
+    // high-frequency chars. This test verifies a representative sample.
+    reset();
+    const required = {
+        龍: "龙", 點: "点", 題: "题", 間: "间", 蘭: "兰", 徹: "彻",
+        瀨: "濑", 結: "结", 語: "语", 場: "场", 幾: "几", 處: "处",
+        體: "体", 頭: "头", 話: "话", 們: "们", 圖: "图", 聲: "声",
+        萬: "万", 節: "节", 覺: "觉", 觀: "观", 論: "论", 買: "买",
+    };
+    const missing = [];
+    const wrong = [];
+    for (const [trad, expected] of Object.entries(required)) {
+        const actual = T2S_MAP_EXPORTED[trad];
+        if (actual === undefined) {
+            missing.push(trad);
+        } else if (actual !== expected) {
+            wrong.push(`${trad} → ${actual} (expected ${expected})`);
+        }
+    }
+    assert.equal(missing.length, 0, `Missing high-freq chars: ${missing.join(", ")}`);
+    assert.equal(wrong.length, 0, `Wrong mappings: ${wrong.join(", ")}`);
+});
+
+await test("convertLight: real-world traditional text converts correctly", () => {
+    // End-to-end conversion test on a realistic sentence.
+    reset();
+    const input = "嚴重的問題在於點火系統，需要徹底檢查龍頭部件。";
+    const expected = "严重的问题在于点火系统，需要彻底检查龙头部件。";
+    assert.equal(convertLight(input), expected);
+});
+
 // ── Summary ─────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);
