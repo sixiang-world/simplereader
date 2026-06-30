@@ -1,56 +1,37 @@
 /**
- * @fileoverview Config sync stub for future multi-device synchronization.
+ * @fileoverview Config sync HTTP client for textdb.hunluan.space.
  *
- * Reserved for the planned "运行时配置同步" feature:
- *   - Runtime config (a subset of SETTINGS_SCHEMA values, plus the
- *     reading history) is synced to an external text storage service
- *     (textdb.hunluan.space) so the same user can pick up where they
- *     left off across devices.
- *   - Sync is keyed by a user-provided token (NOT a server-issued
- *     session ID — there is no server anymore post-v2-refactor).
- *   - The sync is fire-and-forget: writes happen in the background,
- *     reads happen on boot. Conflicts are last-write-wins.
+ * Implements multi-device settings synchronization via the textdb-edgeone
+ * serverless KV store (https://github.com/sixiang-world/textdb-edgeone).
  *
- * This module is a STUB — it defines the public API surface but the
- * methods are no-ops that log a warning. When the feature is
- * implemented:
+ * == API contract (textdb-edgeone) ==
  *
- *   1. Implement the `_push` and `_pull` methods to talk to the textdb
- *      HTTP API.
- *   2. Wire `pullOnBoot()` into app.js's onReady handler (after
- *      settings.enable() runs, so local settings take precedence if
- *      the sync fails).
- *   3. Wire `pushOnSettingsChange()` into settings.js's saveSettings()
- *      via a cbReg listener or a direct call.
+ *   GET    https://textdb.hunluan.space/{key}
+ *          Returns raw text body (text/plain). 404 if key doesn't exist.
  *
- * == Why a separate module instead of using cbReg? ==
+ *   POST   https://textdb.hunluan.space/{key}
+ *          Body: raw text (request body becomes the stored content).
+ *          Returns 200 on success.
  *
- * cbReg is in-process only. Config sync needs to talk to a NETWORK
- * endpoint, with retry, debounce, and conflict resolution. Those
- * concerns don't belong in cbReg. This module encapsulates them.
+ *   DELETE https://textdb.hunluan.space/{key}
+ *          Removes the key. Returns 200 on success.
  *
- * == Why last-write-wins instead of CRDTs/OT? ==
- *
- * The config payload is small (a few KB of settings + reading history).
- * Real-world conflict is rare (the user would have to actively read
- * the same book on two devices simultaneously). LWW is simple, debuggable,
- * and good enough. If conflict becomes a real problem, migrate to a
- * versioned merge later.
- *
- * == Textdb API contract (planned, not yet implemented) ==
- *
- *   PUT  https://textdb.hunluan.space/api/text/{token}
- *        Body: raw text (the JSON-stringified config payload)
- *        Response: { ok: true }
- *
- *   GET  https://textdb.hunluan.space/api/text/{token}
- *        Response: raw text (the last PUT body), or 404 if never written
- *
- * The token is a user-provided string (e.g. a memorable phrase). It
+ * The "key" is the user-provided sync token (a memorable phrase). It
  * is NOT secure — anyone who knows the token can read/write the
  * config. For sensitive data, the user should pick an unguessable
- * token. Future versions may add a hash of the token as the actual
- * storage key to make enumeration harder.
+ * token.
+ *
+ * == Conflict resolution ==
+ *
+ * Last-write-wins. The textdb store has no concept of versions; the
+ * most recent POST wins. This is simple and good enough for
+ * single-user multi-device sync where concurrent writes are rare.
+ *
+ * == Failure modes ==
+ *
+ * Sync failure must NEVER crash the app. All network errors are
+ * caught, logged, and surface as `null` (pull) or `false` (push).
+ * The caller is responsible for degrading gracefully.
  *
  * @module client/src/core/config-sync
  */
@@ -65,88 +46,217 @@
 const DEFAULT_ENDPOINT = "https://textdb.hunluan.space";
 const DEFAULT_DEBOUNCE_MS = 2000;
 const STORAGE_KEY = "config_sync_token";
+const STORAGE_KEY_LAST_PUSH = "config_sync_lastPushedAt";
+const STORAGE_KEY_LAST_PULL = "config_sync_lastPulledAt";
 
+/** @type {number} Max push attempts on failure. */
+const MAX_PUSH_RETRIES = 3;
+/** @type {number} Base delay (ms) for exponential backoff. */
+const BACKOFF_BASE_MS = 500;
+
+/** @type {ReturnType<typeof setTimeout>|null} Debounce timer for pushOnSettingsChange. */
 let _pushTimer = null;
 
 /**
  * Get the user's sync token from localStorage.
  * @returns {string|null} The token, or null if sync is not configured.
+ * @public
  */
 export function getSyncToken() {
-    return localStorage.getItem(STORAGE_KEY);
+    try {
+        return localStorage.getItem(STORAGE_KEY);
+    } catch (_e) {
+        return null;
+    }
 }
 
 /**
  * Set the sync token. Setting to null disables sync.
  * @param {string|null} token
+ * @public
  */
 export function setSyncToken(token) {
-    if (token) {
-        localStorage.setItem(STORAGE_KEY, token);
-    } else {
-        localStorage.removeItem(STORAGE_KEY);
+    try {
+        if (token) {
+            localStorage.setItem(STORAGE_KEY, token);
+        } else {
+            localStorage.removeItem(STORAGE_KEY);
+        }
+    } catch (e) {
+        console.warn("[config-sync] Failed to access localStorage:", e);
     }
 }
 
 /**
  * Is sync configured? (i.e. is there a token in localStorage?)
  * @returns {boolean}
+ * @public
  */
 export function isSyncEnabled() {
     return !!getSyncToken();
 }
 
 /**
+ * Build the full URL for a textdb key.
+ *
+ * @param {string} token - The sync token (becomes the URL path segment).
+ * @param {string} [endpoint] - Override the default endpoint.
+ * @returns {string} Full URL.
+ * @private
+ */
+function _buildUrl(token, endpoint = DEFAULT_ENDPOINT) {
+    // Trim trailing slash, then append the token (URL-encoded for safety).
+    const base = endpoint.replace(/\/+$/, "");
+    return `${base}/${encodeURIComponent(token)}`;
+}
+
+/**
  * Pull the synced config from textdb on boot.
  *
- * This is a STUB — it logs a warning and returns null. When implemented,
- * it should:
- *   1. GET {endpoint}/api/text/{token}
- *   2. If 200, JSON.parse the body and return it.
- *   3. If 404, return null (no sync data yet — first run on this device).
- *   4. On network error, return null and log a warning (don't throw —
- *      sync failure should not block app boot).
+ * Behavior:
+ *   - If sync is disabled (no token), returns null immediately.
+ *   - GET {endpoint}/{token}
+ *   - 200 → JSON.parse the body and return the resulting object.
+ *   - 404 → return null (first run on this device — no sync data yet).
+ *   - Network error / non-200 / parse error → return null and log a warning.
  *
  * The caller (app.js) is responsible for merging the returned config
- * into settings.values via settings.applyPreset() (or a similar merge).
+ * into settings.values via a shallow merge.
  *
+ * @param {Object} [opts]
+ * @param {string} [opts.endpoint] - Override the default endpoint (tests).
+ * @param {typeof fetch} [opts.fetchImpl] - Override fetch (tests).
  * @returns {Promise<Object|null>} The synced config object, or null.
+ * @public
  */
-export async function pullOnBoot() {
+export async function pullOnBoot(opts = {}) {
     const token = getSyncToken();
     if (!token) return null;
 
-    console.warn(
-        "[config-sync] pullOnBoot() is a STUB. The textdb API client " +
-            "has not been implemented yet. Returning null (no sync data)."
-    );
-    return null;
+    const endpoint = opts.endpoint ?? DEFAULT_ENDPOINT;
+    const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+
+    if (typeof fetchImpl !== "function") {
+        console.warn("[config-sync] pullOnBoot: fetch is not available");
+        return null;
+    }
+
+    const url = _buildUrl(token, endpoint);
+    try {
+        const res = await fetchImpl(url, {
+            method: "GET",
+            // textdb is a public KV store — no auth headers needed.
+            // We don't send cookies to a cross-origin endpoint.
+            credentials: "omit",
+            redirect: "follow",
+        });
+
+        if (res.status === 404) {
+            // No sync data yet — first run on this device.
+            return null;
+        }
+        if (!res.ok) {
+            console.warn(`[config-sync] pullOnBoot: HTTP ${res.status} ${res.statusText}`);
+            return null;
+        }
+
+        const text = await res.text();
+        if (!text) return null;
+
+        try {
+            const parsed = JSON.parse(text);
+            if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+                console.warn("[config-sync] pullOnBoot: stored value is not a plain object");
+                return null;
+            }
+            // Update last-pulled timestamp.
+            try {
+                localStorage.setItem(STORAGE_KEY_LAST_PULL, String(Date.now()));
+            } catch (_e) {
+                /* ignore */
+            }
+            return parsed;
+        } catch (e) {
+            console.warn("[config-sync] pullOnBoot: failed to parse stored JSON:", e.message);
+            return null;
+        }
+    } catch (e) {
+        console.warn("[config-sync] pullOnBoot: network error:", e.message);
+        return null;
+    }
 }
 
 /**
  * Push the current config to textdb.
  *
- * This is a STUB — it logs a warning and does nothing. When implemented,
- * it should:
- *   1. PUT {endpoint}/api/text/{token} with the JSON-stringified payload.
- *   2. On network error, retry with exponential backoff (3 attempts).
- *   3. On success, update localStorage["config_sync_lastPushedAt"].
- *
- * The payload is the caller's responsibility — pass in whatever subset
- * of settings + reading history you want synced.
+ * Retries up to {@link MAX_PUSH_RETRIES} times with exponential backoff
+ * on transient failures (network errors, 5xx responses).
  *
  * @param {Object} payload - The config object to sync.
+ * @param {Object} [opts]
+ * @param {string} [opts.endpoint] - Override the default endpoint (tests).
+ * @param {typeof fetch} [opts.fetchImpl] - Override fetch (tests).
  * @returns {Promise<boolean>} True if the push succeeded, false otherwise.
+ * @public
  */
-export async function pushConfig(payload) {
+export async function pushConfig(payload, opts = {}) {
     const token = getSyncToken();
     if (!token) return false;
 
-    console.warn(
-        "[config-sync] pushConfig() is a STUB. The textdb API client " +
-            "has not been implemented yet. Payload will be dropped.",
-        { token, payloadSize: JSON.stringify(payload).length }
-    );
+    const endpoint = opts.endpoint ?? DEFAULT_ENDPOINT;
+    const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+    if (typeof fetchImpl !== "function") {
+        console.warn("[config-sync] pushConfig: fetch is not available");
+        return false;
+    }
+
+    const url = _buildUrl(token, endpoint);
+    const body = JSON.stringify(payload);
+
+    for (let attempt = 1; attempt <= MAX_PUSH_RETRIES; attempt++) {
+        try {
+            const res = await fetchImpl(url, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=UTF-8" },
+                body,
+                credentials: "omit",
+                redirect: "follow",
+            });
+
+            if (res.ok) {
+                try {
+                    localStorage.setItem(STORAGE_KEY_LAST_PUSH, String(Date.now()));
+                } catch (_e) {
+                    /* ignore */
+                }
+                return true;
+            }
+
+            // 4xx = client error — don't retry (e.g. 413 payload too large).
+            if (res.status >= 400 && res.status < 500) {
+                console.warn(
+                    `[config-sync] pushConfig: HTTP ${res.status} ${res.statusText} (not retrying)`
+                );
+                return false;
+            }
+
+            // 5xx = server error — retry with backoff.
+            console.warn(
+                `[config-sync] pushConfig: HTTP ${res.status} (attempt ${attempt}/${MAX_PUSH_RETRIES})`
+            );
+        } catch (e) {
+            console.warn(
+                `[config-sync] pushConfig: network error (attempt ${attempt}/${MAX_PUSH_RETRIES}):`,
+                e.message
+            );
+        }
+
+        if (attempt < MAX_PUSH_RETRIES) {
+            const delay = BACKOFF_BASE_MS * Math.pow(2, attempt - 1);
+            await new Promise((r) => setTimeout(r, delay));
+        }
+    }
+
     return false;
 }
 
@@ -155,18 +265,85 @@ export async function pushConfig(payload) {
  * settings.js's saveSettings() (or a cbReg listener on "applySettings").
  *
  * Coalesces rapid consecutive calls (e.g. when the user drags a slider)
- * into a single network push after DEFAULT_DEBOUNCE_MS of quiet.
+ * into a single network push after `debounceMs` of quiet.
  *
  * @param {Object} payload - The config object to sync.
  * @param {number} [debounceMs=2000] - Override the debounce window.
+ * @param {Object} [opts] - Forwarded to pushConfig (endpoint, fetchImpl).
+ * @public
  */
-export function pushOnSettingsChange(payload, debounceMs = DEFAULT_DEBOUNCE_MS) {
+export function pushOnSettingsChange(payload, debounceMs = DEFAULT_DEBOUNCE_MS, opts = {}) {
     if (!isSyncEnabled()) return;
     if (_pushTimer) clearTimeout(_pushTimer);
     _pushTimer = setTimeout(() => {
         _pushTimer = null;
-        pushConfig(payload).catch((err) => {
+        pushConfig(payload, opts).catch((err) => {
             console.warn("[config-sync] Background push failed:", err);
         });
     }, debounceMs);
+}
+
+/**
+ * Cancel any pending debounced push. Mainly for tests.
+ * @public
+ */
+export function _cancelPendingPush() {
+    if (_pushTimer) {
+        clearTimeout(_pushTimer);
+        _pushTimer = null;
+    }
+}
+
+/**
+ * Get the timestamp of the last successful push, or null.
+ * @returns {number|null} Epoch milliseconds, or null.
+ * @public
+ */
+export function getLastPushedAt() {
+    try {
+        const v = localStorage.getItem(STORAGE_KEY_LAST_PUSH);
+        return v ? parseInt(v, 10) : null;
+    } catch (_e) {
+        return null;
+    }
+}
+
+/**
+ * Get the timestamp of the last successful pull, or null.
+ * @returns {number|null} Epoch milliseconds, or null.
+ * @public
+ */
+export function getLastPulledAt() {
+    try {
+        const v = localStorage.getItem(STORAGE_KEY_LAST_PULL);
+        return v ? parseInt(v, 10) : null;
+    } catch (_e) {
+        return null;
+    }
+}
+
+/**
+ * Merge synced config into the current settings values.
+ *
+ * Local settings take precedence — sync data only fills in keys that
+ * are not already set locally. This implements the "sync supplements
+ * local" rule from the spec.
+ *
+ * @param {Object<string,*>} currentValues - The current settings.values.
+ * @param {Object<string,*>|null} syncData - The synced config (or null).
+ * @returns {Object<string,*>} A new values object with sync data merged in.
+ * @public
+ */
+export function mergeSyncedConfig(currentValues, syncData) {
+    if (!syncData || typeof syncData !== "object") {
+        return { ...currentValues };
+    }
+    const merged = { ...currentValues };
+    for (const [k, v] of Object.entries(syncData)) {
+        // Only fill in keys not already set locally.
+        if (merged[k] === undefined || merged[k] === null || merged[k] === "") {
+            merged[k] = v;
+        }
+    }
+    return merged;
 }
