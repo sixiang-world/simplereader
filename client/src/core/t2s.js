@@ -252,6 +252,16 @@ async function _walkAndConvert(bookData, convertFn) {
  * Sample a representative slice of the bookData text content for
  * auto-detection. Combines the first few processed lines + the title.
  *
+ * processedLines entries can be either:
+ *   - Plain strings (legacy / build-time title & end page HTML)
+ *   - Objects {type, tag, content, ...} (modern client worker output;
+ *     see TextProcessorCore.process)
+ *
+ * We extract the `.content` field from object entries. Pushing the raw
+ * object into the parts array would produce "[object Object]" after
+ * join(" "), causing containsTraditional to always return false and
+ * auto-detect to silently skip conversion for trad books.
+ *
  * @param {Object} bookData
  * @returns {string}
  * @private
@@ -262,7 +272,16 @@ function _sampleForDetection(bookData) {
     if (Array.isArray(bookData?.processedLines)) {
         // First 20 lines is enough for detection.
         for (let i = 0; i < Math.min(20, bookData.processedLines.length); i++) {
-            parts.push(bookData.processedLines[i]);
+            const line = bookData.processedLines[i];
+            if (typeof line === "string") {
+                parts.push(line);
+            } else if (line && typeof line === "object" && typeof line.content === "string") {
+                // Modern TextProcessorCore.process output shape — extract
+                // the .content field which holds the actual HTML/text.
+                parts.push(line.content);
+            }
+            // Entries that are neither string nor {content:string} are
+            // silently skipped — they don't contribute detectable text.
         }
     }
     return parts.join(" ");
