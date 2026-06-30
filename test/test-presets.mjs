@@ -47,6 +47,56 @@ const {
     FACTORY_DEFAULT_MARKER,
 } = await import("../client/src/core/presets.js");
 
+// Hard-coded set of SETTINGS_SCHEMA keys that the Infinite Scroll preset
+// is allowed to use. We can't import settings-schema.js here because its
+// transitive import graph pulls in config/variables-dom.js which needs a
+// real DOM (MutationObserver etc.). The point of this regression test is
+// just to catch the P0-3 class of bug where preset keys drift from
+// schema keys. If new schema keys are added, they don't need to be listed
+// here — only the keys the preset actually uses.
+const SCHEMA_KEYS = new Set([
+    "ui_language",
+    "show_filter_bar",
+    "show_helper_btn",
+    "enable_custom_cursor",
+    "show_book_title",
+    "auto_open_last_book",
+    "infinite_scroll_mode",
+    "infinite_scroll_easy_mode",
+    "anonymous_mode",
+    "log_mode",
+    "continuous_scroll_mode",
+    "show_line_numbers",
+    "light_mainColor_active",
+    "light_mainColor_inactive",
+    "light_fontColor",
+    "light_bgColor",
+    "dark_mainColor_active",
+    "dark_mainColor_inactive",
+    "dark_fontColor",
+    "dark_bgColor",
+    "title_font",
+    "body_font",
+    "p_fontSize",
+    "p_lineHeight",
+    "p_paragraphSpacing",
+    "p_paragraphIndent",
+    "p_textAlign",
+    "show_toc",
+    "toc_width",
+    "main_content_width",
+    "show_content_boundary_lines",
+    "pagination_bottom",
+    "pagination_opacity",
+    "arrow_left",
+    "arrow_right",
+    "page_up",
+    "page_down",
+    "esc",
+    "t2s_mode",
+    "t2s_auto_detect",
+]);
+
 let passed = 0;
 let failed = 0;
 function test(name, fn) {
@@ -242,9 +292,11 @@ test("getDefaultPreset: returns values for known factory name", () => {
     reset();
     const preset = getDefaultPreset("Infinite Scroll");
     assert.ok(preset, "expected preset to be defined");
-    assert.equal(preset.p_infiniteScroll, "true");
-    assert.equal(preset.p_infiniteScrollEasyTrigger, "true");
-    assert.equal(preset.p_anonymousMode, "true");
+    // Keys MUST match SETTINGS_SCHEMA so settings.js persists them
+    // under the same key loadSettingWithFallback reads on next boot.
+    assert.equal(preset.infinite_scroll_mode, "true");
+    assert.equal(preset.infinite_scroll_easy_mode, "true");
+    assert.equal(preset.anonymous_mode, "true");
 });
 
 test("getDefaultPreset: returns null for unknown name", () => {
@@ -258,9 +310,9 @@ test("getDefaultPreset: returns null for unknown name", () => {
 test("getDefaultPreset: returns a fresh copy (mutations don't persist)", () => {
     reset();
     const a = getDefaultPreset("Infinite Scroll");
-    a.p_infiniteScroll = "false";
+    a.infinite_scroll_mode = "false";
     const b = getDefaultPreset("Infinite Scroll");
-    assert.equal(b.p_infiniteScroll, "true"); // unaffected by mutation
+    assert.equal(b.infinite_scroll_mode, "true"); // unaffected by mutation
 });
 
 test("listDefaultPresets: returns array of factory preset names", () => {
@@ -274,12 +326,12 @@ test("applyPreset: factory preset is applied via name even when not in localStor
     reset();
     // No localStorage entry for "Infinite Scroll" — but applyPreset should
     // still find it via the factory default fallback.
-    const current = { p_fontSize: "1.5em", p_infiniteScroll: "false" };
+    const current = { p_fontSize: "1.5em", infinite_scroll_mode: "false" };
     const merged = applyPreset(current, "Infinite Scroll");
-    assert.equal(merged.p_fontSize, "1.5em"); // preserved
-    assert.equal(merged.p_infiniteScroll, "true"); // overridden by preset
-    assert.equal(merged.p_infiniteScrollEasyTrigger, "true"); // added by preset
-    assert.equal(merged.p_anonymousMode, "true"); // added by preset
+    assert.equal(merged.p_fontSize, "1.5em"); // preserved (schema key)
+    assert.equal(merged.infinite_scroll_mode, "true"); // overridden by preset
+    assert.equal(merged.infinite_scroll_easy_mode, "true"); // added by preset
+    assert.equal(merged.anonymous_mode, "true"); // added by preset
 });
 
 test("applyPreset: shallow merge — preset keys override, non-preset keys preserved", () => {
@@ -300,12 +352,12 @@ test("applyPreset: user preset takes precedence over factory preset of same name
     reset();
     // User saves a preset with the same name as a factory default.
     savePreset("Infinite Scroll", { p_fontSize: "3em" });
-    const current = { p_fontSize: "1em", p_infiniteScroll: "false" };
+    const current = { p_fontSize: "1em", infinite_scroll_mode: "false" };
     const merged = applyPreset(current, "Infinite Scroll");
     // User's value wins.
     assert.equal(merged.p_fontSize, "3em");
     // Factory-only key is NOT applied (because user preset replaced it).
-    assert.equal(merged.p_infiniteScroll, "false");
+    assert.equal(merged.infinite_scroll_mode, "false");
 });
 
 console.log("\ncore/presets.js — resolvePresetFromURL with factory defaults\n");
@@ -353,6 +405,27 @@ test("resolvePresetFromURL: nonexistent name still returns null", () => {
     reset();
     const params = new URLSearchParams("scheme=nonexistent");
     assert.equal(resolvePresetFromURL(params), null);
+});
+
+test("REGRESSION: all factory preset keys exist in SETTINGS_SCHEMA", () => {
+    // P0-3 regression guard: factory presets must use the SAME keys as
+    // SETTINGS_SCHEMA so that settings.js's saveSettings() persists them
+    // and loadSettingWithFallback() reads them back on the next boot.
+    // If a factory preset uses a key not in the schema, the value will
+    // be written to settings.values but never persisted to localStorage,
+    // and will be silently overwritten on the next loadSettings() call.
+    reset();
+    for (const name of listDefaultPresets()) {
+        const preset = getDefaultPreset(name);
+        for (const key of Object.keys(preset)) {
+            assert.ok(
+                SCHEMA_KEYS.has(key),
+                `Factory preset "${name}" uses key "${key}" which is NOT in SETTINGS_SCHEMA. ` +
+                    `This means the preset value won't persist across sessions. ` +
+                    `Valid keys: ${[...SCHEMA_KEYS].slice(0, 10).join(", ")}...`
+            );
+        }
+    }
 });
 
 // ── Error resilience ────────────────────────────────────────────────────
