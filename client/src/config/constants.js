@@ -98,10 +98,10 @@ export const CONST_CONFIG = {
     SHOW_LINE_NUMBERS: false,
     SHOW_LINE_NUMBERS_DEFAULT: false,
     // Traditional → Simplified Chinese conversion (see client/src/core/t2s.js)
-    T2S_MODE: "off",
-    T2S_MODE_DEFAULT: "off",
-    T2S_AUTO_DETECT: true,
-    T2S_AUTO_DETECT_DEFAULT: true,
+    T2S_LITE: true,
+    T2S_LITE_DEFAULT: true,
+    T2S_PRO: false,
+    T2S_PRO_DEFAULT: false,
     LOG_FILENAME_RE: /\.log$|^(.*[^a-zA-Z])?log([^a-zA-Z].*)?.txt$/i,
     SHORTCUTS: {
         arrow_left: true,
@@ -485,3 +485,4 @@ export const CONST_DB = Object.freeze({
         },
     ],
 });
+

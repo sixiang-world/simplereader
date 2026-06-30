@@ -282,14 +282,14 @@
     --ui_separator_share_en: "Share Config";
     --ui_separator_t2s_zh: "繁简转换";
     --ui_separator_t2s_en: "T2S Conversion";
-    --ui_t2s_mode_zh: "繁体转简体";
-    --ui_t2s_mode_en: "Trad → Simp Chinese";
-    --ui_t2s_mode_note_zh: "打开繁体中文书籍时自动转换为简体";
-    --ui_t2s_mode_note_en: "Auto-convert traditional Chinese books to simplified on open";
-    --ui_t2s_auto_detect_zh: "自动检测繁体";
-    --ui_t2s_auto_detect_en: "Auto-detect Traditional";
-    --ui_t2s_auto_detect_note_zh: "仅当检测到繁体字符时才转换（推荐开启）";
-    --ui_t2s_auto_detect_note_en: "Only convert when traditional characters are detected (recommended)";
+    --ui_t2s_lite_zh: "繁体转简体（Lite）";
+    --ui_t2s_lite_en: "Trad → Simp (Lite)";
+    --ui_t2s_lite_note_zh: "基于字符映射表的快速转换（内置，无网络依赖）";
+    --ui_t2s_lite_note_en: "Fast char-level conversion (built-in, no network)";
+    --ui_t2s_pro_zh: "繁体转简体（Pro）";
+    --ui_t2s_pro_en: "Trad → Simp (Pro)";
+    --ui_t2s_pro_note_zh: "基于 OpenCC 的词汇级精确转换（首次使用需加载约 1MB）";
+    --ui_t2s_pro_note_en: "OpenCC vocabulary-level conversion (~1MB lazy-loaded on first use)";
 
     /* UI font settings strings */
     --ui_font_group_system: "";
@@ -737,6 +737,11 @@
     --ui_separator_behavior: var(--ui_separator_behavior_zh);
     --ui_separator_shortcuts: var(--ui_separator_shortcuts_zh);
     --ui_separator_share: var(--ui_separator_share_zh);
+    --ui_separator_t2s: var(--ui_separator_t2s_zh);
+    --ui_t2s_lite: var(--ui_t2s_lite_zh);
+    --ui_t2s_lite_note: var(--ui_t2s_lite_note_zh);
+    --ui_t2s_pro: var(--ui_t2s_pro_zh);
+    --ui_t2s_pro_note: var(--ui_t2s_pro_note_zh);
     --ui_settingMenuFontSize: var(--ui_settingMenuFontSize_zh);
     --ui_settingMenuWidth: var(--ui_settingMenuWidth_zh);
     --ui_settingMenuSeparatorWidth: var(--ui_settingMenuSeparatorWidth_zh);
@@ -903,6 +908,11 @@
     --ui_separator_behavior: var(--ui_separator_behavior_en);
     --ui_separator_shortcuts: var(--ui_separator_shortcuts_en);
     --ui_separator_share: var(--ui_separator_share_en);
+    --ui_separator_t2s: var(--ui_separator_t2s_en);
+    --ui_t2s_lite: var(--ui_t2s_lite_en);
+    --ui_t2s_lite_note: var(--ui_t2s_lite_note_en);
+    --ui_t2s_pro: var(--ui_t2s_pro_en);
+    --ui_t2s_pro_note: var(--ui_t2s_pro_note_en);
     --ui_settingMenuFontSize: var(--ui_settingMenuFontSize_en);
     --ui_settingMenuWidth: var(--ui_settingMenuWidth_en);
     --ui_settingMenuSeparatorWidth: var(--ui_settingMenuSeparatorWidth_en);
@@ -1225,17 +1235,17 @@
 #settingLabel-setting_separator_t2s::before {
     content: var(--ui_separator_t2s);
 }
-#settingLabel-setting_t2s_mode::before {
-    content: var(--ui_t2s_mode);
+#settingLabel-setting_t2s_lite::before {
+    content: var(--ui_t2s_lite);
 }
-#tooltip-setting_t2s_mode::before {
-    content: var(--ui_t2s_mode_note);
+#tooltip-setting_t2s_lite::before {
+    content: var(--ui_t2s_lite_note);
 }
-#settingLabel-setting_t2s_auto_detect::before {
-    content: var(--ui_t2s_auto_detect);
+#settingLabel-setting_t2s_pro::before {
+    content: var(--ui_t2s_pro);
 }
-#tooltip-setting_t2s_auto_detect::before {
-    content: var(--ui_t2s_auto_detect_note);
+#tooltip-setting_t2s_pro::before {
+    content: var(--ui_t2s_pro_note);
 }
 #settingLabel-about_title::before {
     content: var(--ui_setting_tab_about_title);
@@ -1327,3 +1337,24 @@
 #footnotediv .footnote-notfound::before {
     content: var(--ui_footnote_notfound);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
