@@ -2041,3 +2041,9 @@ export function initSettings() {
         settings.init();
     }
 }
+
+// Export the settings singleton so other modules (e.g. app.js's config-sync
+// wiring) can access settings.values and call settings.applySettings() after
+// a sync pull. Without this export, `(await import('./settings.js')).settings`
+// is undefined and sync merges are silently skipped.
+export { settings };
