@@ -20,7 +20,7 @@ import * as CONFIG from "./config/index.js";
 import { cbReg } from "../../shared/core/callback/callback-registry.js";
 import { initBookshelf } from "./modules/bookshelf/bookshelf.js";
 import { initFontpool } from "./modules/font/fontpool.js";
-import { initSettings } from "./modules/settings/settings.js";
+import { initSettings, settings as settingsSingleton } from "./modules/settings/settings.js";
 import { initReader } from "./modules/reader/reader.js";
 import { FileHandler } from "./modules/file/file-handler.js";
 import { SidebarSplitView } from "./components/sidebar-splitview.js";
@@ -157,10 +157,12 @@ import {
         try {
             const syncData = await pullOnBoot();
             if (syncData && typeof syncData === "object") {
-                const settings = (await import("./modules/settings/settings.js")).settings;
-                if (settings && settings.values) {
-                    settings.values = mergeSyncedConfig(settings.values, syncData);
-                    settings.applySettings();
+                // Use the imported settings singleton. The previous code used
+                // `(await import('./settings.js')).settings` which returned
+                // undefined because settings wasn't exported — fixed in P0-4.
+                if (settingsSingleton && settingsSingleton.values) {
+                    settingsSingleton.values = mergeSyncedConfig(settingsSingleton.values, syncData);
+                    settingsSingleton.applySettings();
                 }
             }
         } catch (err) {
