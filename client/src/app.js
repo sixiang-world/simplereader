@@ -21,6 +21,7 @@ import { cbReg } from "../../shared/core/callback/callback-registry.js";
 import { initBookshelf } from "./modules/bookshelf/bookshelf.js";
 import { initFontpool } from "./modules/font/fontpool.js";
 import { initSettings, settings as settingsSingleton } from "./modules/settings/settings.js";
+import { SETTINGS_SCHEMA } from "./config/schema/settings-schema.js";
 import { initReader } from "./modules/reader/reader.js";
 import { FileHandler } from "./modules/file/file-handler.js";
 import { SidebarSplitView } from "./components/sidebar-splitview.js";
@@ -180,7 +181,16 @@ import {
                     );
                     return;
                 }
-                settingsSingleton.values = mergeSyncedConfig(settingsSingleton.values, syncData);
+                // Issue 3 fix: pass SETTINGS_SCHEMA keys as the allowed-keys
+                // filter so unknown keys in syncData are dropped. This
+                // prevents a feedback loop where unknown keys accumulate in
+                // the sync store (pull → merge → push → pull → ...).
+                const schemaKeys = new Set(SETTINGS_SCHEMA.map((s) => s.key));
+                settingsSingleton.values = mergeSyncedConfig(
+                    settingsSingleton.values,
+                    syncData,
+                    schemaKeys
+                );
                 settingsSingleton.applySettings();
             })
             .catch((err) => {

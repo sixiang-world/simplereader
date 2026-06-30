@@ -335,21 +335,65 @@ export function getLastPulledAt() {
  * with either the localStorage value or the schema default — there are
  * no empty slots for sync to fill.
  *
- * Note: keys present in syncData but NOT in the current settings schema
- * are still merged in. This is intentional — it lets future schema
- * versions add new keys and have them sync without losing data. The
- * settings UI will just ignore unknown keys.
+ * == Key filtering (Issue 3 fix) ==
+ *
+ * If `allowedKeys` is provided, only keys in that set are merged from
+ * syncData. Unknown keys (not in the schema) are dropped. This prevents
+ * a feedback loop:
+ *
+ *   1. syncData contains an unknown key X (e.g. from an old schema
+ *      version, or a typo, or a malicious push).
+ *   2. mergeSyncedConfig writes X into settings.values.
+ *   3. saveSettings() persists settings.values — but since X is not in
+ *      the schema, it's not written to localStorage (saveSettingFromInput
+ *      only iterates SETTINGS_SCHEMA). However, pushOnSettingsChange
+ *      sends the full settings.values object (including X) back to sync.
+ *   4. The next pull sees X again → infinite loop of garbage keys
+ *      accumulating in the sync store.
+ *
+ * The caller (app.js) passes the schema keys:
+ *   mergeSyncedConfig(values, syncData, new Set(SETTINGS_SCHEMA.map(s => s.key)))
+ *
+ * config-sync.js does NOT import SETTINGS_SCHEMA directly to avoid a
+ * potential circular dependency (settings.js imports config-sync.js,
+ * and settings.js re-exports SETTINGS_SCHEMA via its schema import).
+ * The caller injects the allowed-keys set instead.
  *
  * @param {Object<string,*>} currentValues - The current settings.values.
  * @param {Object<string,*>|null} syncData - The synced config (or null).
+ * @param {Set<string>|null} [allowedKeys=null] - Optional set of keys to
+ *        allow from syncData. If null, all syncData keys are merged (the
+ *        pre-Issue-3 behavior, kept for backward compatibility with tests).
  * @returns {Object<string,*>} A new values object with sync data merged in.
  * @public
  */
-export function mergeSyncedConfig(currentValues, syncData) {
+export function mergeSyncedConfig(currentValues, syncData, allowedKeys = null) {
     if (!syncData || typeof syncData !== "object" || Array.isArray(syncData)) {
         return { ...currentValues };
     }
+    // Filter syncData to allowed keys (if provided) to prevent unknown
+    // keys from entering settings.values and creating a feedback loop
+    // through pushOnSettingsChange → textdb → pullOnBoot.
+    let filtered = syncData;
+    if (allowedKeys instanceof Set && allowedKeys.size > 0) {
+        filtered = {};
+        let dropped = 0;
+        for (const [k, v] of Object.entries(syncData)) {
+            if (allowedKeys.has(k)) {
+                filtered[k] = v;
+            } else {
+                dropped++;
+            }
+        }
+        if (dropped > 0) {
+            console.warn(
+                `[config-sync] mergeSyncedConfig: dropped ${dropped} unknown key(s) ` +
+                    `from sync data (not in SETTINGS_SCHEMA). This prevents a ` +
+                    `feedback loop where unknown keys accumulate in the sync store.`
+            );
+        }
+    }
     // Sync overrides local. Shallow merge: sync values replace local
     // values for the same key; local-only keys are preserved.
-    return { ...currentValues, ...syncData };
+    return { ...currentValues, ...filtered };
 }
