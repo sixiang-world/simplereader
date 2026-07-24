@@ -39,6 +39,7 @@ const {
     getSyncToken,
     setSyncToken,
     isSyncEnabled,
+    validateSyncToken,
     pullOnBoot,
     pushConfig,
     pushOnSettingsChange,
@@ -477,6 +478,95 @@ await test("REGRESSION i3: allowedKeys with non-Set value is ignored (no filteri
     const merged = mergeSyncedConfig(current, sync, ["a"]);
     assert.equal(merged.a, 2);
     assert.equal(merged.unknown, "kept"); // NOT filtered (array is not a Set)
+});
+
+console.log("\ncore/config-sync.js — validateSyncToken\n");
+
+await test("validateSyncToken: empty string is valid (disables sync)", () => {
+    const result = validateSyncToken("");
+    assert.equal(result.valid, true);
+    assert.equal(result.reason, undefined);
+});
+
+await test("validateSyncToken: whitespace-only string trims to empty → valid", () => {
+    const result = validateSyncToken("   ");
+    assert.equal(result.valid, true);
+});
+
+await test("validateSyncToken: alphanumeric token is valid", () => {
+    const result = validateSyncToken("myToken123");
+    assert.equal(result.valid, true);
+    assert.equal(result.reason, undefined);
+});
+
+await test("validateSyncToken: underscore is allowed", () => {
+    const result = validateSyncToken("my_token_456");
+    assert.equal(result.valid, true);
+});
+
+await test("validateSyncToken: hyphen is rejected (textdb returns 400)", () => {
+    const result = validateSyncToken("my-token");
+    assert.equal(result.valid, false);
+    assert.equal(result.reason, "sync_token_error_invalid_chars");
+});
+
+await test("validateSyncToken: space is rejected", () => {
+    const result = validateSyncToken("my token");
+    assert.equal(result.valid, false);
+    assert.equal(result.reason, "sync_token_error_invalid_chars");
+});
+
+await test("validateSyncToken: special chars are rejected", () => {
+    assert.equal(validateSyncToken("tok@en").valid, false);
+    assert.equal(validateSyncToken("tok#1").valid, false);
+    assert.equal(validateSyncToken("tok!").valid, false);
+    assert.equal(validateSyncToken("tok.").valid, false);
+    assert.equal(validateSyncToken("tok/").valid, false);
+});
+
+await test("validateSyncToken: too short (< 4 chars) is rejected", () => {
+    const result = validateSyncToken("abc");
+    assert.equal(result.valid, false);
+    assert.equal(result.reason, "sync_token_error_too_short");
+});
+
+await test("validateSyncToken: exact minimum length (4) is valid", () => {
+    const result = validateSyncToken("abcd");
+    assert.equal(result.valid, true);
+});
+
+await test("validateSyncToken: too long (> 64 chars) is rejected", () => {
+    const result = validateSyncToken("a".repeat(65));
+    assert.equal(result.valid, false);
+    assert.equal(result.reason, "sync_token_error_too_long");
+});
+
+await test("validateSyncToken: exact maximum length (64) is valid", () => {
+    const result = validateSyncToken("a".repeat(64));
+    assert.equal(result.valid, true);
+});
+
+await test("validateSyncToken: non-string input is rejected", () => {
+    assert.equal(validateSyncToken(null).valid, false);
+    assert.equal(validateSyncToken(undefined).valid, false);
+    assert.equal(validateSyncToken(12345).valid, false);
+    assert.equal(validateSyncToken({}).valid, false);
+});
+
+await test("validateSyncToken: unicode letters are rejected (ASCII-only)", () => {
+    const result = validateSyncToken("令牌");
+    assert.equal(result.valid, false);
+    // Each unicode char may be counted as multiple bytes; the token length
+    // check runs before the regex check. Either reason is acceptable.
+    assert.ok(
+        result.reason === "sync_token_error_invalid_chars" || result.reason === "sync_token_error_too_short",
+        `Expected invalid_chars or too_short, got ${result.reason}`
+    );
+});
+
+await test("validateSyncToken: mixed valid token passes", () => {
+    const result = validateSyncToken("User_Config_2024");
+    assert.equal(result.valid, true);
 });
 
 // ── Summary ─────────────────────────────────────────────────────────────
