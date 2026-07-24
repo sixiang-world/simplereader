@@ -356,13 +356,20 @@ export class TextProcessorCore {
     }
 
     /**
-     * Escape special characters in regular expression
+     * Escape special characters in regular expression.
+     *
+     * Only escapes characters that have special meaning in regex:
+     *   \ ^ $ . * + ? ( ) [ ] { } |
+     *
+     * Previously this method escaped EVERY character (replaceAll(/(.)/g, "\\$1")),
+     * which produced over-escaped strings like \\书\\名 that broke regex matching.
+     *
      * @param {string} str - The string to escape special characters from.
-     * @returns {string} Escaped string.
+     * @returns {string} Escaped string safe for use in RegExp constructor.
      * @private
      */
     static #safeREStr(str) {
-        return str.replaceAll(/(.)/g, "\\$1");
+        return str.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
     }
 
     /**
