@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p jsconfig.json",
     "preprocess-books": "node build-tools/preprocess-books.mjs",
-    "test": "node test/test-issue-12.mjs && node test/test-url-settings.mjs && node test/test-base-submodules.mjs && node test/test-hooks.mjs && node test/test-presets.mjs && node test/test-t2s.mjs && node test/test-preprocess-books.mjs && node test/test-config-sync.mjs && node test/test-settings-export.mjs && node test/test-opencc-cdn.mjs && node test/test-worker-resolution.mjs"
+    "test": "node test/test-issue-12.mjs && node test/test-url-settings.mjs && node test/test-base-submodules.mjs && node test/test-hooks.mjs && node test/test-presets.mjs && node test/test-t2s.mjs && node test/test-t2s-advanced.mjs && node test/test-presets-advanced.mjs && node test/test-settings-schema.mjs && node test/test-mutual-exclusion.mjs && node test/test-preprocess-books.mjs && node test/test-config-sync.mjs && node test/test-settings-export.mjs && node test/test-opencc-cdn.mjs && node test/test-worker-resolution.mjs && node test/test-build-integration.mjs"
   },
   "devDependencies": {
     "@types/jquery": "^3.5.31",
