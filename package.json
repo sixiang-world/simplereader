@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p jsconfig.json",
     "preprocess-books": "node build-tools/preprocess-books.mjs",
     "test": "node test/test-issue-12.mjs && node test/test-url-settings.mjs && node test/test-base-submodules.mjs && node test/test-hooks.mjs && node test/test-presets.mjs && node test/test-t2s.mjs && node test/test-preprocess-books.mjs && node test/test-config-sync.mjs && node test/test-settings-export.mjs && node test/test-opencc-cdn.mjs && node test/test-worker-resolution.mjs"
   },

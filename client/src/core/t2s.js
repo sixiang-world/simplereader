@@ -66,6 +66,7 @@ import { getConverter as getOpenCCConverter } from "./t2s-opencc.js";
 // localStorage keys (mirrors settings-schema.js).
 const SETTING_KEY_LITE = "t2s_lite";
 const SETTING_KEY_PRO = "t2s_pro";
+const SETTING_KEY_AUTO_DETECT = "t2s_auto_detect";
 
 /**
  * Read the current T2S settings. Reads directly from localStorage so
@@ -307,8 +308,12 @@ async function _fileAfterProcessHook(ctx) {
     const { lite, pro } = _readSettings();
     if (!lite && !pro) return ctx;
 
-    const sample = _sampleForDetection(ctx.bookData);
-    if (!containsTraditional(sample)) return ctx;
+    // Auto-detect: skip conversion if the book appears to be
+    // already simplified (unless auto-detect is explicitly disabled).
+    if (getAutoDetect()) {
+        const sample = _sampleForDetection(ctx.bookData);
+        if (!containsTraditional(sample)) return ctx;
+    }
 
     if (lite) {
         await _walkAndConvert(ctx.bookData, convertLight);
@@ -411,6 +416,78 @@ export function isLite() {
  */
 export function isPro() {
     return _readSettings().pro;
+}
+
+// ── Backward-compatible API (used by tests and external callers) ────────
+
+/**
+ * Set the T2S mode using the legacy three-state API.
+ *
+ * This is a convenience wrapper around setLite/setPro for backward
+ * compatibility with tests and external code that uses the old
+ * setMode('off'|'light'|'heavy') API.
+ *
+ * @param {"off"|"light"|"heavy"} mode
+ * @public
+ */
+export function setMode(mode) {
+    const validModes = ["off", "light", "heavy"];
+    if (!validModes.includes(mode)) {
+        throw new TypeError(`Invalid mode: ${mode}. Expected one of: ${validModes.join(", ")}`);
+    }
+    if (mode === "off") {
+        setLite(false);
+        setPro(false);
+    } else if (mode === "light") {
+        setLite(true);
+    } else if (mode === "heavy") {
+        setPro(true);
+    }
+}
+
+/**
+ * Get the current T2S mode using the legacy three-state API.
+ * @returns {"off"|"light"|"heavy"}
+ * @public
+ */
+export function getMode() {
+    const { lite, pro } = _readSettings();
+    if (pro) return "heavy";
+    if (lite) return "light";
+    return "off";
+}
+
+/**
+ * Enable or disable auto-detect.
+ *
+ * Auto-detect is on by default. When enabled, the hook samples the
+ * book text and skips conversion if no traditional characters are
+ * found. When disabled, conversion is forced regardless of content.
+ *
+ * @param {boolean} enabled
+ * @public
+ */
+export function setAutoDetect(enabled) {
+    try {
+        localStorage.setItem(SETTING_KEY_AUTO_DETECT, enabled ? "true" : "false");
+    } catch (e) {
+        console.warn("[t2s] Failed to persist auto-detect setting:", e);
+    }
+}
+
+/**
+ * Check if auto-detect is enabled.
+ * @returns {boolean} Default true.
+ * @public
+ */
+export function getAutoDetect() {
+    try {
+        const stored = localStorage.getItem(SETTING_KEY_AUTO_DETECT);
+        if (stored === "false" || stored === "0") return false;
+        return true; // default: auto-detect on
+    } catch (_e) {
+        return true;
+    }
 }
 
 // Export the raw map for tests that want to inspect it.
