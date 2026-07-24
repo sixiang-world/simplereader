@@ -155,9 +155,10 @@ export const REGEX_RULES = {
  */
 export const generateAdsRules = (bookAndAuthor) => ({
     EN: () => [
-        `^(\\s*(\\[)?${bookAndAuthor.bookName}\\s*(\\])?\\s*$)`,
+        // Use bookNameRE/authorRE (already escaped for regex) instead of raw
+        // bookName/author to prevent "Invalid regular expression" when the
+        // book name contains regex metacharacters like [ ] ( ) etc.
         `^(\\s*(\\[)?${bookAndAuthor.bookNameRE}\\s*(\\])?\\s*$)`,
-        `^(\\s*(By[:：])?\\s*(\\[)?${bookAndAuthor.author}\\s*(\\])?\\s*$)`,
         `^(\\s*(By[:：])?\\s*(\\[)?${bookAndAuthor.authorRE}\\s*(\\])?\\s*$)`,
     ],
     ZXCS: () => [
@@ -165,15 +166,10 @@ export const generateAdsRules = (bookAndAuthor) => ({
         "^(\\s*[=]+\\s*$)",
         `^(\\s*(更多精校小说尽在知轩藏书下载)\\s*${REGEX_RULES.COLON}(${REGEX_RULES.HTTP}(www.)?zxcs(txt|8)?.(com|me|info|zip)${REGEX_RULES.HTTP_END})$)`,
         `^(\\s*((书名)?\\s*${REGEX_RULES.COLON}${REGEX_RULES.BRACKET_LEFT}${bookAndAuthor.bookNameRE}${REGEX_RULES.BRACKET_RIGHT})\\s*$)`,
-        `^(\\s*((书名)?\\s*${REGEX_RULES.COLON}${REGEX_RULES.BRACKET_LEFT}${bookAndAuthor.bookName}${REGEX_RULES.BRACKET_RIGHT})\\s*$)`,
         `^(\\s*((作者)?\\s*${REGEX_RULES.COLON}${bookAndAuthor.authorRE})\\s*$)`,
-        `^(\\s*((作者)?\\s*${REGEX_RULES.COLON}${bookAndAuthor.author})\\s*$)`,
         `^(\\s*((书名)?\\s*${REGEX_RULES.COLON}${REGEX_RULES.BRACKET_LEFT}${bookAndAuthor.bookNameRE}${REGEX_RULES.BRACKET_RIGHT})\\s*((作者)?\\s*${REGEX_RULES.COLON}${bookAndAuthor.authorRE})\\s*$)`,
-        `^(\\s*((书名)?\\s*${REGEX_RULES.COLON}${REGEX_RULES.BRACKET_LEFT}${bookAndAuthor.bookName}${REGEX_RULES.BRACKET_RIGHT})\\s*((作者)?\\s*${REGEX_RULES.COLON}${bookAndAuthor.author})\\s*$)`,
         `^(\\s*((书名)?\\s*${REGEX_RULES.COLON}${REGEX_RULES.BRACKET_LEFT}${bookAndAuthor.bookNameRE}${REGEX_RULES.BRACKET_RIGHT})\\s*([\\(（)]?)${REGEX_RULES.BOOK_EDITION}([)）]?)\\s*((作者)?\\s*${REGEX_RULES.COLON}${bookAndAuthor.authorRE})\\s*$)`,
-        `^(\\s*((书名)?\\s*${REGEX_RULES.COLON}${REGEX_RULES.BRACKET_LEFT}${bookAndAuthor.bookName}${REGEX_RULES.BRACKET_RIGHT})\\s*([\\(（)]?)${REGEX_RULES.BOOK_EDITION}([)）]?)\\s*((作者)?\\s*${REGEX_RULES.COLON}${bookAndAuthor.author})\\s*$)`,
         `^(\\s*((作者)?\\s*${REGEX_RULES.COLON}${bookAndAuthor.authorRE})\\s*((书名)?\\s*${REGEX_RULES.COLON}${REGEX_RULES.BRACKET_LEFT}${bookAndAuthor.bookNameRE}${REGEX_RULES.BRACKET_RIGHT})\\s*$)`,
-        `^(\\s*((作者)?\\s*${REGEX_RULES.COLON}${bookAndAuthor.author})\\s*((书名)?\\s*${REGEX_RULES.COLON}${REGEX_RULES.BRACKET_LEFT}${bookAndAuthor.bookName}${REGEX_RULES.BRACKET_RIGHT})\\s*$)`,
         `^(\\s*(本书由本站书友从网络收集整理并上传分享)${REGEX_RULES.PUNC}(版权归原作者和出版社所有)${REGEX_RULES.PUNC}\\s*$)`,
         `^(\\s*${REGEX_RULES.BRACKET_LEFT}(4020电子书)${REGEX_RULES.BRACKET_RIGHT}(${REGEX_RULES.HTTP}(www.)?4020book.com${REGEX_RULES.HTTP_END})${REGEX_RULES.PUNC}\\s*$)`,
     ],
@@ -190,7 +186,6 @@ export const generateAdsRules = (bookAndAuthor) => ({
         `^(\\s*(版权归原作者所有)${REGEX_RULES.PUNC}(文本仅供试读)${REGEX_RULES.PUNC}(请勿用于一切商业用途)${REGEX_RULES.PUNC}\\s*$)`,
         `^(\\s*(${REGEX_RULES.HTTP}bbs.dospy.com${REGEX_RULES.HTTP_END})\\s*)$`,
         `^(\\s*(\\[)?${bookAndAuthor.bookNameRE}\\s*(\\/)?\\s*${bookAndAuthor.authorRE}\\s*(著)?\\s*(\\])?\\s*$)`,
-        `^(\\s*(\\[)?${bookAndAuthor.bookName}\\s*(\\/)?\\s*${bookAndAuthor.author}\\s*(著)?\\s*(\\])?\\s*$)`,
         `^(\\s*${REGEX_RULES.SYMBOLS}\\s*$)`,
         `^(\\s*(本电子书由)${REGEX_RULES.SOMESTRINGS}(整理制作)${REGEX_RULES.PUNC}$)`,
         `^(\\s*(本书由)${REGEX_RULES.SOMESTRINGS}(整理制作)${REGEX_RULES.PUNC}$)`,
@@ -219,7 +214,6 @@ export const generateAdsRules = (bookAndAuthor) => ({
     ],
     QMJ: () => [
         `^(\\s*${REGEX_RULES.BRACKET_LEFT}${bookAndAuthor.bookNameRE}${REGEX_RULES.BRACKET_RIGHT}\\s*(由)\\s*(阡陌居)\\s*(会员)${REGEX_RULES.SOMESTRINGS}(校对排版)${REGEX_RULES.PUNC}$)`,
-        `^(\\s*${REGEX_RULES.BRACKET_LEFT}${bookAndAuthor.bookName}${REGEX_RULES.BRACKET_RIGHT}\\s*(由)\\s*(阡陌居)\\s*(会员)${REGEX_RULES.SOMESTRINGS}(校对排版)${REGEX_RULES.PUNC}$)`,
         `^(\\s*(更多校对精校书籍请访问)${REGEX_RULES.COLON}$)`,
         `^(\\s*(阡陌居)${REGEX_RULES.COLON}(${REGEX_RULES.HTTP}www.1000qm.com${REGEX_RULES.HTTP_END})\\s*$)`,
     ],
