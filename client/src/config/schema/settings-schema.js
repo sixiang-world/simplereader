@@ -565,6 +565,8 @@ const SETTINGS_SCHEMA = [
         bind: "CONFIG.RUNTIME_VARS.STYLE.ui_sync_token",
     },
 ]
+/**
+ * Array of menu schema definitions describing the UI layout of the settings menu.
  *
  * Each object in the array represents a single tab in the settings menu, and
  * defines its display order, label, and the sections/items to render.
