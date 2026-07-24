@@ -548,9 +548,23 @@ const SETTINGS_SCHEMA = [
             }
         },
     },
+
+    // ==== Config Sync ====
+    // Not a real SETTINGS_SCHEMA input — the UI is a custom text field
+    // rendered via the virtual item "__config_sync_token" in MENU_SCHEMA.
+    // We still list it here so schemaMap has an entry and generateConfigURL
+    // knows about it, but it is marked hidden so the generic renderer skips it.
+    {
+        key: "config_sync_token",
+        type: "hidden",
+        tab: "general",
+        label: "setting_config_sync_token",
+        hidden: true,
+        persist: false, // Handled manually by config-sync.js
+        default: "",
+        bind: "CONFIG.RUNTIME_VARS.STYLE.ui_sync_token",
+    },
 ]
-/**
- * Array of menu schema definitions describing the UI layout of the settings menu.
  *
  * Each object in the array represents a single tab in the settings menu, and
  * defines its display order, label, and the sections/items to render.
@@ -638,8 +652,13 @@ const MENU_SCHEMA = [
                 items: ["t2s_lite", "t2s_pro"],
             },
             {
-                section: "setting_separator_share",
+                section: "setting_separator_sync",
                 order: 5,
+                items: ["__config_sync_token"],
+            },
+            {
+                section: "setting_separator_share",
+                order: 6,
                 items: ["__config_share_url"],
             },
         ],

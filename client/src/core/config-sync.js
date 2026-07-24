@@ -97,6 +97,64 @@ export function isSyncEnabled() {
 }
 
 /**
+ * Valid sync token characters.
+ *
+ * textdb.hunluan.space rejects keys that contain certain characters
+ * (notably hyphens "-" return HTTP 400 "Invalid Key"). We restrict
+ * tokens to alphanumeric + underscore to stay safely inside the
+ * accepted character set.
+ *
+ * @type {RegExp}
+ * @private
+ */
+const VALID_TOKEN_RE = /^[a-zA-Z0-9_]+$/;
+
+/**
+ * Minimum token length. Shorter tokens are too easy to guess.
+ * @type {number}
+ * @private
+ */
+const MIN_TOKEN_LENGTH = 4;
+
+/**
+ * Maximum token length. Extremely long tokens may hit URL length limits.
+ * @type {number}
+ * @private
+ */
+const MAX_TOKEN_LENGTH = 64;
+
+/**
+ * Validate a user-provided sync token.
+ *
+ * Returns an object with `valid` (boolean) and optional `reason`
+ * (localized error key). The caller is responsible for translating
+ * the reason key into the user's language.
+ *
+ * @param {string} token - The token to validate.
+ * @returns {{valid: boolean, reason?: string}}
+ * @public
+ */
+export function validateSyncToken(token) {
+    if (typeof token !== "string") {
+        return { valid: false, reason: "sync_token_error_type" };
+    }
+    const trimmed = token.trim();
+    if (trimmed.length === 0) {
+        return { valid: true }; // Empty = disable sync, which is valid
+    }
+    if (trimmed.length < MIN_TOKEN_LENGTH) {
+        return { valid: false, reason: "sync_token_error_too_short" };
+    }
+    if (trimmed.length > MAX_TOKEN_LENGTH) {
+        return { valid: false, reason: "sync_token_error_too_long" };
+    }
+    if (!VALID_TOKEN_RE.test(trimmed)) {
+        return { valid: false, reason: "sync_token_error_invalid_chars" };
+    }
+    return { valid: true };
+}
+
+/**
  * Build the full URL for a textdb key.
  *
  * @param {string} token - The sync token (becomes the URL path segment).

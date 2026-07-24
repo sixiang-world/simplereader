@@ -981,3 +981,81 @@ dialog::backdrop {
     color: var(--bgColor);
     border-color: var(--mainColor_active);
 }
+
+/* Config sync token input */
+.sync-token-wrapper {
+    padding: 10px 0px;
+    width: 100%;
+}
+.sync-token-wrapper .setting-label {
+    font-size: 0.85em;
+    margin-bottom: 6px;
+    color: var(--fontColor);
+    opacity: 0.9;
+}
+.sync-token-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    min-height: 36px;
+}
+.sync-token-input-row .sync-token-input {
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--mainColor_inactive);
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.85em;
+    outline: none;
+    box-sizing: border-box;
+    line-height: normal;
+}
+.sync-token-input-row .sync-token-input:focus {
+    border-color: var(--mainColor_active);
+}
+.sync-token-input-row .sync-token-save-btn {
+    flex-shrink: 0;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--mainColor_inactive);
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.8em;
+    white-space: nowrap;
+    transition: background 0.15s;
+    box-sizing: border-box;
+    line-height: normal;
+}
+.sync-token-input-row .sync-token-save-btn:hover {
+    background: var(--mainColor_active);
+    color: var(--bgColor);
+    border-color: var(--mainColor_active);
+}
+.sync-token-hint {
+    font-size: 0.7em;
+    margin-top: 4px;
+    color: var(--fontColor);
+    opacity: 0.6;
+}
+.sync-token-hint.sync-token-error {
+    color: #e74c3c;
+    opacity: 1;
+}
+.sync-token-status {
+    font-size: 0.75em;
+    margin-top: 4px;
+    padding: 2px 0;
+}
+.sync-token-status.sync-token-enabled {
+    color: #27ae60;
+}
+.sync-token-status.sync-token-disabled {
+    color: var(--fontColor);
+    opacity: 0.6;
+}

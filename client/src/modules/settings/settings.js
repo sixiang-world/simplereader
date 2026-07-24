@@ -55,7 +55,13 @@ import {
     applyPreset,
     FACTORY_DEFAULT_MARKER,
 } from "../../core/presets.js";
-import { pushOnSettingsChange, isSyncEnabled } from "../../core/config-sync.js";
+import {
+    pushOnSettingsChange,
+    isSyncEnabled,
+    getSyncToken,
+    setSyncToken,
+    validateSyncToken,
+} from "../../core/config-sync.js";
 import { refreshShareButtonLabels } from "../../utils/label-refresh.js";
 import {
     setRangeValue,
@@ -518,6 +524,10 @@ class SettingsMenu {
                     tab.appendChild(this.#createShareURLItem());
                     continue;
                 }
+                if (itemId === "__config_sync_token") {
+                    tab.appendChild(this.#createSyncTokenItem());
+                    continue;
+                }
 
                 const def = this.#SETTINGS_MAP[itemId];
                 if (!def || def.hidden) continue; // skip undefined or hidden items
@@ -834,6 +844,118 @@ class SettingsMenu {
             }
         });
         wrapper.appendChild(copyBtn);
+
+        return wrapper;
+    }
+
+    /**
+     * Creates the "Config Sync" token input item for the general tab.
+     * Renders a text input for the sync token with validation feedback.
+     * @returns {HTMLElement} The sync token item element
+     */
+    #createSyncTokenItem() {
+        const isZh = CONFIG.RUNTIME_VARS.STYLE.ui_LANG === "zh";
+        const labelText = isZh ? "同步令牌" : "Sync Token";
+        const placeholder = isZh ? "输入令牌以启用多设备同步" : "Enter token to enable multi-device sync";
+        const saveText = isZh ? "保存" : "Save";
+        const savedText = isZh ? "✓ 已保存" : "✓ Saved";
+        const hintText = isZh
+            ? "仅支持字母、数字和下划线（4-64 位）"
+            : "Letters, digits, and underscores only (4-64 chars)";
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "sync-token-wrapper";
+
+        // Label
+        const label = document.createElement("div");
+        label.className = "setting-label";
+        label.id = "settingLabel-setting_config_sync_token";
+        label.textContent = labelText;
+        wrapper.appendChild(label);
+
+        // Input row
+        const inputRow = document.createElement("div");
+        inputRow.className = "sync-token-input-row";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.id = "config-sync-token";
+        input.className = "sync-token-input";
+        input.placeholder = placeholder;
+        input.value = getSyncToken() || "";
+        input.setAttribute("autocomplete", "off");
+        input.setAttribute("spellcheck", "false");
+        inputRow.appendChild(input);
+
+        // Save button
+        const saveBtn = document.createElement("button");
+        saveBtn.className = "sync-token-save-btn";
+        saveBtn.textContent = saveText;
+        inputRow.appendChild(saveBtn);
+
+        wrapper.appendChild(inputRow);
+
+        // Hint / validation message
+        const hint = document.createElement("div");
+        hint.className = "sync-token-hint";
+        hint.id = "config-sync-token-hint";
+        hint.textContent = hintText;
+        wrapper.appendChild(hint);
+
+        // Status indicator (hidden by default)
+        const status = document.createElement("div");
+        status.className = "sync-token-status";
+        status.id = "config-sync-token-status";
+        status.style.display = "none";
+        wrapper.appendChild(status);
+
+        let savedResetTimer = null;
+
+        const validateAndSave = () => {
+            const raw = input.value;
+            const result = validateSyncToken(raw);
+
+            if (!result.valid) {
+                hint.classList.add("sync-token-error");
+                hint.textContent = isZh
+                    ? `格式错误：${hintText}`
+                    : `Invalid: ${hintText}`;
+                status.style.display = "none";
+                return;
+            }
+
+            hint.classList.remove("sync-token-error");
+            hint.textContent = hintText;
+
+            // Empty string = disable sync
+            const token = raw.trim() || null;
+            setSyncToken(token);
+
+            // Visual feedback
+            saveBtn.textContent = savedText;
+            if (savedResetTimer !== null) {
+                clearTimeout(savedResetTimer);
+            }
+            savedResetTimer = setTimeout(() => {
+                saveBtn.textContent = saveText;
+                savedResetTimer = null;
+            }, 2000);
+
+            // Show sync status
+            status.style.display = "block";
+            if (token) {
+                status.className = "sync-token-status sync-token-enabled";
+                status.textContent = isZh ? "同步已启用" : "Sync enabled";
+            } else {
+                status.className = "sync-token-status sync-token-disabled";
+                status.textContent = isZh ? "同步已禁用" : "Sync disabled";
+            }
+        };
+
+        saveBtn.addEventListener("click", validateAndSave);
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") validateAndSave();
+        });
 
         return wrapper;
     }
