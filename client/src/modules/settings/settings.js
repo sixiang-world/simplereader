@@ -908,8 +908,6 @@ class SettingsMenu {
 
         wrapper.appendChild(inner);
 
-        let savedResetTimer = null;
-
         const validateAndSave = () => {
             const raw = input.value;
             const result = validateSyncToken(raw);
@@ -929,20 +927,21 @@ class SettingsMenu {
             const token = raw.trim() || null;
             setSyncToken(token);
 
-            // Visual feedback on save button (replaces separate status element)
+            // Visual feedback on save button — persistent until user edits again
             saveBtn.textContent = token ? savedEnabledText : savedDisabledText;
-            if (savedResetTimer !== null) {
-                clearTimeout(savedResetTimer);
-            }
-            savedResetTimer = setTimeout(() => {
-                saveBtn.textContent = saveText;
-                savedResetTimer = null;
-            }, 2000);
+            saveBtn.dataset.savedState = token ? "enabled" : "disabled";
         };
 
         saveBtn.addEventListener("click", validateAndSave);
         input.addEventListener("keydown", (e) => {
             if (e.key === "Enter") validateAndSave();
+        });
+        // Reset button to "Save" when user starts editing again
+        input.addEventListener("input", () => {
+            if (saveBtn.dataset.savedState) {
+                saveBtn.textContent = saveText;
+                delete saveBtn.dataset.savedState;
+            }
         });
 
         return wrapper;
