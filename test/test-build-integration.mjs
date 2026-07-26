@@ -7,7 +7,7 @@
  *   - version.json is copied to dist/
  *   - OpenCC bundle is in dist/
  *   - Worker files are copied to dist/
- *   - Source maps exist for debuggability
+ *   - Production build is minified (no sourcemaps in production)
  *   - No source files leak into dist/ (except copied workers)
  *
  * Run: node test/test-build-integration.mjs
@@ -94,13 +94,19 @@ test("dist/shared/ directory exists (worker dependencies)", () => {
     assert.ok(fs.existsSync(path.join(DIST, "shared")), "shared/ missing in dist/");
 });
 
-console.log("\nbuild integration — Source maps\n");
+console.log("\nbuild integration — Production minification\n");
 
-test("dist/assets/index.js.map exists", () => {
+test("dist/assets/index.js.map does NOT exist (production disables sourcemaps)", () => {
     assert.ok(
-        fs.existsSync(path.join(DIST, "assets", "index.js.map")),
-        "Source map for index.js missing"
+        !fs.existsSync(path.join(DIST, "assets", "index.js.map")),
+        "Source map should not exist in production build"
     );
+});
+
+test("dist/assets/index.js is minified (no long multi-line comments)", () => {
+    const js = fs.readFileSync(path.join(DIST, "assets", "index.js"), "utf-8");
+    // Minified code should not contain typical un-minified multi-line block comments
+    assert.ok(!js.includes("/**"), "index.js still contains block comments (not minified)");
 });
 
 console.log("\nbuild integration — Font assets\n");
