@@ -226,6 +226,7 @@
     align-items: center; /* Align vertical */
     position: relative;
     overflow-y: unset !important;
+    flex-shrink: 0;
 }
 .settingItem-wrapper:first-child {
     /* margin-top: 0; */
@@ -251,6 +252,7 @@
     border-top: 1px dashed var(--borderColor);
     margin: 20px 0;
     align-self: center;
+    flex-shrink: 0;
 }
 .settingItem-separator {
     display: flex;
@@ -261,6 +263,7 @@
     margin: 0;
     padding: 20px 0;
     position: relative;
+    flex-shrink: 0;
 }
 .settingItem-separator-span {
     font-size: 0.8rem;
@@ -933,6 +936,7 @@ dialog::backdrop {
     align-items: center;
     padding: 10px 0px;
     position: relative;
+    flex-shrink: 0;
 }
 .share-url-inner {
     display: flex;
@@ -985,6 +989,7 @@ dialog::backdrop {
     justify-content: center;
     align-items: center;
     position: relative;
+    flex-shrink: 0;
 }
 .sync-token-inner {
     display: flex;
