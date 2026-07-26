@@ -931,7 +931,7 @@ dialog::backdrop {
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    padding: 10px 0px;
+    padding: 4px 0px;
     position: relative;
 }
 .share-url-inner {
@@ -939,7 +939,7 @@ dialog::backdrop {
     gap: 8px;
     align-items: center;
     width: var(--ui_settingMenuSeparatorWidth);
-    min-height: 40px;
+    min-height: 32px;
 }
 .share-url-wrapper input {
     flex: 1;
@@ -981,7 +981,7 @@ dialog::backdrop {
 
 /* Config sync token input */
 .sync-token-wrapper {
-    padding: 10px 0px;
+    padding: 4px 0px;
     display: flex;
     justify-content: center;
     align-items: flex-start;
@@ -994,7 +994,7 @@ dialog::backdrop {
 }
 .sync-token-inner .setting-label {
     font-size: 0.85em;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     color: var(--fontColor);
     opacity: 0.9;
 }
@@ -1003,7 +1003,7 @@ dialog::backdrop {
     gap: 8px;
     align-items: center;
     width: 100%;
-    min-height: 36px;
+    min-height: 32px;
 }
 .sync-token-input-row .sync-token-input {
     flex: 1;
@@ -1044,7 +1044,7 @@ dialog::backdrop {
 }
 .sync-token-hint {
     font-size: 0.7em;
-    margin-top: 4px;
+    margin-top: 2px;
     color: var(--fontColor);
     opacity: 0.6;
 }
@@ -1054,8 +1054,8 @@ dialog::backdrop {
 }
 .sync-token-status {
     font-size: 0.75em;
-    margin-top: 4px;
-    padding: 2px 0;
+    margin-top: 2px;
+    padding: 1px 0;
 }
 .sync-token-status.sync-token-enabled {
     color: #27ae60;
