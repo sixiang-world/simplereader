@@ -929,10 +929,16 @@ dialog::backdrop {
 /* Share config URL input */
 .share-url-wrapper {
     display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 10px 0px;
+    position: relative;
+}
+.share-url-inner {
+    display: flex;
     gap: 8px;
     align-items: center;
-    padding: 10px 0px;
-    width: 100%;
+    width: var(--ui_settingMenuSeparatorWidth);
     min-height: 40px;
 }
 .share-url-wrapper input {
@@ -976,9 +982,17 @@ dialog::backdrop {
 /* Config sync token input */
 .sync-token-wrapper {
     padding: 10px 0px;
-    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    position: relative;
 }
-.sync-token-wrapper .setting-label {
+.sync-token-inner {
+    display: flex;
+    flex-direction: column;
+    width: var(--ui_settingMenuSeparatorWidth);
+}
+.sync-token-inner .setting-label {
     font-size: 0.85em;
     margin-bottom: 6px;
     color: var(--fontColor);
