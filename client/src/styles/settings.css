@@ -35,9 +35,9 @@
     -webkit-transform: translate(-50%, -50%);
     transform: translate(-50%, -50%);
     width: min(700px, 90vw);
-    height: min(525px, 85vh);
+    height: min(720px, 90vh);
     max-width: 90vw;
-    max-height: 85vh;
+    max-height: 90vh;
     overflow: auto;
     display: flex;
     flex-direction: column;
@@ -219,7 +219,7 @@
        positioning (centered overlay) and overflow behavior. */
 }
 .settingItem-wrapper {
-    padding: 10px 0px;
+    padding: 6px 0px;
     overflow-y: unset !important;
     display: flex;
     justify-content: center; /* Align horizontal */
@@ -249,7 +249,7 @@
     width: var(--ui_settingMenuSeparatorWidth);
     border: none;
     border-top: 1px dashed var(--borderColor);
-    margin: 20px 0;
+    margin: 12px 0;
     align-self: center;
 }
 .settingItem-separator {
@@ -259,7 +259,7 @@
     justify-content: center;
     width: var(--ui_settingMenuSeparatorWidth);
     margin: 0;
-    padding: 20px 0;
+    padding: 12px 0;
     position: relative;
 }
 .settingItem-separator-span {
