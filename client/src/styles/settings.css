@@ -200,32 +200,23 @@
     /* transition: var(--darkMode_animation); */
 }
 
-/* Settings menu */
+/* Settings menu — acts as a modal overlay via .settings-modal class */
 #settings-menu {
     font-size: var(--ui_settingMenuFontSize);
-    position: fixed;
-    right: calc(var(--ui_btnGap) + var(--ui_scrollBarWidth) + var(--ui_btnOffset));
-    bottom: calc(2 * (var(--ui_btnGap) + var(--ui_btnSize)));
     z-index: 1004;
     background-color: var(--bgColor);
     border: 1px solid var(--borderColor);
     border-radius: 8px;
-    padding: 0 30px 0 30px;
     box-shadow: 0 0 5px var(--shadowColor);
     -webkit-box-shadow: var(--shadowColor) 0 0 5px;
     -moz-box-shadow: 0 0 5px var(--shadowColor);
     font-family: var(--fontFamily_ui) !important;
     color: var(--mainColor_active) !important;
-    /* visibility: hidden; */
-    contain: content;
-
-    /* Add scroll related styles */
-    max-height: 85vh;
-    max-width: 90vw;
-    /* overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: thin;
-    scrollbar-color: var(--mainColor_active) transparent; */
+    /* NOTE: position/size/layout are handled by .settings-modal class.
+       The old right/bottom/contain/padding rules conflicted with the
+       flex-based modal layout and caused the config-sync area to be
+       clipped. They have been removed; .settings-modal now controls
+       positioning (centered overlay) and overflow behavior. */
 }
 .settingItem-wrapper {
     padding: 10px 0px;
