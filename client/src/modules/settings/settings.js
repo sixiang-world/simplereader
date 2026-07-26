@@ -778,12 +778,16 @@ class SettingsMenu {
         const wrapper = document.createElement("div");
         wrapper.className = "share-url-wrapper";
 
+        // Inner container constrained to the same width as other setting items
+        const inner = document.createElement("div");
+        inner.className = "share-url-inner";
+
         const input = document.createElement("input");
         input.type = "text";
         input.id = "config-share-url";
         input.readOnly = true;
         input.value = this.settingsObj.generateConfigURL();
-        wrapper.appendChild(input);
+        inner.appendChild(input);
 
         const copyBtn = document.createElement("button");
         copyBtn.className = "share-url-copy-btn";
@@ -843,7 +847,9 @@ class SettingsMenu {
                 input.select();
             }
         });
-        wrapper.appendChild(copyBtn);
+        inner.appendChild(copyBtn);
+
+        wrapper.appendChild(inner);
 
         return wrapper;
     }
@@ -866,12 +872,16 @@ class SettingsMenu {
         const wrapper = document.createElement("div");
         wrapper.className = "sync-token-wrapper";
 
+        // Inner container constrained to the same width as other setting items
+        const inner = document.createElement("div");
+        inner.className = "sync-token-inner";
+
         // Label
         const label = document.createElement("div");
         label.className = "setting-label";
         label.id = "settingLabel-setting_config_sync_token";
         label.textContent = labelText;
-        wrapper.appendChild(label);
+        inner.appendChild(label);
 
         // Input row
         const inputRow = document.createElement("div");
@@ -893,21 +903,23 @@ class SettingsMenu {
         saveBtn.textContent = saveText;
         inputRow.appendChild(saveBtn);
 
-        wrapper.appendChild(inputRow);
+        inner.appendChild(inputRow);
 
         // Hint / validation message
         const hint = document.createElement("div");
         hint.className = "sync-token-hint";
         hint.id = "config-sync-token-hint";
         hint.textContent = hintText;
-        wrapper.appendChild(hint);
+        inner.appendChild(hint);
 
         // Status indicator (hidden by default)
         const status = document.createElement("div");
         status.className = "sync-token-status";
         status.id = "config-sync-token-status";
         status.style.display = "none";
-        wrapper.appendChild(status);
+        inner.appendChild(status);
+
+        wrapper.appendChild(inner);
 
         let savedResetTimer = null;
 
