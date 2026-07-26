@@ -112,16 +112,22 @@ function reset() {
 
 console.log("config/schema/settings-schema.js — mutual exclusion structure\n");
 
-test("Exactly two settings have mutualExclusiveWith", () => {
+test("Exactly four settings have mutualExclusiveWith (2 pairs)", () => {
     const withMutex = SETTINGS_SCHEMA.filter((e) => e.mutualExclusiveWith);
-    assert.equal(withMutex.length, 2, `Expected 2, got ${withMutex.length}`);
+    assert.equal(withMutex.length, 4, `Expected 4, got ${withMutex.length}: ${withMutex.map(e => e.key).join(', ')}`);
 });
 
-test("mutualExclusiveWith forms a pair (A→B, B→A)", () => {
+test("mutualExclusiveWith forms two pairs (A→B, B→A)", () => {
     const withMutex = SETTINGS_SCHEMA.filter((e) => e.mutualExclusiveWith);
-    const [a, b] = withMutex;
-    assert.equal(a.mutualExclusiveWith, b.key);
-    assert.equal(b.mutualExclusiveWith, a.key);
+    // Build pairs: every key should point to another key that also points back
+    const map = new Map();
+    for (const entry of withMutex) {
+        map.set(entry.key, entry.mutualExclusiveWith);
+    }
+    for (const [key, target] of map) {
+        const reverse = map.get(target);
+        assert.equal(reverse, key, `${key} → ${target}, but ${target} → ${reverse} (expected ${key})`);
+    }
 });
 
 test("Both mutual exclusion entries are in the 'general' tab", () => {

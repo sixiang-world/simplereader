@@ -1034,10 +1034,9 @@ export function initReader() {
                 if (isElementInContainer(target, CONTENT_CONTAINER)) {
                     if (!CONFIG.VARS.INIT) {
                         GetScrollPositions();
-                        // Flow mode: trigger sliding window preload on scroll
+                        // Flow mode: trigger accumulate-append on scroll (throttled)
                         if (flowReader.isActive()) {
-                            const curLine = flowReader.getCurrentLineNumber();
-                            flowReader.preloadContent(curLine);
+                            flowReader.scheduleScrollAppend();
                         }
                     }
                 }
@@ -1102,9 +1101,10 @@ export function initReader() {
         if (CONFIG.CONST_CONFIG.LOG_MODE || CONFIG.VARS.IS_LOG_MODE) {
             container?.setAttribute("data-reader-mode", "log");
             content.setAttribute("data-reader-mode", "log");
-            // Log mode forces continuous scroll and line numbers
-            if (!CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE) {
-                CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE = true;
+            // Log mode uses flow mode for continuous scrolling and line numbers.
+            // Enter flow mode directly without modifying CONTINUOUS_SCROLL_MODE
+            // (so the setting checkbox stays independent — log mode is hidden anyway).
+            if (!flowReader.isActive()) {
                 flowReader.enter();
             }
             if (!CONFIG.CONST_CONFIG.SHOW_LINE_NUMBERS) {
@@ -1114,6 +1114,14 @@ export function initReader() {
         } else {
             container?.removeAttribute("data-reader-mode");
             content.removeAttribute("data-reader-mode");
+            // If log mode is turned off and continuous_scroll_mode setting is also off,
+            // exit flow mode to restore paged mode
+            if (flowReader.isActive() && !CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE) {
+                const result = flowReader.exit();
+                if (result) {
+                    reader.gotoPage(result.targetPage);
+                }
+            }
         }
     });
 

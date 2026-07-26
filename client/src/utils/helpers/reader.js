@@ -184,7 +184,10 @@ export function GetScrollPositions(toSetHistory = true, gotoPageClicked = false)
     }
 
     // Flow mode: update CURRENT_PAGE based on scroll position
-    if (CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE) {
+    // Use data-page-mode attribute to detect flow mode (works for both
+    // continuous_scroll_mode setting and log-mode auto-activation)
+    const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+    if (content && content.getAttribute("data-page-mode") === "flow") {
         const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
         let newPage = 1;
         for (let i = pageBreaks.length - 1; i >= 0; i--) {
@@ -213,7 +216,9 @@ function calculateReadingProgress(curLineNumber) {
     const contentLength = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
 
     // Flow mode: simple line-based progress
-    if (CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE && contentLength > 0) {
+    // Use data-page-mode attribute to detect flow mode
+    const contentContainer = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+    if (contentContainer && contentContainer.getAttribute("data-page-mode") === "flow" && contentLength > 0) {
         let totalPercentage = (curLineNumber / (contentLength - 1)) * 100;
         if (curLineNumber === 0 && getScrollY() <= 5) {
             totalPercentage = 0;

@@ -125,6 +125,12 @@ const SETTINGS_SCHEMA = [
         bind: "CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE",
         default: CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE_DEFAULT,
         persist: true,
+        mutualExclusiveWith: "continuous_scroll_mode",
+        onApply: function (value) {
+            if (value) {
+                this.values.continuous_scroll_mode = false;
+            }
+        },
     },
     {
         key: "infinite_scroll_easy_mode",
@@ -171,6 +177,12 @@ const SETTINGS_SCHEMA = [
         bind: "CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE",
         default: CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE_DEFAULT,
         persist: true,
+        mutualExclusiveWith: "infinite_scroll_mode",
+        onApply: function (value) {
+            if (value) {
+                this.values.infinite_scroll_mode = false;
+            }
+        },
     },
     {
         key: "show_line_numbers",

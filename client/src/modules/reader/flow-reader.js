@@ -1,110 +1,132 @@
 /**
- * @fileoverview Flow mode (continuous scroll) reader module
+ * @fileoverview Flow mode (continuous scroll / auto-join) reader module
  *
- * Implements a sliding-window renderer that loads/unloads pages of content
- * as the user scrolls, providing a seamless continuous reading experience.
- * Ported from simplereader-enhance's preloadContentFlow() and adapted for
- * cnb's ES modules architecture and structured FILE_CONTENT_CHUNKS.
+ * Implements an accumulate-only continuous scroll renderer:
+ *   - Enter: render current page + 1 page ahead as initial content
+ *   - Scroll down: when approaching the bottom of rendered content,
+ *     append the next page (only append, never remove)
+ *   - Scroll up: all previously rendered content stays in DOM —
+ *     zero jump/flash, just native scroll
+ *   - Jump (TOC / progress bar): clear DOM, re-render from target
+ *   - Exit: restore paged mode at the page matching current line
+ *
+ * The old sliding-window approach (preloadContent with symmetric
+ * load/unload) had several bugs:
+ *   1. Full DOM wipe on window-out-of-range → visual jump
+ *   2. Scroll-position restoration via getBoundingClientRect unreliable
+ *      after DOM bulk mutations
+ *   3. PAGE_BREAKS-based window tracking didn't match flow-mode reality
+ *   4. No mutual exclusion with infinite-scroll at schema level
+ *
+ * This rewrite fixes all of those by adopting a simpler accumulate-only
+ * model: content grows downward, never shrinks. For extremely large
+ * files (>50 000 lines), a future optimisation may add top-crop, but
+ * modern browsers handle tens of thousands of DOM nodes without issue.
  *
  * @module client/src/modules/features/flow-reader
  * @requires client/src/config/index
  * @requires client/src/modules/text/text-processor
  * @requires client/src/modules/features/footnotes
- * @requires client/src/utils/base
- * @requires client/src/utils/helpers-reader
+ * @requires client/src/utils/helpers/reader
  */
 
 import * as CONFIG from "../../config/index.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { getFootnotes } from "./footnotes.js";
-import { isInViewport, enableScroll, disableScroll, isElementInContainer } from "../../utils/base.js";
-import { getTopLineNumber, setHistory, GetScrollPositions } from "../../utils/helpers/reader.js";
+import { setHistory } from "../../utils/helpers/reader.js";
 
 /**
- * Flow mode reader — sliding-window continuous scroll renderer
+ * Flow mode reader — accumulate-only continuous scroll renderer
  * @namespace
  */
 export const flowReader = {
     /** @type {boolean} Whether flow mode is currently active */
     _active: false,
 
-    /** @type {number} Content chunk length at last render (to detect content reload) */
+    /** @type {number} Last rendered line index (0-based). New content is appended after this. */
+    _renderedEnd: -1,
+
+    /** @type {number} Content chunk length at last full render (detect file reload) */
     _lastChunkLength: 0,
 
-    /** @type {Function|null} Saved wheel event handler for infinite scroll (to restore on exit) */
-    _savedWheelHandler: null,
+    /** @type {number|null} Throttle timer ID for onScrollAppend */
+    _scrollTimer: null,
+
+    // ===== Public API =====
 
     /**
-     * Enter flow mode: render content as continuous scroll
+     * Enter flow mode: render initial content block around current position
      */
     enter() {
-        // If already active, check if content has changed (e.g., file reloaded)
-        // and re-render if needed. This handles the case where flow mode was
-        // activated on initial page load (with no content) before a file is opened.
+        // Re-entry guard: if content changed (file reload), force re-enter
         if (this._active) {
             const chunkLen = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
             if (chunkLen > 0 && chunkLen !== this._lastChunkLength) {
-                this._active = false; // Force re-entry with new content
+                this._active = false;
             } else {
                 return;
             }
         }
         this._active = true;
+        this._renderedEnd = -1;
 
         const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
         content.setAttribute("data-page-mode", "flow");
 
-        // Disable cnb's infinite scroll (overscroll page-turn) in flow mode
-        // Flow mode has its own continuous scrolling
+        // Disable infinite-scroll (overscroll page-turn) in flow mode
         this._disableInfiniteScroll();
 
-        // Render initial window around current page's first line
+        // Determine start line from current page position
         const startLine = this._getFirstLineOfCurrentPage();
-        const windowSize = CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_WINDOW_SIZE;
-        const pageSize = this._getPageSize();
-        const begin = Math.max(0, startLine - pageSize);
-        const end = Math.min(
-            CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1,
-            startLine + pageSize * (windowSize - 1)
-        );
+        const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
+        const totalPages = CONFIG.VARS.TOTAL_PAGES;
+        const currentLine = startLine;
+
+        // Render from current page start through 1 page ahead
+        const currentPage = CONFIG.VARS.CURRENT_PAGE || 1;
+        const aheadPage = Math.min(currentPage + 1, totalPages);
+        const endLine = pageBreaks[aheadPage] || CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1;
 
         content.innerHTML = "";
-        CONFIG.VARS.FLOW_PRELOAD_BEGIN = this._getPageOfLine(begin);
-        CONFIG.VARS.FLOW_PRELOAD_END = this._getPageOfLine(end);
-        this.renderRange(begin, end, null);
+        this._renderLines(currentLine, endLine);
 
-        CONFIG.VARS.FLOW_CURRENT_LINE = startLine;
-        const targetEl = CONFIG.DOM_ELEMENT.GET_LINE(startLine);
-        if (targetEl) {
-            targetEl.scrollIntoView({ behavior: "instant" });
-        }
-
+        CONFIG.VARS.FLOW_CURRENT_LINE = currentLine;
+        this._renderedEnd = endLine;
         this._lastChunkLength = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
+
+        // Scroll to the start position
+        const targetEl = CONFIG.DOM_ELEMENT.GET_LINE(currentLine);
+        if (targetEl) {
+            targetEl.scrollIntoView({ behavior: "instant", block: "start" });
+        }
 
         getFootnotes();
     },
 
     /**
-     * Exit flow mode: restore paged mode
+     * Exit flow mode: restore paged mode at the page containing current line
+     * @returns {{ targetPage: number, targetLine: number }|null}
      */
     exit() {
-        if (!this._active) return;
+        if (!this._active) return null;
         this._active = false;
+        this._renderedEnd = -1;
+
+        this._cancelScrollTimer();
 
         const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
         content.removeAttribute("data-page-mode");
 
-        // Re-enable infinite scroll if it was configured
         this._restoreInfiniteScroll();
 
-        // Record current scroll position as the line to restore in paged mode
+        // Determine current position before clearing state
         const curLine = this.getCurrentLineNumber();
-        CONFIG.VARS.FLOW_PRELOAD_BEGIN = 0;
-        CONFIG.VARS.FLOW_PRELOAD_END = 0;
+
+        // Reset flow state
         CONFIG.VARS.FLOW_CURRENT_LINE = 0;
         this._lastChunkLength = 0;
 
-        // Find which page contains the current line and switch to it
+        // Map current line → page number
         const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
         let targetPage = 1;
         for (let i = 0; i < pageBreaks.length - 1; i++) {
@@ -117,121 +139,194 @@ export const flowReader = {
             targetPage = CONFIG.VARS.TOTAL_PAGES;
         }
 
-        // Return target page so caller can navigate there
         return { targetPage, targetLine: curLine };
     },
 
     /**
-     * Check if flow mode is active
+     * Check if flow mode is currently active
      * @returns {boolean}
      */
     isActive() {
         return this._active;
     },
 
-    // ===== Core sliding-window rendering =====
+    // ===== Scroll-driven content appending =====
 
     /**
-     * Preload content around the given line number (sliding window).
-     * Call this on scroll events to dynamically load/unload content.
-     * @param {number} lineNumber - The currently visible line number
+     * Called on scroll events (throttled). Checks if the user is near
+     * the bottom of rendered content and appends the next page.
+     * @param {number} [lineNumber] - Current visible line (optional hint)
      */
-    preloadContent(lineNumber) {
+    onScrollAppend(lineNumber) {
         if (!this._active) return;
 
-        const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
-        const totalPages = CONFIG.VARS.TOTAL_PAGES;
         const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
-        const windowSize = CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_WINDOW_SIZE;
+        const chunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
+        const totalLines = chunks.length - 1;
 
-        // Find which page the line belongs to
-        const page = this._getPageOfLine(lineNumber);
-        const preloadBegin = CONFIG.VARS.FLOW_PRELOAD_BEGIN;
-        const preloadEnd = CONFIG.VARS.FLOW_PRELOAD_END;
+        // Nothing more to append if we've already rendered everything
+        if (this._renderedEnd >= totalLines) return;
 
-        let loadRange = null;
-        let unloadRange = null;
-        let insertBefore = null;
-
-        if (page < preloadBegin || page > preloadEnd) {
-            // Outside preload range — full reload
-            const newBegin = Math.max(1, page - 1);
-            const newEnd = Math.min(totalPages, page + windowSize - 2);
-            CONFIG.VARS.FLOW_PRELOAD_BEGIN = newBegin;
-            CONFIG.VARS.FLOW_PRELOAD_END = newEnd;
-            loadRange = this._getPagesLineRange(newBegin, newEnd);
-
-            // Reset scroll position BEFORE clearing — prevents stale scrollTop
-            // from causing scroll position mismatch after re-render
-            content.scrollTop = 0;
-
-            content.innerHTML = "";
-            insertBefore = null;
-
-            // After full reload, scroll to the target line
-            this.renderRange(loadRange.begin, loadRange.end, null);
-            const targetEl = CONFIG.DOM_ELEMENT.GET_LINE(lineNumber);
-            if (targetEl) {
-                targetEl.scrollIntoView({ behavior: "instant", block: "start" });
+        // Check proximity to bottom of rendered content.
+        // If the last rendered element's bottom edge is within 2 viewport
+        // heights of the visible area, it's time to append.
+        const lastEl = CONFIG.DOM_ELEMENT.GET_LINE(this._renderedEnd);
+        if (lastEl) {
+            const lastRect = lastEl.getBoundingClientRect();
+            const viewportHeight = content.clientHeight || window.innerHeight;
+            if (lastRect.top > viewportHeight * 2) {
+                // Still far from bottom — no need to append yet
+                return;
             }
+        }
+
+        // Append next page of content
+        const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
+        const currentPage = this._getPageOfLine(this._renderedEnd);
+        const nextPage = currentPage + 1;
+        const nextEnd = nextPage <= CONFIG.VARS.TOTAL_PAGES
+            ? (pageBreaks[nextPage] || totalLines)
+            : totalLines;
+
+        // Only append if there's actually new content
+        if (nextEnd > this._renderedEnd) {
+            this._renderLines(this._renderedEnd + 1, nextEnd);
+            this._renderedEnd = nextEnd;
             getFootnotes();
-            return;
-        } else if (page === preloadEnd && preloadEnd < totalPages) {
-            // At the end edge — append next page, remove oldest
-            CONFIG.VARS.FLOW_PRELOAD_END++;
-            loadRange = this._getPagesLineRange(CONFIG.VARS.FLOW_PRELOAD_END, CONFIG.VARS.FLOW_PRELOAD_END);
-            unloadRange = this._getPagesLineRange(preloadBegin, preloadBegin);
-            CONFIG.VARS.FLOW_PRELOAD_BEGIN++;
-            insertBefore = null;
-        } else if (page === preloadBegin && preloadBegin > 1) {
-            // At the start edge — prepend previous page, remove newest
-            CONFIG.VARS.FLOW_PRELOAD_BEGIN--;
-            loadRange = this._getPagesLineRange(CONFIG.VARS.FLOW_PRELOAD_BEGIN, CONFIG.VARS.FLOW_PRELOAD_BEGIN);
-            unloadRange = this._getPagesLineRange(preloadEnd, preloadEnd);
-            CONFIG.VARS.FLOW_PRELOAD_END--;
-            insertBefore = content.firstElementChild;
-        } else {
-            // Within range — no action needed
-            return;
         }
-
-        // Save current scroll position (line + pixel offset)
-        const savedLine = this.getCurrentLineNumber();
-        const savedEl = CONFIG.DOM_ELEMENT.GET_LINE(savedLine);
-        const savedOffset = savedEl ? savedEl.getBoundingClientRect().top : 0;
-
-        // Load new content
-        if (loadRange) {
-            this.renderRange(loadRange.begin, loadRange.end, insertBefore);
-        }
-
-        // Unload distant content
-        if (unloadRange) {
-            for (let i = unloadRange.begin; i <= unloadRange.end; i++) {
-                const el = CONFIG.DOM_ELEMENT.GET_LINE(i);
-                if (el) el.remove();
-            }
-        }
-
-        // Restore scroll position
-        if (savedEl) {
-            const newEl = CONFIG.DOM_ELEMENT.GET_LINE(savedLine);
-            if (newEl) {
-                const newOffset = newEl.getBoundingClientRect().top;
-                content.scrollBy({ top: newOffset - savedOffset, behavior: "instant" });
-            }
-        }
-
-        getFootnotes();
     },
 
     /**
-     * Render a range of lines into the content container.
-     * @param {number} startLine - First line index (inclusive)
-     * @param {number} endLine - Last line index (inclusive)
-     * @param {Element|null} insertBefore - If set, insert before this element (prepend mode)
+     * Schedule a throttled onScrollAppend call.
+     * Uses ~100ms throttle to avoid excessive DOM mutations during fast scrolling.
      */
-    renderRange(startLine, endLine, insertBefore) {
+    scheduleScrollAppend() {
+        if (!this._active) return;
+        if (this._scrollTimer !== null) return; // already scheduled
+
+        this._scrollTimer = setTimeout(() => {
+            this._scrollTimer = null;
+            const curLine = this.getCurrentLineNumber();
+            this.onScrollAppend(curLine);
+        }, 100);
+    },
+
+    /**
+     * Cancel any pending throttled scroll-append timer
+     * @private
+     */
+    _cancelScrollTimer() {
+        if (this._scrollTimer !== null) {
+            clearTimeout(this._scrollTimer);
+            this._scrollTimer = null;
+        }
+    },
+
+    // ===== Navigation =====
+
+    /**
+     * Jump to a specific line in flow mode.
+     * If the line is already in the DOM, just scroll to it.
+     * If not (e.g. TOC click to distant chapter), do a full reload from that point.
+     *
+     * @param {number} lineNumber - Target line number (0-based)
+     * @param {boolean} [isTitle=false] - Whether this is a TOC navigation
+     * @returns {boolean} Success
+     */
+    gotoLine(lineNumber, isTitle = false) {
+        if (!this._active) return false;
+
+        const maxLine = CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1;
+        lineNumber = Math.max(0, Math.min(lineNumber, maxLine));
+
+        // Check if target line is already rendered in DOM
+        const el = CONFIG.DOM_ELEMENT.GET_LINE(lineNumber);
+        if (el) {
+            // Already in DOM — just scroll
+            el.scrollIntoView({ behavior: "instant", block: "start" });
+            CONFIG.VARS.FLOW_CURRENT_LINE = lineNumber;
+            setHistory(CONFIG.VARS.FILENAME, lineNumber);
+            return true;
+        }
+
+        // Target not in DOM — full reload from target position
+        // (This happens for distant TOC jumps or progress-bar jumps)
+        const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+        const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
+        const totalPages = CONFIG.VARS.TOTAL_PAGES;
+
+        const targetPage = this._getPageOfLine(lineNumber);
+        const aheadPage = Math.min(targetPage + 1, totalPages);
+        const endLine = pageBreaks[aheadPage] || maxLine;
+
+        // Save scroll offset ratio so we can roughly restore position
+        // after clearing DOM (only needed for progress-bar jumps where
+        // we don't know the exact target line yet)
+        content.scrollTop = 0;
+        content.innerHTML = "";
+        this._renderedEnd = -1;
+
+        this._renderLines(lineNumber, endLine);
+        this._renderedEnd = endLine;
+
+        const targetEl = CONFIG.DOM_ELEMENT.GET_LINE(lineNumber);
+        if (targetEl) {
+            targetEl.scrollIntoView({ behavior: "instant", block: "start" });
+        }
+
+        CONFIG.VARS.FLOW_CURRENT_LINE = lineNumber;
+        setHistory(CONFIG.VARS.FILENAME, lineNumber);
+        getFootnotes();
+        return true;
+    },
+
+    /**
+     * Get the line number of the last visible line in the viewport.
+     * Used for progress tracking and scroll-append decisions.
+     * @returns {number} Line number (0-based), or 0 if none found
+     */
+    getCurrentLineNumber() {
+        const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+        const viewportHeight = window.innerHeight;
+        const contentTop = content.getBoundingClientRect().top;
+
+        let lastVisible = 0;
+
+        for (const child of content.children) {
+            if (!child.id || !child.id.startsWith("line")) continue;
+            const rect = child.getBoundingClientRect();
+            // Element is visible if any part is within the viewport
+            if (rect.bottom >= contentTop && rect.top <= viewportHeight) {
+                const num = parseInt(child.id.replace("line", ""));
+                if (num > lastVisible) lastVisible = num;
+            }
+        }
+
+        if (lastVisible > 0) return lastVisible;
+
+        // Fallback: estimate from scroll ratio (rare — only if DOM is empty
+        // or all elements are off-screen, e.g. during a jump transition)
+        const scrollable = content.scrollHeight - content.clientHeight;
+        if (scrollable > 0) {
+            const ratio = content.scrollTop / scrollable;
+            const maxLine = CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1;
+            return Math.round(ratio * maxLine);
+        }
+        return 0;
+    },
+
+    // ===== Private helpers =====
+
+    /**
+     * Render a range of lines [startLine, endLine] into the content container.
+     * Lines are appended to the end of the container (accumulate-only).
+     * Skips lines that already exist in the DOM (prevents duplicates).
+     *
+     * @param {number} startLine - First line index (inclusive, 0-based)
+     * @param {number} endLine   - Last line index (inclusive, 0-based)
+     * @private
+     */
+    _renderLines(startLine, endLine) {
         const chunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
         const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
 
@@ -239,25 +334,17 @@ export const flowReader = {
             const currentLine = chunks[j];
             if (!currentLine) continue;
 
-            // Safety: skip lines whose element already exists in the DOM
-            // Prevents duplicates from sliding-window edge cases (e.g., when
-            // preloadContent and wheel events overlap at content boundaries)
+            // Skip if element already exists (prevent duplicates)
             const existingEl = CONFIG.DOM_ELEMENT.GET_LINE(j);
             if (existingEl && content.contains(existingEl)) continue;
 
             try {
                 if (typeof currentLine === "object") {
                     const [processedContent, lineType] = TextProcessor.createDOM(currentLine);
-                    if (lineType === "e" && processedContent.innerHTML.trim() === "") {
-                        continue;
-                    }
-                    if (insertBefore) {
-                        content.insertBefore(processedContent, insertBefore);
-                    } else {
-                        content.appendChild(processedContent);
-                    }
+                    if (lineType === "e" && processedContent.innerHTML.trim() === "") continue;
+                    content.appendChild(processedContent);
                 } else {
-                    // v1.6.3 fallback (string content)
+                    // String content fallback (v1.6.3)
                     if (currentLine.trim()) {
                         const isTitlePage =
                             j < CONFIG.VARS.TITLE_PAGE_LINE_NUMBER_OFFSET || j === chunks.length - 1;
@@ -266,14 +353,8 @@ export const flowReader = {
                             j,
                             isTitlePage
                         );
-                        if (lineType === "e" && processedContent.innerHTML.trim() === "") {
-                            continue;
-                        }
-                        if (insertBefore) {
-                            content.insertBefore(processedContent, insertBefore);
-                        } else {
-                            content.appendChild(processedContent);
-                        }
+                        if (lineType === "e" && processedContent.innerHTML.trim() === "") continue;
+                        content.appendChild(processedContent);
                     }
                 }
             } catch (e) {
@@ -283,101 +364,9 @@ export const flowReader = {
         }
     },
 
-    // ===== Navigation =====
-
     /**
-     * Go to a specific line in flow mode.
-     * Loads the page containing the line if not already loaded.
-     * @param {number} lineNumber - Target line number
-     * @param {boolean} [isTitle=false] - Whether this is a title navigation
-     * @returns {boolean} Success
-     */
-    gotoLine(lineNumber, isTitle = false) {
-        if (!this._active) return false;
-
-        const maxLine = CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1;
-        lineNumber = Math.max(0, Math.min(lineNumber, maxLine));
-        const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
-
-        // Check if line is currently rendered
-        let el = CONFIG.DOM_ELEMENT.GET_LINE(lineNumber);
-        if (!el) {
-            // Need to load the page containing this line
-            const page = this._getPageOfLine(lineNumber);
-            const windowSize = CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_WINDOW_SIZE;
-            const halfWindow = Math.floor(windowSize / 2);
-            const beginPage = Math.max(1, page - halfWindow);
-            const endPage = Math.min(CONFIG.VARS.TOTAL_PAGES, page + halfWindow);
-            const range = this._getPagesLineRange(beginPage, endPage);
-
-            // Reset scroll position BEFORE clearing — prevents stale scrollTop
-            // from interfering with scrollIntoView after re-render
-            content.scrollTop = 0;
-
-            content.innerHTML = "";
-            CONFIG.VARS.FLOW_PRELOAD_BEGIN = beginPage;
-            CONFIG.VARS.FLOW_PRELOAD_END = endPage;
-            this.renderRange(range.begin, range.end, null);
-            getFootnotes();
-
-            el = CONFIG.DOM_ELEMENT.GET_LINE(lineNumber);
-        }
-
-        if (el) {
-            el.scrollIntoView({ behavior: "instant", block: "start" });
-            CONFIG.VARS.FLOW_CURRENT_LINE = lineNumber;
-            setHistory(CONFIG.VARS.FILENAME, lineNumber);
-            return true;
-        }
-
-        return false;
-    },
-
-    /**
-     * Get the line number of the first visible line in the content container.
-     * @returns {number} Line number, or 0 if none found
-     */
-    getCurrentLineNumber() {
-        const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
-        const viewportHeight = window.innerHeight;
-
-        let firstVisible = 0;
-        let lastVisible = 0;
-
-        for (const child of content.children) {
-            if (!child.id || !child.id.startsWith("line")) continue;
-            const rect = child.getBoundingClientRect();
-            if (rect.bottom >= 0 && rect.top <= viewportHeight) {
-                const num = parseInt(child.id.replace("line", ""));
-                if (firstVisible === 0) firstVisible = num;
-                lastVisible = num;
-            }
-        }
-
-        // If no elements are visible (user scrolled past rendered content),
-        // estimate current line from scroll position
-        if (firstVisible === 0 && lastVisible === 0) {
-            const scrollable = content.scrollHeight - content.clientHeight;
-            if (scrollable > 0) {
-                const ratio = content.scrollTop / scrollable;
-                const maxLine = CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1;
-                return Math.round(ratio * maxLine);
-            }
-            return 0;
-        }
-
-        // In flow mode, always return the last visible line (bottom of viewport)
-        // to accurately track reading position. Using firstVisible causes the
-        // sliding window to incorrectly think we're at earlier content and
-        // triggers unnecessary full reloads or edge-case re-renders.
-        return lastVisible || firstVisible;
-    },
-
-    // ===== Private helpers =====
-
-    /**
-     * Get the first line index of the current page (for initial flow mode entry).
-     * @returns {number}
+     * Get the first line index of the current page (for initial entry).
+     * @returns {number} 0-based line index
      * @private
      */
     _getFirstLineOfCurrentPage() {
@@ -387,8 +376,8 @@ export const flowReader = {
 
     /**
      * Get the page number (1-based) that contains the given line.
-     * @param {number} line
-     * @returns {number}
+     * @param {number} line - 0-based line index
+     * @returns {number} 1-based page number
      * @private
      */
     _getPageOfLine(line) {
@@ -400,35 +389,7 @@ export const flowReader = {
     },
 
     /**
-     * Get the average page size (lines per page) from PAGE_BREAKS.
-     * @returns {number}
-     * @private
-     */
-    _getPageSize() {
-        const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
-        if (pageBreaks.length < 2) return 200;
-        return Math.round(
-            (pageBreaks[pageBreaks.length - 1] - pageBreaks[0]) / (pageBreaks.length - 1)
-        );
-    },
-
-    /**
-     * Convert a page range to a line range using PAGE_BREAKS.
-     * @param {number} firstPage - First page (1-based, inclusive)
-     * @param {number} lastPage - Last page (1-based, inclusive)
-     * @returns {{begin: number, end: number}}
-     * @private
-     */
-    _getPagesLineRange(firstPage, lastPage) {
-        const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
-        const maxLine = CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1;
-        const begin = pageBreaks[firstPage - 1] || 0;
-        const end = Math.min(pageBreaks[lastPage] || maxLine, maxLine);
-        return { begin, end };
-    },
-
-    /**
-     * Disable cnb's overscroll infinite scroll to avoid conflicts.
+     * Disable the infinite-scroll (overscroll page-turn) wheel handler.
      * @private
      */
     _disableInfiniteScroll() {
@@ -438,7 +399,7 @@ export const flowReader = {
     },
 
     /**
-     * Restore cnb's infinite scroll if it was configured.
+     * Re-enable infinite scroll if it was configured before entering flow mode.
      * @private
      */
     _restoreInfiniteScroll() {
@@ -448,6 +409,6 @@ export const flowReader = {
     },
 };
 
-// Import reader at module level to avoid circular dependency issues.
-// This is a lazy reference — used only for _disableInfiniteScroll/_restoreInfiniteScroll.
+// Lazy reference to reader — used only for _disableInfiniteScroll/_restoreInfiniteScroll.
+// Imported at module level to avoid circular dependency at call time.
 import { reader } from "./reader.js";
