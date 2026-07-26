@@ -930,7 +930,7 @@ dialog::backdrop {
 .share-url-wrapper {
     display: flex;
     justify-content: center;
-    align-items: flex-start;
+    align-items: center;
     padding: 10px 0px;
     position: relative;
 }
@@ -939,7 +939,6 @@ dialog::backdrop {
     gap: 8px;
     align-items: center;
     width: var(--ui_settingMenuSeparatorWidth);
-    min-height: 40px;
 }
 .share-url-wrapper input {
     flex: 1;
@@ -984,7 +983,7 @@ dialog::backdrop {
     padding: 10px 0px;
     display: flex;
     justify-content: center;
-    align-items: flex-start;
+    align-items: center;
     position: relative;
 }
 .sync-token-inner {
@@ -992,18 +991,11 @@ dialog::backdrop {
     flex-direction: column;
     width: var(--ui_settingMenuSeparatorWidth);
 }
-.sync-token-inner .setting-label {
-    font-size: 0.85em;
-    margin-bottom: 6px;
-    color: var(--fontColor);
-    opacity: 0.9;
-}
 .sync-token-input-row {
     display: flex;
     gap: 8px;
     align-items: center;
     width: 100%;
-    min-height: 36px;
 }
 .sync-token-input-row .sync-token-input {
     flex: 1;
@@ -1043,24 +1035,14 @@ dialog::backdrop {
     border-color: var(--mainColor_active);
 }
 .sync-token-hint {
+    display: none;
     font-size: 0.7em;
     margin-top: 4px;
     color: var(--fontColor);
     opacity: 0.6;
 }
 .sync-token-hint.sync-token-error {
+    display: block;
     color: #e74c3c;
     opacity: 1;
-}
-.sync-token-status {
-    font-size: 0.75em;
-    margin-top: 4px;
-    padding: 2px 0;
-}
-.sync-token-status.sync-token-enabled {
-    color: #27ae60;
-}
-.sync-token-status.sync-token-disabled {
-    color: var(--fontColor);
-    opacity: 0.6;
 }
