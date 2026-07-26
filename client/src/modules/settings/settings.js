@@ -861,10 +861,10 @@ class SettingsMenu {
      */
     #createSyncTokenItem() {
         const isZh = CONFIG.RUNTIME_VARS.STYLE.ui_LANG === "zh";
-        const labelText = isZh ? "同步令牌" : "Sync Token";
         const placeholder = isZh ? "输入令牌以启用多设备同步" : "Enter token to enable multi-device sync";
         const saveText = isZh ? "保存" : "Save";
-        const savedText = isZh ? "✓ 已保存" : "✓ Saved";
+        const savedEnabledText = isZh ? "✓ 已启用" : "✓ Enabled";
+        const savedDisabledText = isZh ? "✓ 已禁用" : "✓ Disabled";
         const hintText = isZh
             ? "仅支持字母、数字和下划线（4-64 位）"
             : "Letters, digits, and underscores only (4-64 chars)";
@@ -876,14 +876,7 @@ class SettingsMenu {
         const inner = document.createElement("div");
         inner.className = "sync-token-inner";
 
-        // Label
-        const label = document.createElement("div");
-        label.className = "setting-label";
-        label.id = "settingLabel-setting_config_sync_token";
-        label.textContent = labelText;
-        inner.appendChild(label);
-
-        // Input row
+        // Input row (label moved to placeholder, hint moved to title)
         const inputRow = document.createElement("div");
         inputRow.className = "sync-token-input-row";
 
@@ -892,6 +885,7 @@ class SettingsMenu {
         input.id = "config-sync-token";
         input.className = "sync-token-input";
         input.placeholder = placeholder;
+        input.title = hintText;
         input.value = getSyncToken() || "";
         input.setAttribute("autocomplete", "off");
         input.setAttribute("spellcheck", "false");
@@ -905,19 +899,12 @@ class SettingsMenu {
 
         inner.appendChild(inputRow);
 
-        // Hint / validation message
+        // Hint / validation message (hidden by default, only shown on error)
         const hint = document.createElement("div");
         hint.className = "sync-token-hint";
         hint.id = "config-sync-token-hint";
         hint.textContent = hintText;
         inner.appendChild(hint);
-
-        // Status indicator (hidden by default)
-        const status = document.createElement("div");
-        status.className = "sync-token-status";
-        status.id = "config-sync-token-status";
-        status.style.display = "none";
-        inner.appendChild(status);
 
         wrapper.appendChild(inner);
 
@@ -932,7 +919,6 @@ class SettingsMenu {
                 hint.textContent = isZh
                     ? `格式错误：${hintText}`
                     : `Invalid: ${hintText}`;
-                status.style.display = "none";
                 return;
             }
 
@@ -943,8 +929,8 @@ class SettingsMenu {
             const token = raw.trim() || null;
             setSyncToken(token);
 
-            // Visual feedback
-            saveBtn.textContent = savedText;
+            // Visual feedback on save button (replaces separate status element)
+            saveBtn.textContent = token ? savedEnabledText : savedDisabledText;
             if (savedResetTimer !== null) {
                 clearTimeout(savedResetTimer);
             }
@@ -952,16 +938,6 @@ class SettingsMenu {
                 saveBtn.textContent = saveText;
                 savedResetTimer = null;
             }, 2000);
-
-            // Show sync status
-            status.style.display = "block";
-            if (token) {
-                status.className = "sync-token-status sync-token-enabled";
-                status.textContent = isZh ? "同步已启用" : "Sync enabled";
-            } else {
-                status.className = "sync-token-status sync-token-disabled";
-                status.textContent = isZh ? "同步已禁用" : "Sync disabled";
-            }
         };
 
         saveBtn.addEventListener("click", validateAndSave);
