@@ -35,9 +35,9 @@
     -webkit-transform: translate(-50%, -50%);
     transform: translate(-50%, -50%);
     width: min(700px, 90vw);
-    height: min(820px, 95vh);
+    height: min(525px, 85vh);
     max-width: 90vw;
-    max-height: 95vh;
+    max-height: 85vh;
     overflow: auto;
     display: flex;
     flex-direction: column;
@@ -219,7 +219,7 @@
        positioning (centered overlay) and overflow behavior. */
 }
 .settingItem-wrapper {
-    padding: 4px 0px;
+    padding: 10px 0px;
     overflow-y: unset !important;
     display: flex;
     justify-content: center; /* Align horizontal */
@@ -229,7 +229,7 @@
 }
 .settingItem-wrapper:first-child {
     /* margin-top: 0; */
-    margin-top: 12px;
+    margin-top: 20px;
     padding-top: 0;
 }
 .settingItem-span {
@@ -241,15 +241,15 @@
     font-size: 0.78rem;
     color: var(--fontInfoColor);
     opacity: 0.6;
-    margin-top: 2px;
-    line-height: 1.25;
+    margin-top: 3px;
+    line-height: 1.4;
     font-family: var(--fontFamily_ui) !important;
 }
 .settingItem-divider {
     width: var(--ui_settingMenuSeparatorWidth);
     border: none;
     border-top: 1px dashed var(--borderColor);
-    margin: 8px 0;
+    margin: 20px 0;
     align-self: center;
 }
 .settingItem-separator {
@@ -259,7 +259,7 @@
     justify-content: center;
     width: var(--ui_settingMenuSeparatorWidth);
     margin: 0;
-    padding: 8px 0;
+    padding: 20px 0;
     position: relative;
 }
 .settingItem-separator-span {
@@ -931,7 +931,7 @@ dialog::backdrop {
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    padding: 4px 0px;
+    padding: 10px 0px;
     position: relative;
 }
 .share-url-inner {
@@ -939,7 +939,7 @@ dialog::backdrop {
     gap: 8px;
     align-items: center;
     width: var(--ui_settingMenuSeparatorWidth);
-    min-height: 32px;
+    min-height: 40px;
 }
 .share-url-wrapper input {
     flex: 1;
@@ -981,7 +981,7 @@ dialog::backdrop {
 
 /* Config sync token input */
 .sync-token-wrapper {
-    padding: 4px 0px;
+    padding: 10px 0px;
     display: flex;
     justify-content: center;
     align-items: flex-start;
@@ -994,7 +994,7 @@ dialog::backdrop {
 }
 .sync-token-inner .setting-label {
     font-size: 0.85em;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     color: var(--fontColor);
     opacity: 0.9;
 }
@@ -1003,7 +1003,7 @@ dialog::backdrop {
     gap: 8px;
     align-items: center;
     width: 100%;
-    min-height: 32px;
+    min-height: 36px;
 }
 .sync-token-input-row .sync-token-input {
     flex: 1;
@@ -1044,7 +1044,7 @@ dialog::backdrop {
 }
 .sync-token-hint {
     font-size: 0.7em;
-    margin-top: 2px;
+    margin-top: 4px;
     color: var(--fontColor);
     opacity: 0.6;
 }
@@ -1054,8 +1054,8 @@ dialog::backdrop {
 }
 .sync-token-status {
     font-size: 0.75em;
-    margin-top: 2px;
-    padding: 1px 0;
+    margin-top: 4px;
+    padding: 2px 0;
 }
 .sync-token-status.sync-token-enabled {
     color: #27ae60;
