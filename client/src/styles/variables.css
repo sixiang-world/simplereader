@@ -220,10 +220,10 @@
     --ui_log_mode_note_zh: "⚠ 实验功能，可能存在BUG";
     --ui_log_mode_en: "Log Mode";
     --ui_log_mode_note_en: "⚠ Experimental, may contain bugs";
-    --ui_continuous_scroll_mode_zh: "自动拼接";
-    --ui_continuous_scroll_mode_en: "Auto-Join";
-    --ui_continuous_scroll_mode_note_zh: "⚠ 实验功能，存在已知 BUG，不推荐使用";
-    --ui_continuous_scroll_mode_note_en: "⚠ Experimental — known bugs, not recommended";
+    --ui_continuous_scroll_mode_zh: "连续滚动";
+    --ui_continuous_scroll_mode_en: "Continuous Scroll";
+    --ui_continuous_scroll_mode_note_zh: "消除分页边界，内容连续显示（与无限滚动互斥）";
+    --ui_continuous_scroll_mode_note_en: "Remove page boundaries for continuous scrolling (mutually exclusive with Infinite Scroll)";
     --ui_anonymous_mode_zh: "匿名模式";
     --ui_anonymous_mode_en: "Anonymous Mode";
     --ui_anonymous_mode_note_zh: "开启后，打开的书籍不会出现在书架上";

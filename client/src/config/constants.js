@@ -53,9 +53,8 @@ const SUPPORTED_FONT_EXT = [".ttf", ".otf"];
  * @property {boolean} SHOW_TOC_AREA_DEFAULT - Whether to show the TOC area (default value)
  * @property {boolean} ENABLE_CUSTOM_CURSOR - Whether to enable custom cursor
  * @property {boolean} ENABLE_CUSTOM_CURSOR_DEFAULT - Whether to enable custom cursor (default value)
- * @property {boolean} CONTINUOUS_SCROLL_MODE - Whether to use continuous scroll (flow) mode
+ * @property {boolean} CONTINUOUS_SCROLL_MODE - Whether to use continuous scroll (flow/auto-join) mode
  * @property {boolean} CONTINUOUS_SCROLL_MODE_DEFAULT - Whether to use continuous scroll mode (default value)
- * @property {number} CONTINUOUS_SCROLL_WINDOW_SIZE - Number of pages to preload in flow mode
  * @property {boolean} LOG_MODE - Whether to use log mode (monospace, no TOC)
  * @property {boolean} LOG_MODE_DEFAULT - Log mode default value
  * @property {boolean} SHOW_LINE_NUMBERS - Whether to show line numbers
@@ -90,7 +89,6 @@ export const CONST_CONFIG = {
     ENABLE_CUSTOM_CURSOR_DEFAULT: false,
     CONTINUOUS_SCROLL_MODE: false,
     CONTINUOUS_SCROLL_MODE_DEFAULT: false,
-    CONTINUOUS_SCROLL_WINDOW_SIZE: 3,
     SHOW_BOOK_TITLE: true,
     SHOW_BOOK_TITLE_DEFAULT: true,
     LOG_MODE: false,

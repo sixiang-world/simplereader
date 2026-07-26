@@ -171,12 +171,12 @@ if (readerSrc) {
         );
     });
 
-    test("reader.js enforces log mode → auto-join (LOG_MODE forces CONTINUOUS_SCROLL_MODE)", () => {
-        // Look for the pattern where LOG_MODE triggers CONTINUOUS_SCROLL_MODE
-        // The actual code has them on separate lines with a comment in between
+    test("reader.js enforces log mode → flow mode (LOG_MODE activates flowReader.enter())", () => {
+        // Log mode now enters flow mode via flowReader.enter() directly,
+        // without modifying CONTINUOUS_SCROLL_MODE setting value.
         assert.ok(
-            /LOG_MODE.*CONTINUOUS_SCROLL_MODE|CONTINUOUS_SCROLL_MODE.*LOG_MODE|Log mode forces continuous scroll/.test(readerSrc),
-            "reader.js should enforce log mode → auto-join relationship"
+            /flowReader\.enter\(\)|Log mode.*flow/.test(readerSrc),
+            "reader.js should activate flow mode when LOG_MODE is on"
         );
     });
 
