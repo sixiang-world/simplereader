@@ -160,6 +160,7 @@ const SETTINGS_SCHEMA = [
         bind: "CONFIG.CONST_CONFIG.LOG_MODE",
         default: CONFIG.CONST_CONFIG.LOG_MODE_DEFAULT,
         persist: true,
+        hidden: true, // Experimental — UI entry removed; default is false
     },
     {
         key: "continuous_scroll_mode",
@@ -646,7 +647,7 @@ const MENU_SCHEMA = [
             {
                 section: "setting_separator_reading_mode",
                 order: 3,
-                items: ["log_mode", "show_line_numbers"],
+                items: ["show_line_numbers"],
             },
             {
                 section: "setting_separator_t2s",
