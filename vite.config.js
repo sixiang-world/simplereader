@@ -164,9 +164,13 @@ export default defineConfig({
         rollupOptions: {
             input: fileURLToPath(new URL("./index.html", import.meta.url)),
             output: {
-                entryFileNames: "assets/[name].js",
-                chunkFileNames: "assets/[name].js",
-                assetFileNames: "assets/[name][extname]",
+                // Hash the emitted filenames so EdgeOne's `immutable,
+                // max-age=31536000` cache on /assets/* always serves the
+                // correct build. Without the hash, a new deploy would leave
+                // clients pinned to the old JS for up to a year.
+                entryFileNames: "assets/[name]-[hash].js",
+                chunkFileNames: "assets/[name]-[hash].js",
+                assetFileNames: "assets/[name]-[hash][extname]",
             },
             // jschardet is loaded as a classic <script> in the browser
             // (window.jschardet). The shared/adapters/jschardet.js adapter
