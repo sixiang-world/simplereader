@@ -1,6 +1,27 @@
 {
-    "version": "2.0.1",
+    "version": "2.1.0",
     "changelog": {
+        "2.1.0": {
+            "date": "2026-07-27",
+            "changes": {
+                "zh": [
+                    "**配置同步改为手动按需模式** — 移除启动自动拉取、周期轮询与保存时自动推送，改为设置面板「拉取 / 推送」按钮显式触发，从根本上避免本地修改被远端覆盖",
+                    "**同步令牌 UI** — 新增令牌格式校验（仅字母、数字、下划线，4–64 位）与拉取 / 推送动作的即时状态反馈",
+                    "**自动拼接重写** — 重构为仅累积的连续滚动（accumulate-only continuous scroll），修正旧实现的已知 BUG",
+                    "**修复正则越界** — 广告过滤规则中对书名 / 作者中的正则元字符进行转义，避免规则崩溃",
+                    "⚠️ **同步数据格式为 v2（字段级时间戳），与 1.x 客户端不兼容** — 多设备请统一升级到 ≥2.0.0，旧客户端读取 v2 数据会失败",
+                    "**构建与部署加固** — Vite 产物文件名加入内容哈希；统一使用 pnpm 管理依赖（移除 package-lock.json）；Docker 镜像改用 Caddy 静态服务并移除已失效的 8866 端口"
+                ],
+                "en": [
+                    "**Config sync is now manual on-demand** — removed boot auto-pull, periodic polling and auto-push-on-save; pull/push are explicit buttons in the settings panel, eliminating accidental remote overwrites",
+                    "**Sync token UI** — added token format validation (alphanumeric + underscore, 4–64 chars) and live status feedback for pull/push actions",
+                    "**Auto-join rewrite** — reimplemented as accumulate-only continuous scroll, fixing known bugs in the old implementation",
+                    "**Fixed regex overflow** — escape regex metacharacters in book name / author for the ad-filter rules to prevent crashes",
+                    "⚠️ **Sync data format is v2 (field-level timestamps), NOT compatible with 1.x clients** — upgrade all devices to ≥2.0.0; old clients fail to read v2 data",
+                    "**Build & deploy hardening** — Vite asset filenames now include a content hash; dependencies unified under pnpm (removed package-lock.json); Docker image uses Caddy static serving and drops the obsolete :8866 port"
+                ]
+            }
+        },
         "2.0.1": {
             "date": "2026-07-01",
             "changes": {
