@@ -171,7 +171,7 @@ pnpm run dev
 # Production build (outputs to dist/)
 pnpm run build
 
-# Run all 163 tests (5 test files)
+# Run all unit tests (22 test files)
 pnpm run test
 ```
 
@@ -204,8 +204,19 @@ client/
   manifests/                # Extension manifests (Chrome / Firefox / PWA)
 shared/                     # Shared core logic (client/server-agnostic)
 archive/                    # Historical code archives (server/, debug/, etc.)
-test/                       # 163 Node.js test cases
+test/                       # Unit tests (22 test files, Node-native assert)
 ```
+
+## v1 → v2 migration guide (breaking changes)
+
+This release line (since v2.0.0) is a major refactor and is **not backward compatible with v1**. Read the following before upgrading:
+
+1. **Server-side is deprecated**: the old `server/` (Node + Express + Prisma, including `/api/library/*`, `/api/auth/*`, login and the bookshelf database) is archived under `archive/server/`. **The v2 image is a static frontend only** (Vite build output), served by Caddy or any static server. There is **no migration script** for server-stored bookshelves — re-import your books after upgrading.
+2. **Config-sync security model changed**: v1 used session auth; v2 uses a **plain-text token** mode — the token is the storage key and is placed directly in the URL (`https://textdb.hunluan.space/{token}`), so it appears in server access logs and browser history. **Only sync reading preferences; do not use a token that contains sensitive information.**
+3. **Sync data format v2 (not backward compatible)**: the format is now `{_meta:{v:2}, key:{v,ts}}` with field-level timestamps, incompatible with the flat 1.x format. **Upgrade all devices to ≥2.0.0**, otherwise old clients fail to read v2 data.
+4. **`isOnServer` is deprecated**: the client no longer has the concept of "book stored on server"; related UI and fields are removed.
+
+Upgrade tip: rebuild the image (don't blindly overwrite an incompatible environment with the old `:latest`), and back up local books before upgrading.
 
 ---
 
