@@ -26,7 +26,16 @@ import { initReader } from "./modules/reader/reader.js";
 import { FileHandler } from "./modules/file/file-handler.js";
 import { SidebarSplitView } from "./components/sidebar-splitview.js";
 import { registerT2SHook } from "./core/t2s.js";
-import { pullOnBoot, mergeSyncedConfig, isSyncEnabled } from "./core/config-sync.js";
+import {
+    pullOnBoot,
+    mergeSyncedConfig,
+    isSyncEnabled,
+    getFieldTimestamps,
+    setFieldTimestamps,
+    buildPushPayload,
+    pushOnSettingsChange,
+    startPeriodicPull,
+} from "./core/config-sync.js";
 import {
     isVariableDefined,
     removeHashbang,
@@ -150,52 +159,62 @@ import {
 
     // Pull synced config from textdb.hunluan.space (if sync is configured).
     //
-    // P1-3 fix: this runs NON-BLOCKING. The previous code did
-    // `await pullOnBoot()` which blocked initBookshelf/initFontpool
-    // — if textdb was slow (2-5s), app boot was delayed. Now we fire
-    // the pull in the background and apply the result whenever it
-    // arrives. The user sees the app immediately with local settings;
-    // synced settings (if any) replace them a moment later.
+    // The pull is NON-BLOCKING (fire-and-forget). The user sees the app
+    // immediately with local settings; synced settings (if any) replace
+    // them a moment later.
     //
-    // Issue 2 fix: guard against the sync pull overwriting the user's
-    // in-flight changes. If the user has already called saveSettings()
-    // (e.g. dragged a slider, toggled a checkbox) before the sync pull
-    // resolves, applying the synced snapshot would roll back their
-    // changes. We check settings._userInteracted (set by saveSettings)
-    // and skip the merge if the user has touched anything.
+    // Merge is FIELD-LEVEL last-write-wins by timestamp: for each key,
+    // the entry with the higher timestamp wins. This prevents data loss
+    // when two devices edit different settings concurrently.
     //
-    // Sync failures (network errors, 404, parse errors) are caught and
-    // logged; they do NOT affect the running app.
+    // Keys the user has already modified in this session
+    // (_userInteractedKeys) are protected — the pull never overrides
+    // them, even if the remote timestamp is newer.
+    //
+    // After merge:
+    //   1. Changed values are written to localStorage (so they survive
+    //      reload — no redundant pull next boot).
+    //   2. applySettings() updates the UI.
+    //   3. The merged state is pushed back so other devices converge.
+    //
+    // A periodic pull (every 60s + on tab focus) picks up changes from
+    // other devices while this tab stays open.
     if (isSyncEnabled()) {
-        // Fire-and-forget — do NOT await.
-        pullOnBoot()
-            .then((syncData) => {
-                if (!syncData || typeof syncData !== "object") return;
-                // Use the imported settings singleton (P0-4 fix).
-                if (!settingsSingleton || !settingsSingleton.values) return;
-                // Issue 2 guard: if the user has interacted with settings
-                // since boot, skip the sync merge — their changes win.
-                if (settingsSingleton._userInteracted) {
-                    console.info(
-                        "[app] Config sync pull skipped: user has modified settings since boot."
-                    );
-                    return;
-                }
-                // Issue 3 fix: pass SETTINGS_SCHEMA keys as the allowed-keys
-                // filter so unknown keys in syncData are dropped. This
-                // prevents a feedback loop where unknown keys accumulate in
-                // the sync store (pull → merge → push → pull → ...).
-                const schemaKeys = new Set(SETTINGS_SCHEMA.map((s) => s.key));
-                settingsSingleton.values = mergeSyncedConfig(
-                    settingsSingleton.values,
-                    syncData,
-                    schemaKeys
-                );
+        const handleSyncPull = (syncData) => {
+            if (!syncData || typeof syncData !== "object") return;
+            if (!settingsSingleton || !settingsSingleton.values) return;
+
+            const schemaKeys = new Set(SETTINGS_SCHEMA.map((s) => s.key));
+            const localTs = getFieldTimestamps();
+            const protectedKeys = settingsSingleton._userInteractedKeys || new Set();
+
+            const result = mergeSyncedConfig(
+                settingsSingleton.values,
+                syncData,
+                schemaKeys,
+                localTs,
+                protectedKeys
+            );
+
+            if (result.changedKeys.length > 0) {
+                settingsSingleton.values = result.values;
+                settingsSingleton.persistSyncedKeys(result.changedKeys);
                 settingsSingleton.applySettings();
-            })
+                setFieldTimestamps(result.timestamps);
+                // Push merged state back so other devices converge.
+                pushOnSettingsChange(buildPushPayload(result.values));
+            }
+        };
+
+        // Fire-and-forget boot pull — do NOT await.
+        pullOnBoot()
+            .then(handleSyncPull)
             .catch((err) => {
                 console.warn("[app] Config sync pull failed:", err.message);
             });
+
+        // Periodic pull: pick up changes from other devices while open.
+        startPeriodicPull(handleSyncPull);
     }
 
     // Parallel execution of initBookshelf & initFontpool

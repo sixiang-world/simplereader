@@ -61,6 +61,8 @@ import {
     getSyncToken,
     setSyncToken,
     validateSyncToken,
+    buildPushPayload,
+    recordLocalChange,
 } from "../../core/config-sync.js";
 import { refreshShareButtonLabels } from "../../utils/label-refresh.js";
 import {
@@ -1260,6 +1262,13 @@ const settings = {
     settingsMenu: null,
 
     /*
+     * Config-sync: keys the user has modified in this session.
+     * Pulls never override these keys — the user's in-session change
+     * always wins for them. Reset on page reload.
+     */
+    _userInteractedKeys: new Set(),
+
+    /*
      * Language settings
      */
     browser_LANG: localStorage.getItem("browser_LANG") ?? "zh",
@@ -1468,6 +1477,29 @@ const settings = {
                 if (sourceKey && this.values[sourceKey] !== undefined) {
                     const $mockInput = { val: () => this.values[sourceKey] };
                     this.values[def.key] = def.getValue.call({ defaults: this.defaults }, $mockInput);
+                }
+            }
+        }
+    },
+
+    /**
+     * Persist specific keys' values to localStorage. Called after a
+     * sync pull merge to ensure the merged values survive a page
+     * reload (otherwise loadSettings would read stale localStorage
+     * values and the next pull would be redundant).
+     *
+     * @public
+     * @method persistSyncedKeys
+     * @param {string[]} keys - The keys to persist.
+     */
+    persistSyncedKeys(keys) {
+        for (const key of keys) {
+            const def = this.schemaMap[key];
+            if (def && def.persist) {
+                try {
+                    localStorage.setItem(key, this.values[key]);
+                } catch (e) {
+                    console.warn(`[settings] Failed to persist synced key '${key}':`, e);
                 }
             }
         }
@@ -1766,13 +1798,12 @@ const settings = {
     saveSettings(toSetLanguage = false, forceSetLanguage = false, colorOnly = false) {
         // console.log("saveSettings", { toSetLanguage, forceSetLanguage });
 
-        // Mark that the user has interacted with settings. This flag is
-        // checked by the config-sync pull handler (app.js) to avoid
-        // overwriting the user's in-flight changes when a sync pull
-        // resolves after the user has already started editing. Without
-        // this guard, a slow sync pull (2-5s) could roll back the user's
-        // changes by replacing settings.values with the synced snapshot.
-        this._userInteracted = true;
+        // Snapshot current values so we can detect which keys actually
+        // changed. Changed keys are:
+        //   1. Added to _userInteractedKeys (protects against sync pull
+        //      reverting them).
+        //   2. Timestamped via recordLocalChange() (field-level LWW).
+        const oldValues = { ...this.values };
 
         // Helper: update values from schema
         const updateValuesFromInputs = (filterType = null) => {
@@ -1785,10 +1816,25 @@ const settings = {
             }
         };
 
+        // Helper: detect changed keys, mark them as protected + timestamped
+        const recordChangedKeys = () => {
+            for (const def of SETTINGS_SCHEMA) {
+                const key = def.key;
+                if (this.values[key] !== oldValues[key]) {
+                    this._userInteractedKeys.add(key);
+                    recordLocalChange(key);
+                }
+            }
+        };
+
         if (colorOnly) {
             updateValuesFromInputs("color");
+            recordChangedKeys();
             this.applySettings(true);
             cbReg.go("updateAllBookCovers", { colorOnly: colorOnly });
+            if (isSyncEnabled()) {
+                pushOnSettingsChange(buildPushPayload(this.values));
+            }
             return;
         }
 
@@ -1871,8 +1917,9 @@ const settings = {
         // Trigger a debounced background push to the config-sync
         // endpoint (textdb.hunluan.space). No-op if sync is not
         // configured (no token in localStorage).
+        recordChangedKeys();
         if (isSyncEnabled()) {
-            pushOnSettingsChange({ ...this.values });
+            pushOnSettingsChange(buildPushPayload(this.values));
         }
     },
 
