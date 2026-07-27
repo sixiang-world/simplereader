@@ -166,7 +166,11 @@ const SETTINGS_SCHEMA = [
         bind: "CONFIG.CONST_CONFIG.LOG_MODE",
         default: CONFIG.CONST_CONFIG.LOG_MODE_DEFAULT,
         persist: true,
-        hidden: true, // Experimental — UI entry removed; default is false
+        // Experimental feature with known bugs (see review P2-3). Hidden by
+        // default, but can be revealed deliberately via the CONFIG feature
+        // flag below — instead of being silently dropped from the UI.
+        hidden: true,
+        featureFlag: "LOG_MODE_UI_ENABLED",
     },
     {
         key: "continuous_scroll_mode",
