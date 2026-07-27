@@ -57,6 +57,7 @@ const SUPPORTED_FONT_EXT = [".ttf", ".otf"];
  * @property {boolean} CONTINUOUS_SCROLL_MODE_DEFAULT - Whether to use continuous scroll mode (default value)
  * @property {boolean} LOG_MODE - Whether to use log mode (monospace, no TOC)
  * @property {boolean} LOG_MODE_DEFAULT - Log mode default value
+ * @property {boolean} LOG_MODE_UI_ENABLED - Whether to expose the (experimental, known-bugs) log mode toggle in the settings UI. Gated behind a flag instead of a hardcoded `hidden: true` so it can be enabled deliberately.
  * @property {boolean} SHOW_LINE_NUMBERS - Whether to show line numbers
  * @property {boolean} SHOW_LINE_NUMBERS_DEFAULT - Whether to show line numbers (default value)
  * @property {RegExp} LOG_FILENAME_RE - Pattern to detect log files
@@ -93,6 +94,7 @@ export const CONST_CONFIG = {
     SHOW_BOOK_TITLE_DEFAULT: true,
     LOG_MODE: false,
     LOG_MODE_DEFAULT: false,
+    LOG_MODE_UI_ENABLED: false,
     SHOW_LINE_NUMBERS: false,
     SHOW_LINE_NUMBERS_DEFAULT: false,
     // Traditional → Simplified Chinese conversion (see client/src/core/t2s.js)

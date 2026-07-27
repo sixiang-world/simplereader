@@ -540,7 +540,11 @@ class SettingsMenu {
                 }
 
                 const def = this.#SETTINGS_MAP[itemId];
-                if (!def || def.hidden) continue; // skip undefined or hidden items
+                // Skip undefined items and hidden items, UNLESS the item is
+                // gated behind a CONFIG feature flag that is currently enabled
+                // (e.g. log_mode behind CONFIG.CONST_CONFIG.LOG_MODE_UI_ENABLED).
+                if (!def) continue;
+                if (def.hidden && !(def.featureFlag && CONFIG.CONST_CONFIG[def.featureFlag])) continue;
 
                 // Choose the right UI helper
                 let el = null;
