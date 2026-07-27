@@ -76,7 +76,6 @@ const SVG_DEFS = {
  * @property {string} ICONS.FINISHED_BADGE_OLD - The "finished badge old" icon definition.
  * @property {string} ICONS.FINISHED_BADGE - The "finished badge" icon definition.
  * @property {string} ICONS.NEWBOOK_RIBBON - The "newbook ribbon" icon definition.
- * @property {string} ICONS.BOOK_IS_ON_SERVER - The "book is on server" icon definition.
  * @property {string} ICONS.DELETE_BOOK - The "delete book" icon definition.
  * @property {string} ICONS.DELETE_ALL_BOOKS - The "delete all books" icon definition.
  * @property {string} ICONS.SCROLL_TOP - The "booklist scroll top" icon definition.
@@ -145,9 +144,6 @@ export const ICONS = {
                 <path class="svg-shadow" d="M199.3,90.5L109.8,0.8c-0.1,0-7.5,4.1-7.6,4.2h8.8l84,84.2V98L199.3,90.5z"/>
                     <polygon class="svg-ribbon" points="156,1 109.4,1 199,90.7 199,44.1 "/>
                 </svg>`,
-    BOOK_IS_ON_SERVER: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40">
-                        <path d="M24.7793,25.30225H7.2207A6.02924,6.02924,0,0,1,1.84375,22.0708c-1.99856-3.83755.74946-8.94738,5.2832-8.8418a9.30623,9.30623,0,0,1,17.74121-.0249A6.04953,6.04953,0,0,1,24.7793,25.30225ZM7.25781,15.22754c-3.1607-.153-4.95556,3.33035-3.62493,5.94832a4.01435,4.01435,0,0,0,3.63079,2.12736l17.5166-.001A4.05253,4.05253,0,1,0,22.11722,16.202a1.00012,1.00012,0,0,1-1.41312-.05653c-1.00583-1.32476,1.17841-2.28273,2.15235-2.65332A7.30425,7.30425,0,0,0,8.8623,14.4779C8.70326,15.24838,7.89656,15.30989,7.25781,15.22754Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>`,
     DELETE_BOOK: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M6 7V18C6 19.1046 6.89543 20 8 20H16C17.1046 20 18 19.1046 18 18V7M6 7H5M6 7H8M18 7H19M18 7H16M10 11V16M14 11V16M8 7V5C8 3.89543 8.89543 3 10 3H14C15.1046 3 16 3.89543 16 5V7M8 7H16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>`,

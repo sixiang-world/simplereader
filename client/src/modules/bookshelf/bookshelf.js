@@ -860,9 +860,6 @@ const bookshelf = {
                 </div>
                 <div class="info-container">
                     <div class="progress"></div>
-                    <div class="isOnServer">
-                        ${bookInfo.isOnServer && !bookInfo.isFromLocal ? `${ICONS.BOOK_IS_ON_SERVER}` : ""}
-                    </div>
                     <div class="delete-btn-wrapper">
                         <span class="delete-btn hasTitle" data-title="${
                             CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_removeBook
