@@ -419,11 +419,15 @@ export async function pushConfig(payload, opts = {}) {
                 return true;
             }
 
-            // 4xx = client error — don't retry.
+            // 4xx = client error (bad/revoked token, quota). Don't retry the
+            // network call, but RETAIN the payload so a later manual retry (or
+            // token fix) can resend it instead of silently dropping the user's
+            // settings change. (Previously the payload was discarded here.)
             if (res.status >= 400 && res.status < 500) {
                 console.warn(
-                    `[config-sync] pushConfig: HTTP ${res.status} ${res.statusText} (not retrying)`
+                    `[config-sync] pushConfig: HTTP ${res.status} ${res.statusText} (not retrying; payload retained for retry)`
                 );
+                _pendingPushPayload = payload;
                 return false;
             }
 
@@ -491,6 +495,21 @@ export async function flushPendingPush(opts = {}) {
  * @public
  */
 export function _cancelPendingPush() {
+    if (_pushTimer) {
+        clearTimeout(_pushTimer);
+        _pushTimer = null;
+    }
+}
+
+/**
+ * Reset all module-level mutable state. Tests ONLY — clears the pending-push
+ * payload and any in-flight debounce timer so cases don't leak state into
+ * each other. (Addresses review P3-4: `_pendingPushPayload` is module-level
+ * singleton state that could cross-contaminate tests.)
+ * @public
+ */
+export function __resetForTest() {
+    _pendingPushPayload = null;
     if (_pushTimer) {
         clearTimeout(_pushTimer);
         _pushTimer = null;
