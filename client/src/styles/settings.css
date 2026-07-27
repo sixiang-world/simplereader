@@ -1051,3 +1051,51 @@ dialog::backdrop {
     color: #e74c3c;
     opacity: 1;
 }
+.sync-token-action-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    width: 100%;
+}
+.sync-token-action-btn {
+    flex-shrink: 0;
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid var(--mainColor_inactive);
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.8em;
+    white-space: nowrap;
+    transition: background 0.15s;
+    box-sizing: border-box;
+    line-height: normal;
+}
+.sync-token-action-btn:hover:not(:disabled) {
+    background: var(--mainColor_active);
+    color: var(--bgColor);
+    border-color: var(--mainColor_active);
+}
+.sync-token-action-btn:disabled {
+    opacity: 0.5;
+    cursor: progress;
+}
+.sync-token-status {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.72em;
+    opacity: 0.7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sync-token-status-ok {
+    color: #2ecc71;
+    opacity: 1;
+}
+.sync-token-status-err {
+    color: #e74c3c;
+    opacity: 1;
+}

@@ -4,6 +4,15 @@
  * Implements multi-device settings synchronization via the textdb-edgeone
  * serverless KV store (https://github.com/sixiang-world/textdb-edgeone).
  *
+ * == Sync model: MANUAL (on-demand) ==
+ *
+ * Pull and push are independent request actions — they are NOT triggered
+ * automatically. There is no boot-time auto-pull, no periodic background
+ * polling, no auto-push on settings change, and no `online`-event auto-retry.
+ * The caller (e.g. the settings panel) invokes `pullOnBoot` / `pushConfig`
+ * explicitly (typically via "Pull" / "Push" buttons) and handles the
+ * returned change-status to update local state and re-render the UI.
+ *
  * == API contract (textdb-edgeone) ==
  *
  *   GET    https://textdb.hunluan.space/{key}
@@ -62,7 +71,7 @@
  *
  * Sync failure must NEVER crash the app. All network errors are
  * caught, logged, and surface as `null` (pull) or `false` (push).
- * Failed pushes are stored for retry on the next `online` event.
+ * Failed pushes are stored for manual retry via `flushPendingPush()`.
  *
  * @module client/src/core/config-sync
  */
@@ -76,7 +85,6 @@ const STORAGE_KEY_LAST_PUSH = "config_sync_lastPushedAt";
 const STORAGE_KEY_LAST_PULL = "config_sync_lastPulledAt";
 const STORAGE_KEY_FIELD_TS = "config_sync_fieldTs";
 const SYNC_SCHEMA_VERSION = 2;
-const PERIODIC_PULL_INTERVAL_MS = 60_000;
 
 /** @type {number} Max push attempts on failure. */
 const MAX_PUSH_RETRIES = 3;
@@ -90,12 +98,6 @@ let _pushTimer = null;
 
 /** @type {any|null} Payload awaiting retry (set when all push attempts fail). */
 let _pendingPushPayload = null;
-
-/** @type {ReturnType<typeof setInterval>|null} Timer for periodic pull. */
-let _pullIntervalId = null;
-
-/** @type {((syncData: Object) => void)|null} Callback for periodic pull. */
-let _pullCallback = null;
 
 // ── Token management ────────────────────────────────────────────────────
 
@@ -563,87 +565,6 @@ export function mergeSyncedConfig(currentValues, syncData, allowedKeys = null, l
 
     return { values: result, timestamps: newTs, changedKeys };
 }
-
-// ── Periodic pull ───────────────────────────────────────────────────────
-
-/**
- * Internal: perform a pull and invoke the callback if data was received.
- * @private
- */
-async function _doPeriodicPull() {
-    if (!isSyncEnabled()) return;
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-    try {
-        const syncData = await pullOnBoot();
-        if (syncData && _pullCallback) {
-            _pullCallback(syncData);
-        }
-    } catch (e) {
-        console.warn("[config-sync] Periodic pull failed:", e.message);
-    }
-}
-
-/**
- * Internal: visibilitychange handler — pull when tab becomes visible.
- * @private
- */
-function _onVisibilityChange() {
-    if (typeof document === "undefined") return;
-    if (document.visibilityState === "visible") {
-        _doPeriodicPull();
-    }
-}
-
-/**
- * Start periodic background pulls so that changes from other devices
- * are picked up while this tab is open. Also pulls when the tab
- * becomes visible again (e.g. user switches back from another tab).
- *
- * @param {(syncData: Object) => void} callback - Called with sync data
- *        on each successful pull.
- * @param {number} [intervalMs=60000] - Poll interval.
- * @public
- */
-export function startPeriodicPull(callback, intervalMs = PERIODIC_PULL_INTERVAL_MS) {
-    stopPeriodicPull();
-    _pullCallback = callback;
-    _pullIntervalId = setInterval(_doPeriodicPull, intervalMs);
-    if (typeof document !== "undefined") {
-        document.addEventListener("visibilitychange", _onVisibilityChange);
-    }
-}
-
-/**
- * Stop periodic background pulls.
- * @public
- */
-export function stopPeriodicPull() {
-    if (_pullIntervalId) {
-        clearInterval(_pullIntervalId);
-        _pullIntervalId = null;
-    }
-    if (typeof document !== "undefined") {
-        document.removeEventListener("visibilitychange", _onVisibilityChange);
-    }
-    _pullCallback = null;
-}
-
-// ── Online/offline auto-retry ───────────────────────────────────────────
-
-/**
- * Wire up the `online` event to retry any pending push.
- * Called once at module load (guarded for non-browser environments).
- * @private
- */
-function _initOnlineRetry() {
-    if (typeof window === "undefined" || !window.addEventListener) return;
-    window.addEventListener("online", () => {
-        flushPendingPush().catch((err) => {
-            console.warn("[config-sync] Online retry push failed:", err);
-        });
-    });
-}
-_initOnlineRetry();
 
 // ── Timestamp accessors (kept for backward compat) ──────────────────────
 

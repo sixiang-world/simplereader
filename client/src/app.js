@@ -20,22 +20,11 @@ import * as CONFIG from "./config/index.js";
 import { cbReg } from "../../shared/core/callback/callback-registry.js";
 import { initBookshelf } from "./modules/bookshelf/bookshelf.js";
 import { initFontpool } from "./modules/font/fontpool.js";
-import { initSettings, settings as settingsSingleton } from "./modules/settings/settings.js";
-import { SETTINGS_SCHEMA } from "./config/schema/settings-schema.js";
+import { initSettings } from "./modules/settings/settings.js";
 import { initReader } from "./modules/reader/reader.js";
 import { FileHandler } from "./modules/file/file-handler.js";
 import { SidebarSplitView } from "./components/sidebar-splitview.js";
 import { registerT2SHook } from "./core/t2s.js";
-import {
-    pullOnBoot,
-    mergeSyncedConfig,
-    isSyncEnabled,
-    getFieldTimestamps,
-    setFieldTimestamps,
-    buildPushPayload,
-    pushOnSettingsChange,
-    startPeriodicPull,
-} from "./core/config-sync.js";
 import {
     isVariableDefined,
     removeHashbang,
@@ -157,65 +146,10 @@ import {
     // invocation, so it's safe to register once at boot.
     registerT2SHook();
 
-    // Pull synced config from textdb.hunluan.space (if sync is configured).
-    //
-    // The pull is NON-BLOCKING (fire-and-forget). The user sees the app
-    // immediately with local settings; synced settings (if any) replace
-    // them a moment later.
-    //
-    // Merge is FIELD-LEVEL last-write-wins by timestamp: for each key,
-    // the entry with the higher timestamp wins. This prevents data loss
-    // when two devices edit different settings concurrently.
-    //
-    // Keys the user has already modified in this session
-    // (_userInteractedKeys) are protected — the pull never overrides
-    // them, even if the remote timestamp is newer.
-    //
-    // After merge:
-    //   1. Changed values are written to localStorage (so they survive
-    //      reload — no redundant pull next boot).
-    //   2. applySettings() updates the UI.
-    //   3. The merged state is pushed back so other devices converge.
-    //
-    // A periodic pull (every 60s + on tab focus) picks up changes from
-    // other devices while this tab stays open.
-    if (isSyncEnabled()) {
-        const handleSyncPull = (syncData) => {
-            if (!syncData || typeof syncData !== "object") return;
-            if (!settingsSingleton || !settingsSingleton.values) return;
-
-            const schemaKeys = new Set(SETTINGS_SCHEMA.map((s) => s.key));
-            const localTs = getFieldTimestamps();
-            const protectedKeys = settingsSingleton._userInteractedKeys || new Set();
-
-            const result = mergeSyncedConfig(
-                settingsSingleton.values,
-                syncData,
-                schemaKeys,
-                localTs,
-                protectedKeys
-            );
-
-            if (result.changedKeys.length > 0) {
-                settingsSingleton.values = result.values;
-                settingsSingleton.persistSyncedKeys(result.changedKeys);
-                settingsSingleton.applySettings();
-                setFieldTimestamps(result.timestamps);
-                // Push merged state back so other devices converge.
-                pushOnSettingsChange(buildPushPayload(result.values));
-            }
-        };
-
-        // Fire-and-forget boot pull — do NOT await.
-        pullOnBoot()
-            .then(handleSyncPull)
-            .catch((err) => {
-                console.warn("[app] Config sync pull failed:", err.message);
-            });
-
-        // Periodic pull: pick up changes from other devices while open.
-        startPeriodicPull(handleSyncPull);
-    }
+    // Config sync is MANUAL (on-demand): pull/push are triggered by the
+    // user via the token panel buttons (settings.syncPull / settings.syncPush).
+    // There is no boot-time auto-pull, no periodic polling, and no auto-push
+    // on settings change. See docs/config-sync-fix-plan.md §零.
 
     // Parallel execution of initBookshelf & initFontpool
     if (window.consoleTime) console.time("[time][background] Initialize Bookshelf");
