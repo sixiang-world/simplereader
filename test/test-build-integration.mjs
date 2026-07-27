@@ -46,12 +46,29 @@ test("dist/index.html exists", () => {
     assert.ok(fs.existsSync(path.join(DIST, "index.html")), "dist/index.html missing");
 });
 
-test("dist/assets/index.js exists", () => {
-    assert.ok(fs.existsSync(path.join(DIST, "assets", "index.js")), "dist/assets/index.js missing");
+// Helper: list files in dist/assets/ (hashed filenames since v2.1.0).
+function listAssets() {
+    const assetsDir = path.join(DIST, "assets");
+    if (!fs.existsSync(assetsDir)) return [];
+    return fs.readdirSync(assetsDir);
+}
+
+test("dist/assets/ contains a hashed entry JS bundle", () => {
+    const assets = listAssets();
+    const entryJs = assets.find((f) => /^index-.*\.js$/.test(f));
+    assert.ok(
+        entryJs,
+        `Expected dist/assets/index-<hash>.js (hashed). Found: ${assets.join(", ") || "(empty)"}`
+    );
 });
 
-test("dist/assets/index.css exists", () => {
-    assert.ok(fs.existsSync(path.join(DIST, "assets", "index.css")), "dist/assets/index.css missing");
+test("dist/assets/ contains a hashed entry CSS bundle", () => {
+    const assets = listAssets();
+    const entryCss = assets.find((f) => /^index-.*\.css$/.test(f));
+    assert.ok(
+        entryCss,
+        `Expected dist/assets/index-<hash>.css (hashed). Found: ${assets.join(", ") || "(empty)"}`
+    );
 });
 
 test("dist/version.json exists", () => {
@@ -96,17 +113,17 @@ test("dist/shared/ directory exists (worker dependencies)", () => {
 
 console.log("\nbuild integration — Production minification\n");
 
-test("dist/assets/index.js.map does NOT exist (production disables sourcemaps)", () => {
-    assert.ok(
-        !fs.existsSync(path.join(DIST, "assets", "index.js.map")),
-        "Source map should not exist in production build"
-    );
+test("dist/assets/ contains no source maps (production disables sourcemaps)", () => {
+    const maps = listAssets().filter((f) => f.endsWith(".js.map") || f.endsWith(".css.map"));
+    assert.ok(maps.length === 0, `Unexpected source maps in dist/assets: ${maps.join(", ")}`);
 });
 
-test("dist/assets/index.js is minified (no long multi-line comments)", () => {
-    const js = fs.readFileSync(path.join(DIST, "assets", "index.js"), "utf-8");
+test("dist/assets entry JS is minified (no block comments)", () => {
+    const entryJs = listAssets().find((f) => /^index-.*\.js$/.test(f));
+    assert.ok(entryJs, "entry JS not found");
+    const js = fs.readFileSync(path.join(DIST, "assets", entryJs), "utf-8");
     // Minified code should not contain typical un-minified multi-line block comments
-    assert.ok(!js.includes("/**"), "index.js still contains block comments (not minified)");
+    assert.ok(!js.includes("/**"), "entry JS still contains block comments (not minified)");
 });
 
 console.log("\nbuild integration — Font assets\n");
@@ -115,10 +132,11 @@ test("dist/client/fonts/ directory exists", () => {
     assert.ok(fs.existsSync(path.join(DIST, "client", "fonts")), "fonts/ missing in dist/");
 });
 
-test("dist/assets/LXGWWenKaiScreen_sub.woff2 exists", () => {
+test("dist/assets/ contains the subset UI font (hashed)", () => {
+    const font = listAssets().find((f) => /^LXGWWenKaiScreen_sub-.*\.woff2$/.test(f));
     assert.ok(
-        fs.existsSync(path.join(DIST, "assets", "LXGWWenKaiScreen_sub.woff2")),
-        "Subset UI font missing"
+        font,
+        `Subset UI font missing in dist/assets (hashed name expected)`
     );
 });
 
