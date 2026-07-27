@@ -27,17 +27,20 @@ jobs:
           node-version: "22"
 
       # (v2 refactor) The project now ships a package.json with a `test`
-      # script that runs ALL 5 test suites in sequence (163 tests total):
-      #   - test-issue-12.mjs        (6 tests, share-button i18n)
-      #   - test-url-settings.mjs    (39 tests, URL ?key=value parsing)
-      #   - test-base-submodules.mjs (80 tests, base/ submodule split)
-      #   - test-hooks.mjs           (16 tests, hook system)
-      #   - test-presets.mjs         (22 tests, preset manager stub)
-      # Previously the workflow only ran the first two suites, which let
-      # regressions in the v2 refactored modules slip through CI.
+      # script that runs ALL test suites in sequence (22 test files under
+      # test/, covering T2S, presets, pre-pagination, hooks, config sync,
+      # worker resolution, CSS/i18n completeness, build integration, etc.).
+      # The `build` step below is REQUIRED: test-build-integration.mjs
+      # asserts that dist/ exists and contains the production artifacts.
+      - name: Setup pnpm via corepack
+        run: corepack enable
+
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: pnpm install --frozen-lockfile --no-audit --no-fund
+
+      - name: Build production bundle
+        run: pnpm run build
 
       - name: Run all tests
-        run: npm run test
+        run: pnpm run test
         working-directory: ${{ github.workspace }}

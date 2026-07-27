@@ -30,7 +30,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-USE_PNPM="${USE_PNPM:-0}"
+# Default to pnpm (the project's single source of truth for dependencies,
+# declared via pnpm-workspace.yaml + pnpm-lock.yaml). Set USE_PNPM=0 to force
+# npm (not recommended — npm ignores pnpm-lock.yaml and can drift).
+USE_PNPM="${USE_PNPM:-1}"
 WITH_BUILD=0
 for arg in "$@"; do
   case "$arg" in

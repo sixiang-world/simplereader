@@ -10,10 +10,10 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml jsconfig.json ./
 COPY vite.config.js ./
 
-# Install dependencies (use npm — pnpm is not preinstalled in node:20-alpine;
-# npm can install from a pnpm-lock.yaml + package.json without issue, since
-# the lockfile is only consulted by pnpm itself)
-RUN npm install --no-audit --no-fund
+# Enable pnpm via corepack (pnpm is declared in package.json `packageManager`)
+# and install from the committed pnpm-lock.yaml. This keeps the dependency
+# tree identical across EdgeOne / Docker / local dev (single source of truth).
+RUN corepack enable && corepack prepare pnpm@$(node -p "require('./package.json').packageManager.replace(/pnpm@/, '')") --activate && pnpm install --frozen-lockfile --no-audit --no-fund
 
 # Copy source
 COPY index.html version.json help.json ./
@@ -21,7 +21,7 @@ COPY client/ ./client/
 COPY shared/ ./shared/
 
 # Build static bundle → /app/dist
-RUN npm run build
+RUN pnpm run build
 
 # ---- Runtime stage ---------------------------------------------------------
 # Serve dist/ as static files. Caddy is ~30MB, has automatic gzip/br, and
@@ -37,11 +37,9 @@ COPY --from=builder /app/dist/ /srv/
 RUN mkdir -p /srv/books
 VOLUME ["/srv/books"]
 
-# Caddy serves /srv on :80 by default with no Caddyfile needed for a static
-# site. Expose 80 (default) and 8866 (kept for parity with the old server's
-# documented port — map either at runtime via `docker -p`).
+# Caddy serves /srv on :80 (see CMD). v2 is a static frontend only — the
+# old server's :8866 port no longer exists, so only :80 is exposed.
 EXPOSE 80
-EXPOSE 8866
 
 # Inline Caddyfile: serve /srv on :80, enable gzip/br, SPA fallback to index.html
 CMD ["caddy", "file-server", "--root", "/srv", "--listen", ":80", "--browse"]
