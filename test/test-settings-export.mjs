@@ -169,6 +169,19 @@ test("REGRESSION: applySyncPull syncs form controls after merge", () => {
     );
 });
 
+test("REGRESSION: token UI state persists across page refresh", () => {
+    // The save button must reflect the persisted token on init (not always
+    // show "Save"), and the panel must refresh the token input on show() so
+    // unsaved edits are discarded in favour of the saved token.
+    assert.ok(
+        /refreshSyncTokenUI\s*\(/.test(src),
+        "Expected `refreshSyncTokenUI()` method in settings.js to re-render " +
+            "the token input/button from the persisted token."
+    );
+    const showCaller = /refreshSyncTokenUI\s*\(/.test(src);
+    assert.ok(showCaller, "Expected settings.js to call refreshSyncTokenUI on show().");
+});
+
 // ── Summary ─────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -225,6 +225,10 @@ class SettingsMenu {
             shareInput.value = this.settingsObj.generateConfigURL();
         }
 
+        // Refresh the sync-token panel so it reflects the persisted token
+        // (discards any unsaved edits left in the input from a prior session).
+        this.settingsObj.refreshSyncTokenUI();
+
         // Add global wheel event handler
         // Disable page scrolling when settings menu is open
         document.body.style.overflow = "hidden";
@@ -897,10 +901,12 @@ class SettingsMenu {
         input.setAttribute("spellcheck", "false");
         inputRow.appendChild(input);
 
-        // Save button
+        // Save button — initial state reflects whether a token is already saved
         const saveBtn = document.createElement("button");
         saveBtn.className = "sync-token-save-btn";
-        saveBtn.textContent = saveText;
+        const _hasToken = !!getSyncToken();
+        saveBtn.textContent = _hasToken ? savedEnabledText : saveText;
+        if (_hasToken) saveBtn.dataset.savedState = "enabled";
         inputRow.appendChild(saveBtn);
 
         inner.appendChild(inputRow);
@@ -1626,6 +1632,54 @@ const settings = {
             } else if (def.type === "select-font") {
                 setSelectorValue(def.label, findFontIndex(this.values[def.key]));
             }
+        }
+    },
+
+    /**
+     * Refresh the sync-token panel UI from the persisted token state.
+     *
+     * Re-reads the token from localStorage and re-renders the input value,
+     * save-button label/state, hint, and action status. Called on settings
+     * menu show() so that any unsaved edits typed into the input (which
+     * persist because the panel DOM is kept alive via show/hide) are
+     * discarded in favour of the actually-saved token.
+     *
+     * @public
+     */
+    refreshSyncTokenUI() {
+        const input = document.getElementById("config-sync-token");
+        if (!input) return;
+        const saveBtn = document.querySelector(".sync-token-save-btn");
+        const hint = document.getElementById("config-sync-token-hint");
+        const status = document.querySelector(".sync-token-status");
+
+        const isZh = CONFIG.RUNTIME_VARS.STYLE.ui_LANG === "zh";
+        const saveText = isZh ? "保存" : "Save";
+        const savedEnabledText = isZh ? "✓ 已启用" : "✓ Enabled";
+        const hintText = isZh
+            ? "仅支持字母、数字和下划线（4-64 位）"
+            : "Letters, digits, and underscores only (4-64 chars)";
+
+        const token = getSyncToken();
+        // Restore the saved token, discarding any unsaved in-input edits.
+        input.value = token || "";
+
+        if (saveBtn) {
+            if (token) {
+                saveBtn.textContent = savedEnabledText;
+                saveBtn.dataset.savedState = "enabled";
+            } else {
+                saveBtn.textContent = saveText;
+                delete saveBtn.dataset.savedState;
+            }
+        }
+        if (hint) {
+            hint.classList.remove("sync-token-error");
+            hint.textContent = hintText;
+        }
+        if (status) {
+            status.textContent = "";
+            status.classList.remove("sync-token-status-ok", "sync-token-status-err");
         }
     },
 
