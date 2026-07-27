@@ -153,6 +153,22 @@ test("REGRESSION: settings.js has persistSyncedKeys method", () => {
     );
 });
 
+test("REGRESSION: applySyncPull syncs form controls after merge", () => {
+    // After a manual pull merges new values, applySettings() alone only
+    // updates runtime CSS vars — the settings-panel form controls (range,
+    // color, checkbox, font selector) would still show stale values until a
+    // page reload. applySyncPull must call syncValuesToForm to refresh them.
+    assert.ok(
+        /syncValuesToForm\s*\(/.test(src),
+        "Expected `syncValuesToForm()` method in settings.js."
+    );
+    assert.ok(
+        /applySyncPull[\s\S]*?syncValuesToForm\s*\(/.test(src),
+        "Expected applySyncPull to call `syncValuesToForm()` after merging, " +
+            "otherwise the settings UI does not reflect pulled values without a reload."
+    );
+});
+
 // ── Summary ─────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

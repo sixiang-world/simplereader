@@ -1585,6 +1585,51 @@ const settings = {
     },
 
     /**
+     * Sync the current `this.values` back into the settings-panel form
+     * controls (range sliders, color pickers, checkboxes, font selectors,
+     * and the language selector). This is the reverse of saveSettings —
+     * it makes the UI reflect the in-memory values.
+     *
+     * Used after a sync pull merges new values, and after loadDefaultSettings.
+     *
+     * @param {string[]|Set<string>|null} [keys=null] - Only sync these keys.
+     *        If null/empty, syncs all schema keys.
+     * @public
+     */
+    syncValuesToForm(keys = null) {
+        const keySet = Array.isArray(keys)
+            ? new Set(keys)
+            : (keys instanceof Set ? keys : null);
+
+        // Language selector has special handling via respectUserLangSetting.
+        if (!keySet || keySet.has("ui_language")) {
+            if (this.respectUserLangSetting) {
+                setSelectorValue(
+                    "setting_ui_language",
+                    Object.keys(CONFIG.CONST_UI.LANGUAGE_MAPPING).indexOf(this.values.ui_language) + 1
+                );
+            } else {
+                setSelectorValue("setting_ui_language", 0);
+            }
+        }
+
+        for (const def of SETTINGS_SCHEMA) {
+            if (def.hidden) continue;
+            if (def.key === "ui_language") continue;
+            if (keySet && !keySet.has(def.key)) continue;
+            if (def.type === "range") {
+                setRangeValue(def.label, this.values[def.key]);
+            } else if (def.type === "checkbox") {
+                setCheckboxValue(def.label, this.values[def.key]);
+            } else if (def.type === "color") {
+                setColorValue(def.label, this.values[def.key]);
+            } else if (def.type === "select-font") {
+                setSelectorValue(def.label, findFontIndex(this.values[def.key]));
+            }
+        }
+    },
+
+    /**
      * Apply pulled sync data: merge into current values using field-level
      * LWW, persist changed keys, re-render the UI. This is the core
      * "process the returned change-status → local update → render" step
@@ -1614,6 +1659,9 @@ const settings = {
             this.values = result.values;
             this.persistSyncedKeys(result.changedKeys);
             this.applySettings();
+            // Sync the settings-panel form controls (select/range/color/checkbox)
+            // so they reflect the newly merged values without a page reload.
+            this.syncValuesToForm(result.changedKeys);
             setFieldTimestamps(result.timestamps);
         }
         return result.changedKeys;
@@ -1704,34 +1752,7 @@ const settings = {
         }
 
         // Sync settings to UI
-        if (this.respectUserLangSetting) {
-            setSelectorValue(
-                "setting_ui_language",
-                Object.keys(CONFIG.CONST_UI.LANGUAGE_MAPPING).indexOf(this.values.ui_language) + 1
-            );
-        } else {
-            setSelectorValue("setting_ui_language", 0);
-        }
-
-        for (const def of SETTINGS_SCHEMA) {
-            if (def.hidden) continue;
-            if (def.key === "ui_language") continue;
-            if (def.type === "range") {
-                setRangeValue(def.label, this.values[def.key]);
-            }
-            if (def.type === "checkbox") {
-                setCheckboxValue(def.label, this.values[def.key]);
-            }
-            if (def.type === "color") {
-                setColorValue(def.label, this.values[def.key]);
-            }
-            if (def.type === "select-font") {
-                setSelectorValue(def.label, findFontIndex(this.values[def.key]));
-            }
-            // if (def.type === "select") {
-            //     setSelectorValue(def.label, findFontIndex(this.values[def.key]));
-            // }
-        }
+        this.syncValuesToForm();
     },
 
     /**
