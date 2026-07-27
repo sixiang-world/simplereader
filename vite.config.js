@@ -91,6 +91,7 @@ export default defineConfig({
                 copyDir(root + "version.json", distPath + "version.json");
                 copyDir(root + "help.json", distPath + "help.json");
                 copyDir(root + "client/fonts/", distPath + "client/fonts/");
+                copyDir(root + "client/images/", distPath + "client/images/");
                 // ── Web Workers and their runtime-imported deps ──
                 //
                 // Vite only bundles modules statically reachable from
