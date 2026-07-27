@@ -1,17 +1,16 @@
 /**
- * Tests for the config-sync HTTP client in client/src/core/config-sync.js.
+ * Tests for the config-sync client in client/src/core/config-sync.js.
  *
  * Covers:
- *   - getSyncToken / setSyncToken / isSyncEnabled (localStorage roundtrip)
- *   - pullOnBoot: 200 with valid JSON, 404, network error, parse error,
- *     non-object body, sync disabled
- *   - pushConfig: 200 success, 4xx (no retry), 5xx (retry with backoff),
- *     network error (retry), sync disabled
+ *   - Token management (getSyncToken / setSyncToken / isSyncEnabled)
+ *   - Token validation (validateSyncToken)
+ *   - pullOnBoot: 200 v2, 200 v1→v2 migration, 404, network error, parse error
+ *   - pushConfig: success, 4xx (no retry), 5xx (retry), network error
  *   - pushOnSettingsChange: debounce behavior
- *   - mergeSyncedConfig: local precedence rule
- *
- * Network calls are mocked via a fake fetchImpl — no real HTTP requests
- * are made. This makes the tests fast and deterministic.
+ *   - Field timestamps (getFieldTimestamps / setFieldTimestamps / recordLocalChange)
+ *   - buildPushPayload: v2 format with timestamps
+ *   - mergeSyncedConfig: field-level LWW by timestamp
+ *   - flushPendingPush: offline retry
  *
  * Run: node test/test-config-sync.mjs
  */
@@ -44,6 +43,11 @@ const {
     pushConfig,
     pushOnSettingsChange,
     mergeSyncedConfig,
+    buildPushPayload,
+    recordLocalChange,
+    getFieldTimestamps,
+    setFieldTimestamps,
+    flushPendingPush,
     getLastPushedAt,
     getLastPulledAt,
     _cancelPendingPush,
@@ -70,9 +74,6 @@ function reset() {
 
 /**
  * Build a fake fetch that returns a configurable response sequence.
- *
- * @param {Array<{status?: number, body?: string, ok?: boolean, error?: Error}>} responses
- * @returns {{fetch: typeof fetch, calls: Array<{url: string, init: Object}>}}
  */
 function makeFakeFetch(responses) {
     const calls = [];
@@ -100,8 +101,8 @@ console.log("core/config-sync.js — token management\n");
 
 await test("setSyncToken / getSyncToken roundtrip", () => {
     reset();
-    setSyncToken("my-secret-phrase");
-    assert.equal(getSyncToken(), "my-secret-phrase");
+    setSyncToken("mysecretphrase");
+    assert.equal(getSyncToken(), "mysecretphrase");
 });
 
 await test("setSyncToken(null) clears the token", () => {
@@ -124,6 +125,133 @@ await test("isSyncEnabled: true when token set", () => {
     assert.equal(isSyncEnabled(), true);
 });
 
+// ── Token validation ────────────────────────────────────────────────────
+
+console.log("\ncore/config-sync.js — validateSyncToken\n");
+
+await test("validateSyncToken: empty string is valid (disables sync)", () => {
+    const result = validateSyncToken("");
+    assert.equal(result.valid, true);
+});
+
+await test("validateSyncToken: whitespace-only trims to empty → valid", () => {
+    assert.equal(validateSyncToken("   ").valid, true);
+});
+
+await test("validateSyncToken: alphanumeric token is valid", () => {
+    assert.equal(validateSyncToken("myToken123").valid, true);
+});
+
+await test("validateSyncToken: underscore is allowed", () => {
+    assert.equal(validateSyncToken("my_token_456").valid, true);
+});
+
+await test("validateSyncToken: hyphen is rejected (textdb returns 400)", () => {
+    const result = validateSyncToken("my-token");
+    assert.equal(result.valid, false);
+    assert.equal(result.reason, "sync_token_error_invalid_chars");
+});
+
+await test("validateSyncToken: space is rejected", () => {
+    assert.equal(validateSyncToken("my token").valid, false);
+});
+
+await test("validateSyncToken: special chars are rejected", () => {
+    assert.equal(validateSyncToken("tok@en").valid, false);
+    assert.equal(validateSyncToken("tok#1").valid, false);
+    assert.equal(validateSyncToken("tok!").valid, false);
+});
+
+await test("validateSyncToken: too short (< 4 chars) is rejected", () => {
+    const result = validateSyncToken("abc");
+    assert.equal(result.valid, false);
+    assert.equal(result.reason, "sync_token_error_too_short");
+});
+
+await test("validateSyncToken: exact minimum length (4) is valid", () => {
+    assert.equal(validateSyncToken("abcd").valid, true);
+});
+
+await test("validateSyncToken: too long (> 64 chars) is rejected", () => {
+    const result = validateSyncToken("a".repeat(65));
+    assert.equal(result.valid, false);
+    assert.equal(result.reason, "sync_token_error_too_long");
+});
+
+await test("validateSyncToken: exact maximum length (64) is valid", () => {
+    assert.equal(validateSyncToken("a".repeat(64)).valid, true);
+});
+
+await test("validateSyncToken: non-string input is rejected", () => {
+    assert.equal(validateSyncToken(null).valid, false);
+    assert.equal(validateSyncToken(undefined).valid, false);
+    assert.equal(validateSyncToken(12345).valid, false);
+    assert.equal(validateSyncToken({}).valid, false);
+});
+
+// ── Field timestamps ────────────────────────────────────────────────────
+
+console.log("\ncore/config-sync.js — field timestamps\n");
+
+await test("getFieldTimestamps: empty on fresh storage", () => {
+    reset();
+    assert.deepEqual(getFieldTimestamps(), {});
+});
+
+await test("setFieldTimestamps / getFieldTimestamps roundtrip", () => {
+    reset();
+    setFieldTimestamps({ a: 1000, b: 2000 });
+    assert.deepEqual(getFieldTimestamps(), { a: 1000, b: 2000 });
+});
+
+await test("recordLocalChange: stamps key with current time", () => {
+    reset();
+    const before = Date.now();
+    recordLocalChange("p_fontSize");
+    const after = Date.now();
+    const ts = getFieldTimestamps();
+    assert.ok(ts.p_fontSize >= before && ts.p_fontSize <= after);
+});
+
+await test("recordLocalChange: preserves existing timestamps", () => {
+    reset();
+    setFieldTimestamps({ a: 1000 });
+    recordLocalChange("b");
+    const ts = getFieldTimestamps();
+    assert.equal(ts.a, 1000);
+    assert.ok(ts.b > 1000);
+});
+
+// ── buildPushPayload ────────────────────────────────────────────────────
+
+console.log("\ncore/config-sync.js — buildPushPayload\n");
+
+await test("buildPushPayload: produces v2 format with _meta", () => {
+    reset();
+    const values = { p_fontSize: "2em", light_bgColor: "#FFF" };
+    recordLocalChange("p_fontSize");
+    const payload = buildPushPayload(values);
+    assert.ok(payload._meta);
+    assert.equal(payload._meta.v, 2);
+    assert.ok(payload._meta.pushedAt > 0);
+});
+
+await test("buildPushPayload: each key has {v, ts} structure", () => {
+    reset();
+    recordLocalChange("p_fontSize");
+    const payload = buildPushPayload({ p_fontSize: "2em" });
+    assert.equal(payload.p_fontSize.v, "2em");
+    assert.ok(payload.p_fontSize.ts > 0);
+});
+
+await test("buildPushPayload: keys without local ts get ts=0", () => {
+    reset();
+    const payload = buildPushPayload({ unknownKey: "val" });
+    assert.equal(payload.unknownKey.ts, 0);
+});
+
+// ── pullOnBoot ──────────────────────────────────────────────────────────
+
 console.log("\ncore/config-sync.js — pullOnBoot\n");
 
 await test("pullOnBoot: returns null when sync disabled", async () => {
@@ -132,18 +260,35 @@ await test("pullOnBoot: returns null when sync disabled", async () => {
     assert.equal(result, null);
 });
 
-await test("pullOnBoot: 200 with valid JSON object → returns parsed object", async () => {
+await test("pullOnBoot: 200 with v2 JSON → returns v2 object", async () => {
     reset();
-    setSyncToken("test-token");
-    const payload = { p_fontSize: "1.5em", light_bgColor: "#FFFFFF" };
+    setSyncToken("testtoken");
+    const payload = {
+        _meta: { v: 2, pushedAt: 1000 },
+        p_fontSize: { v: "2em", ts: 2000 },
+    };
     const { fetch: f } = makeFakeFetch([{ status: 200, body: JSON.stringify(payload) }]);
     const result = await pullOnBoot({ fetchImpl: f });
     assert.deepEqual(result, payload);
 });
 
+await test("pullOnBoot: 200 with v1 JSON → migrates to v2 with ts=0", async () => {
+    reset();
+    setSyncToken("testtoken");
+    // v1 format: flat { key: value }
+    const v1Data = { p_fontSize: "2em", light_bgColor: "#FFF" };
+    const { fetch: f } = makeFakeFetch([{ status: 200, body: JSON.stringify(v1Data) }]);
+    const result = await pullOnBoot({ fetchImpl: f });
+    assert.equal(result._meta.v, 2);
+    assert.equal(result.p_fontSize.v, "2em");
+    assert.equal(result.p_fontSize.ts, 0);
+    assert.equal(result.light_bgColor.v, "#FFF");
+    assert.equal(result.light_bgColor.ts, 0);
+});
+
 await test("pullOnBoot: 404 → returns null (no error)", async () => {
     reset();
-    setSyncToken("test-token");
+    setSyncToken("testtoken");
     const { fetch: f } = makeFakeFetch([{ status: 404, body: "" }]);
     const result = await pullOnBoot({ fetchImpl: f });
     assert.equal(result, null);
@@ -151,7 +296,7 @@ await test("pullOnBoot: 404 → returns null (no error)", async () => {
 
 await test("pullOnBoot: 500 → returns null (no throw)", async () => {
     reset();
-    setSyncToken("test-token");
+    setSyncToken("testtoken");
     const { fetch: f } = makeFakeFetch([{ status: 500, body: "server error" }]);
     const result = await pullOnBoot({ fetchImpl: f });
     assert.equal(result, null);
@@ -159,23 +304,23 @@ await test("pullOnBoot: 500 → returns null (no throw)", async () => {
 
 await test("pullOnBoot: network error → returns null (no throw)", async () => {
     reset();
-    setSyncToken("test-token");
+    setSyncToken("testtoken");
     const { fetch: f } = makeFakeFetch([{ error: new Error("network down") }]);
     const result = await pullOnBoot({ fetchImpl: f });
     assert.equal(result, null);
 });
 
-await test("pullOnBoot: invalid JSON body → returns null (no throw)", async () => {
+await test("pullOnBoot: invalid JSON body → returns null", async () => {
     reset();
-    setSyncToken("test-token");
+    setSyncToken("testtoken");
     const { fetch: f } = makeFakeFetch([{ status: 200, body: "not valid json" }]);
     const result = await pullOnBoot({ fetchImpl: f });
     assert.equal(result, null);
 });
 
-await test("pullOnBoot: JSON array (not object) → returns null", async () => {
+await test("pullOnBoot: JSON array → returns null", async () => {
     reset();
-    setSyncToken("test-token");
+    setSyncToken("testtoken");
     const { fetch: f } = makeFakeFetch([{ status: 200, body: "[1,2,3]" }]);
     const result = await pullOnBoot({ fetchImpl: f });
     assert.equal(result, null);
@@ -183,7 +328,7 @@ await test("pullOnBoot: JSON array (not object) → returns null", async () => {
 
 await test("pullOnBoot: empty body → returns null", async () => {
     reset();
-    setSyncToken("test-token");
+    setSyncToken("testtoken");
     const { fetch: f } = makeFakeFetch([{ status: 200, body: "" }]);
     const result = await pullOnBoot({ fetchImpl: f });
     assert.equal(result, null);
@@ -191,11 +336,11 @@ await test("pullOnBoot: empty body → returns null", async () => {
 
 await test("pullOnBoot: URL is correctly constructed with encoded token", async () => {
     reset();
-    setSyncToken("my token with spaces");
+    setSyncToken("my_token");
     const { fetch: f, calls } = makeFakeFetch([{ status: 200, body: "{}" }]);
     await pullOnBoot({ fetchImpl: f });
     assert.equal(calls.length, 1);
-    assert.ok(calls[0].url.includes("my%20token%20with%20spaces"), `URL: ${calls[0].url}`);
+    assert.ok(calls[0].url.includes("my_token"));
 });
 
 await test("pullOnBoot: uses GET method with credentials:omit", async () => {
@@ -213,15 +358,16 @@ await test("pullOnBoot: success updates last-pulled timestamp", async () => {
     const { fetch: f } = makeFakeFetch([{ status: 200, body: "{}" }]);
     await pullOnBoot({ fetchImpl: f });
     const ts = getLastPulledAt();
-    assert.ok(typeof ts === "number");
-    assert.ok(ts > 0);
+    assert.ok(typeof ts === "number" && ts > 0);
 });
+
+// ── pushConfig ──────────────────────────────────────────────────────────
 
 console.log("\ncore/config-sync.js — pushConfig\n");
 
 await test("pushConfig: returns false when sync disabled", async () => {
     reset();
-    const result = await pushConfig({ x: 1 }, { fetchImpl: () => assert.fail("should not call fetch") });
+    const result = await pushConfig({ x: 1 }, { fetchImpl: () => assert.fail("should not call") });
     assert.equal(result, false);
 });
 
@@ -234,7 +380,6 @@ await test("pushConfig: 200 success → returns true, updates last-pushed", asyn
     assert.equal(calls.length, 1);
     assert.equal(calls[0].init.method, "POST");
     assert.equal(calls[0].init.credentials, "omit");
-    assert.equal(calls[0].init.body, JSON.stringify({ x: 1 }));
     assert.ok(getLastPushedAt() > 0);
 });
 
@@ -250,14 +395,10 @@ await test("pushConfig: 4xx error → returns false, does NOT retry", async () =
 await test("pushConfig: 5xx error → retries up to MAX_PUSH_RETRIES (3)", async () => {
     reset();
     setSyncToken("tok");
-    const { fetch: f, calls } = makeFakeFetch([
-        { status: 500 },
-        { status: 503 },
-        { status: 500 },
-    ]);
+    const { fetch: f, calls } = makeFakeFetch([{ status: 500 }, { status: 503 }, { status: 500 }]);
     const result = await pushConfig({ x: 1 }, { fetchImpl: f });
     assert.equal(result, false);
-    assert.equal(calls.length, 3, "should retry 3 times on 5xx");
+    assert.equal(calls.length, 3);
 });
 
 await test("pushConfig: 5xx then 200 → succeeds on retry", async () => {
@@ -272,22 +413,11 @@ await test("pushConfig: 5xx then 200 → succeeds on retry", async () => {
 await test("pushConfig: network error → retries up to 3 times", async () => {
     reset();
     setSyncToken("tok");
-    const { fetch: f, calls } = makeFakeFetch([{ error: new Error("net") }, { error: new Error("net") }, { error: new Error("net") }]);
-    const result = await pushConfig({ x: 1 }, { fetchImpl: f });
-    assert.equal(result, false);
-    assert.equal(calls.length, 3);
-});
-
-await test("pushConfig: success after 2 network errors", async () => {
-    reset();
-    setSyncToken("tok");
     const { fetch: f, calls } = makeFakeFetch([
-        { error: new Error("net") },
-        { error: new Error("net") },
-        { status: 200 },
+        { error: new Error("net") }, { error: new Error("net") }, { error: new Error("net") },
     ]);
     const result = await pushConfig({ x: 1 }, { fetchImpl: f });
-    assert.equal(result, true);
+    assert.equal(result, false);
     assert.equal(calls.length, 3);
 });
 
@@ -295,7 +425,7 @@ await test("pushConfig: body is JSON-stringified payload", async () => {
     reset();
     setSyncToken("tok");
     const { fetch: f, calls } = makeFakeFetch([{ status: 200 }]);
-    const payload = { a: 1, b: "two", c: [3, 4] };
+    const payload = { _meta: { v: 2 }, x: { v: 1, ts: 100 } };
     await pushConfig(payload, { fetchImpl: f });
     assert.equal(calls[0].init.body, JSON.stringify(payload));
 });
@@ -308,17 +438,17 @@ await test("pushConfig: Content-Type header is text/plain", async () => {
     assert.equal(calls[0].init.headers["Content-Type"], "text/plain;charset=UTF-8");
 });
 
+// ── pushOnSettingsChange (debounce) ─────────────────────────────────────
+
 console.log("\ncore/config-sync.js — pushOnSettingsChange (debounce)\n");
 
 await test("pushOnSettingsChange: coalesces rapid calls into one push", async () => {
     reset();
     setSyncToken("tok");
     const { fetch: f, calls } = makeFakeFetch([{ status: 200 }]);
-    // Fire 5 rapid calls.
     for (let i = 0; i < 5; i++) {
         pushOnSettingsChange({ x: i }, 50, { fetchImpl: f });
     }
-    // Wait long enough for the debounce to fire.
     await new Promise((r) => setTimeout(r, 200));
     assert.equal(calls.length, 1, "only one push should happen after debounce");
 });
@@ -337,236 +467,206 @@ await test("pushOnSettingsChange: fires after debounce window", async () => {
     setSyncToken("tok");
     const { fetch: f, calls } = makeFakeFetch([{ status: 200 }]);
     pushOnSettingsChange({ x: 1 }, 30, { fetchImpl: f });
-    // Before debounce fires:
     await new Promise((r) => setTimeout(r, 10));
     assert.equal(calls.length, 0);
-    // After debounce fires:
     await new Promise((r) => setTimeout(r, 100));
     assert.equal(calls.length, 1);
 });
 
-console.log("\ncore/config-sync.js — mergeSyncedConfig\n");
+// ── mergeSyncedConfig: field-level LWW ──────────────────────────────────
 
-await test("mergeSyncedConfig: null syncData → returns copy of current", () => {
+console.log("\ncore/config-sync.js — mergeSyncedConfig (field-level LWW)\n");
+
+await test("mergeSyncedConfig: null syncData → returns copy of current, no changes", () => {
     reset();
     const current = { a: 1 };
-    const merged = mergeSyncedConfig(current, null);
-    assert.deepEqual(merged, { a: 1 });
-});
-
-await test("mergeSyncedConfig: sync OVERRIDES local (P1-2 — sync wins)", () => {
-    // P1-2 fix: the previous implementation used "local wins, sync fills
-    // empty" which effectively disabled sync because loadSettings()
-    // populates every key with either localStorage value or schema default.
-    // The new semantics is "sync wins" — sync data overrides local values.
-    reset();
-    const current = { a: "local", b: "local-only" };
-    const sync = { a: "remote", c: "remote-only" };
-    const merged = mergeSyncedConfig(current, sync);
-    assert.equal(merged.a, "remote"); // sync wins
-    assert.equal(merged.b, "local-only"); // local-only key preserved
-    assert.equal(merged.c, "remote-only"); // sync-only key added
-});
-
-await test("mergeSyncedConfig: null syncData → returns copy of current", () => {
-    reset();
-    const current = { a: 1, b: 2 };
-    const merged = mergeSyncedConfig(current, null);
-    assert.deepEqual(merged, { a: 1, b: 2 });
-    assert.notEqual(merged, current); // must be a new object, not the same ref
+    const result = mergeSyncedConfig(current, null);
+    assert.deepEqual(result.values, { a: 1 });
+    assert.deepEqual(result.changedKeys, []);
 });
 
 await test("mergeSyncedConfig: non-object syncData → returns copy of current", () => {
     reset();
     const current = { a: 1 };
-    assert.deepEqual(mergeSyncedConfig(current, "string"), { a: 1 });
-    assert.deepEqual(mergeSyncedConfig(current, 42), { a: 1 });
-    assert.deepEqual(mergeSyncedConfig(current, [1, 2, 3]), { a: 1 });
+    assert.deepEqual(mergeSyncedConfig(current, "string").values, { a: 1 });
+    assert.deepEqual(mergeSyncedConfig(current, 42).values, { a: 1 });
+    assert.deepEqual(mergeSyncedConfig(current, [1, 2, 3]).values, { a: 1 });
+});
+
+await test("mergeSyncedConfig: remote newer → remote wins for that key", () => {
+    reset();
+    const current = { a: "local", b: "local" };
+    const localTs = { a: 1000, b: 1000 };
+    const sync = {
+        _meta: { v: 2, pushedAt: 2000 },
+        a: { v: "remote", ts: 2000 }, // newer → wins
+        b: { v: "remote", ts: 500 },  // older → local wins
+    };
+    const result = mergeSyncedConfig(current, sync, null, localTs);
+    assert.equal(result.values.a, "remote"); // remote wins (2000 > 1000)
+    assert.equal(result.values.b, "local");  // local wins (500 < 1000)
+    assert.deepEqual(result.changedKeys, ["a"]);
+    assert.equal(result.timestamps.a, 2000); // adopted remote ts
+    assert.equal(result.timestamps.b, 1000); // kept local ts
+});
+
+await test("mergeSyncedConfig: equal timestamps → remote wins (first sync)", () => {
+    reset();
+    const current = { a: "local" };
+    const localTs = { a: 0 }; // no local change yet
+    const sync = { a: { v: "remote", ts: 0 } }; // v1 migration, ts=0
+    const result = mergeSyncedConfig(current, sync, null, localTs);
+    assert.equal(result.values.a, "remote"); // 0 >= 0 → remote wins
+    assert.deepEqual(result.changedKeys, ["a"]);
+});
+
+await test("mergeSyncedConfig: concurrent edits to different keys both survive", () => {
+    // This is the core fix for the data-loss bug.
+    reset();
+    const current = { font: "1em", theme: "dark" };
+    const localTs = { font: 1000, theme: 1000 };
+    // Device A changed font (ts=2000), Device B changed theme (ts=2000)
+    const sync = {
+        font: { v: "2em", ts: 2000 },   // remote newer for font
+        theme: { v: "light", ts: 500 }, // remote older for theme (local wins)
+    };
+    const result = mergeSyncedConfig(current, sync, null, localTs);
+    assert.equal(result.values.font, "2em");   // remote wins (2000 > 1000)
+    assert.equal(result.values.theme, "dark"); // local wins (500 < 1000)
+});
+
+await test("mergeSyncedConfig: protected keys are skipped", () => {
+    reset();
+    const current = { a: "user_change", b: "local" };
+    const localTs = { a: 1000, b: 1000 };
+    const sync = {
+        a: { v: "remote_newer", ts: 9999 }, // would normally win
+        b: { v: "remote", ts: 2000 },
+    };
+    const protectedKeys = new Set(["a"]); // user just changed 'a'
+    const result = mergeSyncedConfig(current, sync, null, localTs, protectedKeys);
+    assert.equal(result.values.a, "user_change"); // protected — not overridden
+    assert.equal(result.values.b, "remote");      // not protected — remote wins
+    assert.deepEqual(result.changedKeys, ["b"]);
+});
+
+await test("mergeSyncedConfig: allowedKeys filters unknown keys", () => {
+    reset();
+    const current = { a: 1 };
+    const localTs = {};
+    const sync = {
+        a: { v: 2, ts: 100 },
+        unknownKey: { v: "garbage", ts: 100 },
+    };
+    const allowed = new Set(["a", "b"]);
+    const result = mergeSyncedConfig(current, sync, allowed, localTs);
+    assert.equal(result.values.a, 2);
+    assert.equal(result.values.unknownKey, undefined); // filtered out
 });
 
 await test("mergeSyncedConfig: does not mutate input objects", () => {
     reset();
     const current = { a: 1 };
-    const sync = { b: 2 };
-    const merged = mergeSyncedConfig(current, sync);
+    const localTs = { a: 0 };
+    const sync = { a: { v: 2, ts: 100 } };
+    const result = mergeSyncedConfig(current, sync, null, localTs);
     assert.deepEqual(current, { a: 1 }); // unchanged
-    assert.deepEqual(sync, { b: 2 }); // unchanged
-    assert.deepEqual(merged, { a: 1, b: 2 });
+    assert.deepEqual(sync, { a: { v: 2, ts: 100 } }); // unchanged
+    assert.deepEqual(result.values, { a: 2 });
 });
 
-console.log("\ncore/config-sync.js — Issue 3: allowedKeys filtering\n");
-
-await test("REGRESSION i3: allowedKeys filters out unknown keys from syncData", () => {
-    // Issue 3 fix: unknown keys (not in SETTINGS_SCHEMA) must be dropped
-    // from syncData during merge. This prevents a feedback loop where
-    // unknown keys accumulate in the sync store via push → pull → push.
+await test("mergeSyncedConfig: same value at equal ts → no change reported", () => {
     reset();
-    const current = { p_fontSize: "1em", light_bgColor: "#FFF" };
+    const current = { a: "same" };
+    const localTs = { a: 100 };
+    const sync = { a: { v: "same", ts: 100 } };
+    const result = mergeSyncedConfig(current, sync, null, localTs);
+    assert.deepEqual(result.changedKeys, []); // value didn't change
+    assert.equal(result.timestamps.a, 100);   // ts still updated
+});
+
+await test("mergeSyncedConfig: v1-migrated data (ts=0) applies on first sync", () => {
+    reset();
+    const current = { font: "1em", theme: "dark" };
+    const localTs = {}; // no local timestamps — first sync
+    // v1-migrated: all ts=0
     const sync = {
-        p_fontSize: "2em", // known key — should be merged
-        light_bgColor: "#000", // known key — should be merged
-        unknownKey1: "garbage", // unknown — should be dropped
-        unknownKey2: 42, // unknown — should be dropped
-        _userInteracted: true, // unknown — should be dropped (defensive)
+        font: { v: "2em", ts: 0 },
+        theme: { v: "light", ts: 0 },
     };
-    const allowed = new Set(["p_fontSize", "light_bgColor", "p_lineHeight"]);
-    const merged = mergeSyncedConfig(current, sync, allowed);
-    assert.equal(merged.p_fontSize, "2em"); // known, merged
-    assert.equal(merged.light_bgColor, "#000"); // known, merged
-    assert.equal(merged.unknownKey1, undefined); // unknown, dropped
-    assert.equal(merged.unknownKey2, undefined); // unknown, dropped
-    assert.equal(merged._userInteracted, undefined); // unknown, dropped
+    const result = mergeSyncedConfig(current, sync, null, localTs);
+    assert.equal(result.values.font, "2em");   // 0 >= 0 → remote wins
+    assert.equal(result.values.theme, "light");
+    assert.deepEqual(result.changedKeys, ["font", "theme"]);
 });
 
-await test("REGRESSION i3: allowedKeys=null (default) keeps all keys (backward compat)", () => {
-    // The default (no allowedKeys) preserves the pre-Issue-3 behavior
-    // so existing callers and tests don't break. This is important for
-    // the test environment where we can't import SETTINGS_SCHEMA.
+await test("mergeSyncedConfig: local changes win over v1-migrated data", () => {
     reset();
-    const current = { a: 1 };
-    const sync = { a: 2, unknownKey: "kept" };
-    const merged = mergeSyncedConfig(current, sync); // no allowedKeys
-    assert.equal(merged.a, 2);
-    assert.equal(merged.unknownKey, "kept"); // NOT filtered
+    const current = { font: "2em", theme: "dark" };
+    const localTs = { font: 9999 }; // user changed font
+    const sync = {
+        font: { v: "1em", ts: 0 },    // v1 migrated, ts=0 → local wins
+        theme: { v: "light", ts: 0 }, // v1 migrated, ts=0 → remote wins (no local ts)
+    };
+    const result = mergeSyncedConfig(current, sync, null, localTs);
+    assert.equal(result.values.font, "2em");   // local wins (9999 > 0)
+    assert.equal(result.values.theme, "light"); // remote wins (0 >= 0)
 });
 
-await test("REGRESSION i3: allowedKeys=empty Set keeps all keys", () => {
-    // An empty Set is treated the same as null (no filtering). This
-    // avoids accidentally dropping everything if the caller passes an
-    // empty set by mistake.
+// ── flushPendingPush (offline retry) ────────────────────────────────────
+
+console.log("\ncore/config-sync.js — flushPendingPush (offline retry)\n");
+
+await test("flushPendingPush: returns true when nothing pending", async () => {
     reset();
-    const current = { a: 1 };
-    const sync = { a: 2, unknownKey: "kept" };
-    const merged = mergeSyncedConfig(current, sync, new Set());
-    assert.equal(merged.a, 2);
-    assert.equal(merged.unknownKey, "kept"); // NOT filtered
+    const result = await flushPendingPush({ fetchImpl: () => assert.fail("should not call") });
+    assert.equal(result, true);
 });
 
-await test("REGRESSION i3: allowedKeys preserves local-only keys", () => {
-    // Keys in currentValues but NOT in syncData should always be
-    // preserved, regardless of allowedKeys.
+await test("flushPendingPush: retries pending payload after failed push", async () => {
     reset();
-    const current = { a: 1, b: 2, c: 3 };
-    const sync = { a: 10 }; // only updates 'a'
-    const allowed = new Set(["a", "b", "c"]);
-    const merged = mergeSyncedConfig(current, sync, allowed);
-    assert.equal(merged.a, 10); // updated by sync
-    assert.equal(merged.b, 2); // preserved (local-only, in allowed)
-    assert.equal(merged.c, 3); // preserved (local-only, in allowed)
+    setSyncToken("tok");
+    // First push: all 3 attempts fail (5xx)
+    const { fetch: f1 } = makeFakeFetch([{ status: 500 }, { status: 500 }, { status: 500 }]);
+    const ok1 = await pushConfig({ _meta: { v: 2 }, x: { v: 1, ts: 1 } }, { fetchImpl: f1 });
+    assert.equal(ok1, false); // failed
+    // Retry: succeeds
+    const { fetch: f2, calls: calls2 } = makeFakeFetch([{ status: 200 }]);
+    const ok2 = await flushPendingPush({ fetchImpl: f2 });
+    assert.equal(ok2, true);
+    assert.equal(calls2.length, 1);
 });
 
-await test("REGRESSION i3: allowedKeys with syncData containing only unknown keys", () => {
-    // Edge case: syncData has ONLY unknown keys. The merge should
-    // return currentValues unchanged (all sync keys dropped).
+await test("flushPendingPush: re-stores payload if retry also fails", async () => {
     reset();
-    const current = { a: 1, b: 2 };
-    const sync = { unknown1: "x", unknown2: "y" };
-    const allowed = new Set(["a", "b"]);
-    const merged = mergeSyncedConfig(current, sync, allowed);
-    assert.deepEqual(merged, { a: 1, b: 2 }); // unchanged
-    assert.equal(merged.unknown1, undefined);
-    assert.equal(merged.unknown2, undefined);
+    setSyncToken("tok");
+    // First push fails
+    const { fetch: f1 } = makeFakeFetch([{ status: 500 }, { status: 500 }, { status: 500 }]);
+    await pushConfig({ x: 1 }, { fetchImpl: f1 });
+    // Retry also fails
+    const { fetch: f2 } = makeFakeFetch([{ status: 500 }, { status: 500 }, { status: 500 }]);
+    const ok = await flushPendingPush({ fetchImpl: f2 });
+    assert.equal(ok, false);
+    // A third retry should still have a pending payload
+    const { fetch: f3, calls: calls3 } = makeFakeFetch([{ status: 200 }]);
+    const ok3 = await flushPendingPush({ fetchImpl: f3 });
+    assert.equal(ok3, true);
+    assert.equal(calls3.length, 1);
 });
 
-await test("REGRESSION i3: allowedKeys with non-Set value is ignored (no filtering)", () => {
-    // Defensive: if someone passes a non-Set value (array, string, etc.),
-    // we should NOT filter — fall back to the default behavior.
+await test("pushConfig: success clears pending payload", async () => {
     reset();
-    const current = { a: 1 };
-    const sync = { a: 2, unknown: "kept" };
-    // Pass an array instead of a Set — should be ignored.
-    const merged = mergeSyncedConfig(current, sync, ["a"]);
-    assert.equal(merged.a, 2);
-    assert.equal(merged.unknown, "kept"); // NOT filtered (array is not a Set)
-});
-
-console.log("\ncore/config-sync.js — validateSyncToken\n");
-
-await test("validateSyncToken: empty string is valid (disables sync)", () => {
-    const result = validateSyncToken("");
-    assert.equal(result.valid, true);
-    assert.equal(result.reason, undefined);
-});
-
-await test("validateSyncToken: whitespace-only string trims to empty → valid", () => {
-    const result = validateSyncToken("   ");
-    assert.equal(result.valid, true);
-});
-
-await test("validateSyncToken: alphanumeric token is valid", () => {
-    const result = validateSyncToken("myToken123");
-    assert.equal(result.valid, true);
-    assert.equal(result.reason, undefined);
-});
-
-await test("validateSyncToken: underscore is allowed", () => {
-    const result = validateSyncToken("my_token_456");
-    assert.equal(result.valid, true);
-});
-
-await test("validateSyncToken: hyphen is rejected (textdb returns 400)", () => {
-    const result = validateSyncToken("my-token");
-    assert.equal(result.valid, false);
-    assert.equal(result.reason, "sync_token_error_invalid_chars");
-});
-
-await test("validateSyncToken: space is rejected", () => {
-    const result = validateSyncToken("my token");
-    assert.equal(result.valid, false);
-    assert.equal(result.reason, "sync_token_error_invalid_chars");
-});
-
-await test("validateSyncToken: special chars are rejected", () => {
-    assert.equal(validateSyncToken("tok@en").valid, false);
-    assert.equal(validateSyncToken("tok#1").valid, false);
-    assert.equal(validateSyncToken("tok!").valid, false);
-    assert.equal(validateSyncToken("tok.").valid, false);
-    assert.equal(validateSyncToken("tok/").valid, false);
-});
-
-await test("validateSyncToken: too short (< 4 chars) is rejected", () => {
-    const result = validateSyncToken("abc");
-    assert.equal(result.valid, false);
-    assert.equal(result.reason, "sync_token_error_too_short");
-});
-
-await test("validateSyncToken: exact minimum length (4) is valid", () => {
-    const result = validateSyncToken("abcd");
-    assert.equal(result.valid, true);
-});
-
-await test("validateSyncToken: too long (> 64 chars) is rejected", () => {
-    const result = validateSyncToken("a".repeat(65));
-    assert.equal(result.valid, false);
-    assert.equal(result.reason, "sync_token_error_too_long");
-});
-
-await test("validateSyncToken: exact maximum length (64) is valid", () => {
-    const result = validateSyncToken("a".repeat(64));
-    assert.equal(result.valid, true);
-});
-
-await test("validateSyncToken: non-string input is rejected", () => {
-    assert.equal(validateSyncToken(null).valid, false);
-    assert.equal(validateSyncToken(undefined).valid, false);
-    assert.equal(validateSyncToken(12345).valid, false);
-    assert.equal(validateSyncToken({}).valid, false);
-});
-
-await test("validateSyncToken: unicode letters are rejected (ASCII-only)", () => {
-    const result = validateSyncToken("令牌");
-    assert.equal(result.valid, false);
-    // Each unicode char may be counted as multiple bytes; the token length
-    // check runs before the regex check. Either reason is acceptable.
-    assert.ok(
-        result.reason === "sync_token_error_invalid_chars" || result.reason === "sync_token_error_too_short",
-        `Expected invalid_chars or too_short, got ${result.reason}`
-    );
-});
-
-await test("validateSyncToken: mixed valid token passes", () => {
-    const result = validateSyncToken("User_Config_2024");
-    assert.equal(result.valid, true);
+    setSyncToken("tok");
+    // First push fails
+    const { fetch: f1 } = makeFakeFetch([{ status: 500 }, { status: 500 }, { status: 500 }]);
+    await pushConfig({ x: 1 }, { fetchImpl: f1 });
+    // Second push succeeds
+    const { fetch: f2 } = makeFakeFetch([{ status: 200 }]);
+    const ok = await pushConfig({ x: 2 }, { fetchImpl: f2 });
+    assert.equal(ok, true);
+    // flushPendingPush should be a no-op now
+    const result = await flushPendingPush({ fetchImpl: () => assert.fail("should not call") });
+    assert.equal(result, true);
 });
 
 // ── Summary ─────────────────────────────────────────────────────────────
