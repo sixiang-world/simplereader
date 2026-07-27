@@ -56,7 +56,11 @@ import {
     FACTORY_DEFAULT_MARKER,
 } from "../../core/presets.js";
 import {
-    pushOnSettingsChange,
+    pullOnBoot,
+    pushConfig,
+    mergeSyncedConfig,
+    getFieldTimestamps,
+    setFieldTimestamps,
     isSyncEnabled,
     getSyncToken,
     setSyncToken,
@@ -908,7 +912,81 @@ class SettingsMenu {
         hint.textContent = hintText;
         inner.appendChild(hint);
 
+        // Action row: manual Pull / Push buttons (sync is on-demand, not auto)
+        const pullText = isZh ? "拉取" : "Pull";
+        const pushText = isZh ? "推送" : "Push";
+        const pullingText = isZh ? "拉取中…" : "Pulling…";
+        const pushingText = isZh ? "推送中…" : "Pushing…";
+        const okText = isZh ? "✓ 完成" : "✓ Done";
+        const failText = isZh ? "✗ 失败" : "✗ Failed";
+        const disabledHint = isZh ? "（先保存令牌）" : " (save token first)";
+
+        const actionRow = document.createElement("div");
+        actionRow.className = "sync-token-action-row";
+
+        const pullBtn = document.createElement("button");
+        pullBtn.className = "sync-token-action-btn sync-token-pull-btn";
+        pullBtn.textContent = pullText;
+        actionRow.appendChild(pullBtn);
+
+        const pushBtn = document.createElement("button");
+        pushBtn.className = "sync-token-action-btn sync-token-push-btn";
+        pushBtn.textContent = pushText;
+        actionRow.appendChild(pushBtn);
+
+        const status = document.createElement("span");
+        status.className = "sync-token-status";
+        actionRow.appendChild(status);
+
+        inner.appendChild(actionRow);
+
         wrapper.appendChild(inner);
+
+        const setActionStatus = (text, kind) => {
+            status.textContent = text;
+            status.classList.remove("sync-token-status-ok", "sync-token-status-err");
+            if (kind === "ok") status.classList.add("sync-token-status-ok");
+            else if (kind === "err") status.classList.add("sync-token-status-err");
+        };
+
+        const withBusy = async (btn, busyText, fn) => {
+            if (!isSyncEnabled()) {
+                setActionStatus(disabledHint, "err");
+                return;
+            }
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = busyText;
+            try {
+                await fn();
+            } finally {
+                btn.disabled = false;
+                btn.textContent = original;
+            }
+        };
+
+        pullBtn.addEventListener("click", () => {
+            withBusy(pullBtn, pullingText, async () => {
+                const { ok, changedKeys } = await this.settingsObj.syncPull();
+                if (ok) {
+                    setActionStatus(
+                        changedKeys.length > 0
+                            ? `${okText} (${changedKeys.length})`
+                            : okText,
+                        "ok"
+                    );
+                } else {
+                    setActionStatus(failText, "err");
+                }
+            });
+        });
+
+        pushBtn.addEventListener("click", () => {
+            withBusy(pushBtn, pushingText, async () => {
+                const { ok } = await this.settingsObj.syncPush();
+                setActionStatus(ok ? okText : failText, ok ? "ok" : "err");
+            });
+        });
 
         const validateAndSave = () => {
             const raw = input.value;
@@ -932,6 +1010,7 @@ class SettingsMenu {
             // Visual feedback on save button — persistent until user edits again
             saveBtn.textContent = token ? savedEnabledText : savedDisabledText;
             saveBtn.dataset.savedState = token ? "enabled" : "disabled";
+            setActionStatus("", null);
         };
 
         saveBtn.addEventListener("click", validateAndSave);
@@ -1506,6 +1585,81 @@ const settings = {
     },
 
     /**
+     * Apply pulled sync data: merge into current values using field-level
+     * LWW, persist changed keys, re-render the UI. This is the core
+     * "process the returned change-status → local update → render" step
+     * for the manual pull action.
+     *
+     * @param {Object|null} syncData - V2-format sync object from pullOnBoot.
+     * @returns {string[]} The keys that actually changed (empty if none).
+     * @public
+     */
+    applySyncPull(syncData) {
+        if (!syncData || typeof syncData !== "object") return [];
+        if (!this.values) return [];
+
+        const schemaKeys = new Set(SETTINGS_SCHEMA.map((s) => s.key));
+        const localTs = getFieldTimestamps();
+        const protectedKeys = this._userInteractedKeys || new Set();
+
+        const result = mergeSyncedConfig(
+            this.values,
+            syncData,
+            schemaKeys,
+            localTs,
+            protectedKeys
+        );
+
+        if (result.changedKeys.length > 0) {
+            this.values = result.values;
+            this.persistSyncedKeys(result.changedKeys);
+            this.applySettings();
+            setFieldTimestamps(result.timestamps);
+        }
+        return result.changedKeys;
+    },
+
+    /**
+     * Manual pull action: fetch the synced config from textdb and apply it.
+     * Returns the change-status so the caller (e.g. the token panel button)
+     * can render feedback.
+     *
+     * @returns {Promise<{ok: boolean, changedKeys: string[]}>}
+     * @public
+     */
+    async syncPull() {
+        if (!isSyncEnabled()) return { ok: false, changedKeys: [] };
+        try {
+            const syncData = await pullOnBoot();
+            if (!syncData) return { ok: true, changedKeys: [] };
+            const changedKeys = this.applySyncPull(syncData);
+            return { ok: true, changedKeys };
+        } catch (e) {
+            console.warn("[settings] syncPull failed:", e.message);
+            return { ok: false, changedKeys: [] };
+        }
+    },
+
+    /**
+     * Manual push action: build a payload from current values (with field
+     * timestamps) and POST it to textdb.
+     *
+     * @returns {Promise<{ok: boolean}>}
+     * @public
+     */
+    async syncPush() {
+        if (!isSyncEnabled()) return { ok: false };
+        try {
+            const payload = buildPushPayload(this.values);
+            const ok = await pushConfig(payload);
+            return { ok };
+        } catch (e) {
+            console.warn("[settings] syncPush failed:", e.message);
+            return { ok: false };
+        }
+    },
+
+    /**
      * Resets all settings to their default values.
      * This includes:
      * - UI language (if language setting is enabled)
@@ -1832,9 +1986,6 @@ const settings = {
             recordChangedKeys();
             this.applySettings(true);
             cbReg.go("updateAllBookCovers", { colorOnly: colorOnly });
-            if (isSyncEnabled()) {
-                pushOnSettingsChange(buildPushPayload(this.values));
-            }
             return;
         }
 
@@ -1914,13 +2065,11 @@ const settings = {
             }
         }
 
-        // Trigger a debounced background push to the config-sync
-        // endpoint (textdb.hunluan.space). No-op if sync is not
-        // configured (no token in localStorage).
+        // Settings changes are recorded (timestamped + protected) so that a
+        // later manual syncPush/syncPull has accurate field timestamps.
+        // Sync itself is NOT auto-triggered — the user pulls/pushes on
+        // demand via the token panel buttons.
         recordChangedKeys();
-        if (isSyncEnabled()) {
-            pushOnSettingsChange(buildPushPayload(this.values));
-        }
     },
 
     /**

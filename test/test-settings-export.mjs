@@ -73,14 +73,17 @@ test("settings.js source exports `initSettings` function", () => {
     );
 });
 
-test("app.js imports `settings` from settings.js (not just initSettings)", () => {
-    const appPath = path.resolve(import.meta.dirname, "..", "client", "src", "app.js");
-    const appSrc = fs.readFileSync(appPath, "utf-8");
+test("settings.js defines manual sync entry points (syncPull / syncPush)", () => {
+    // Sync is now MANUAL (on-demand): settings.js exposes syncPull/syncPush
+    // as the entry points invoked by the token-panel buttons. app.js no
+    // longer wires auto-sync.
     assert.ok(
-        /from\s+["'][^"']*settings\.js["']/.test(appSrc) &&
-            /settings\s+as\s+settingsSingleton|initSettings\s*,\s*settings\b/.test(appSrc),
-        "Expected app.js to import the `settings` singleton from settings.js. " +
-            "The previous code used dynamic import which returned undefined."
+        /async\s+syncPull\s*\(/.test(src),
+        "Expected `async syncPull()` method in settings.js — the manual pull entry point."
+    );
+    assert.ok(
+        /async\s+syncPush\s*\(/.test(src),
+        "Expected `async syncPush()` method in settings.js — the manual push entry point."
     );
 });
 
@@ -107,22 +110,37 @@ test("REGRESSION: settings.js defines _userInteractedKeys as a Set", () => {
     );
 });
 
-test("REGRESSION: app.js uses _userInteractedKeys as protectedKeys in merge", () => {
-    const appPath = path.resolve(import.meta.dirname, "..", "client", "src", "app.js");
-    const appSrc = fs.readFileSync(appPath, "utf-8");
+test("REGRESSION: settings.js uses _userInteractedKeys as protectedKeys in merge", () => {
+    // The merge logic (formerly in app.js's handleSyncPull) now lives in
+    // settings.js applySyncPull, which still passes _userInteractedKeys as
+    // protectedKeys to mergeSyncedConfig.
     assert.ok(
-        /_userInteractedKeys/.test(appSrc),
-        "Expected app.js to reference `settingsSingleton._userInteractedKeys` " +
-            "and pass it as protectedKeys to mergeSyncedConfig."
+        /_userInteractedKeys/.test(src) && /protectedKeys/.test(src),
+        "Expected settings.js to reference `_userInteractedKeys` and pass it as " +
+            "protectedKeys to mergeSyncedConfig (in applySyncPull). Without per-key " +
+            "protection, a manual pull overwrites the user's in-flight changes."
     );
 });
 
-test("REGRESSION: saveSettings uses buildPushPayload (not raw values)", () => {
+test("REGRESSION: syncPush uses buildPushPayload (not raw values)", () => {
     assert.ok(
         /buildPushPayload\s*\(\s*this\.values\s*\)/.test(src),
-        "Expected `buildPushPayload(this.values)` in saveSettings. " +
+        "Expected `buildPushPayload(this.values)` in settings.js syncPush. " +
             "Pushing raw values (without timestamps) causes data loss when " +
             "two devices edit different settings concurrently."
+    );
+});
+
+test("REGRESSION: app.js does NOT auto-trigger sync (manual mode)", () => {
+    const appPath = path.resolve(import.meta.dirname, "..", "client", "src", "app.js");
+    const appSrc = fs.readFileSync(appPath, "utf-8");
+    assert.ok(
+        !/startPeriodicPull/.test(appSrc),
+        "app.js must not call startPeriodicPull — sync is manual (on-demand)."
+    );
+    assert.ok(
+        !/pullOnBoot\s*\(/.test(appSrc),
+        "app.js must not auto-call pullOnBoot at boot — pull is a manual action."
     );
 });
 
