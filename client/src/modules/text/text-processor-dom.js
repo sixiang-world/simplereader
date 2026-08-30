@@ -33,13 +33,35 @@ export class TextProcessorDOM {
 
         switch (type) {
             case "title": {
+                // content is expected to be a structural HTML tag like <h1>...</h1> or <span>...</span>.
+                // Parse via a detached template to avoid executing inline event handlers or <script>.
                 const wrapper = document.createElement("div");
                 wrapper.innerHTML = content;
-                const tempElement = wrapper.firstElementChild;
+                // Drop any element that isn't h1/span (the only structural tags the title branch
+                // is designed to handle); this also removes <script>, <img onerror=...>, etc.
+                for (const node of [...wrapper.children]) {
+                    const t = node.tagName.toLowerCase();
+                    if (t !== "h1" && t !== "span") {
+                        node.remove();
+                    }
+                }
+                // Force the wrapper's text into a fresh element to neutralize any attributes
+                // (e.g. onload/onerror) that survived the whitelist.
+                const tempElement = wrapper.firstElementChild
+                    ? (() => {
+                          const clean = document.createElement(wrapper.firstElementChild.tagName.toLowerCase());
+                          clean.textContent = wrapper.firstElementChild.textContent;
+                          return clean;
+                      })()
+                    : (() => {
+                          const clean = document.createElement("span");
+                          clean.textContent = wrapper.textContent;
+                          return clean;
+                      })();
                 const tempAnchor = document.createElement("a");
                 tempAnchor.href = `#line${lineNumber}`;
                 tempAnchor.classList.add("prevent-select", "title");
-                tempAnchor.innerHTML = tempElement.innerHTML;
+                tempAnchor.textContent = tempElement.textContent;
                 this.#addTitleClickHandler(tempAnchor);
                 tempElement.innerHTML = "";
                 tempElement.appendChild(tempAnchor);
@@ -50,7 +72,7 @@ export class TextProcessorDOM {
                 const tempAnchor = document.createElement("a");
                 tempAnchor.href = `#line${lineNumber}`;
                 tempAnchor.classList.add("prevent-select", "title");
-                tempAnchor.innerHTML = content.replace(":", "").replace("：", "");
+                tempAnchor.textContent = this.#escapeHtml(content.replace(":", "").replace("：", ""));
                 this.#addTitleClickHandler(tempAnchor);
                 const tempH2 = document.createElement("h2");
                 tempH2.id = `line${lineNumber}`;
@@ -70,9 +92,10 @@ export class TextProcessorDOM {
                     tempSpan.classList.add("dropCap");
                     tempSpan.innerText = dropCap.content;
                     tempP.appendChild(tempSpan);
-                    tempP.innerHTML += content;
+                    // Escape before assigning to innerHTML to prevent injected markup from running.
+                    tempP.insertAdjacentHTML("beforeend", this.#escapeHtml(content));
                 } else {
-                    tempP.innerHTML = content;
+                    tempP.textContent = content;
                 }
                 return [setLineNum(tempP), elementType];
             }
@@ -81,10 +104,26 @@ export class TextProcessorDOM {
             default: {
                 const tempSpan = document.createElement("span");
                 tempSpan.id = `line${lineNumber}`;
-                tempSpan.innerHTML = content;
+                tempSpan.textContent = content;
                 return [setLineNum(tempSpan), elementType];
             }
         }
+    }
+
+    /**
+     * Escape a string for safe insertion as HTML text content.
+     * @param {string} str - Raw string to escape.
+     * @returns {string} Escaped string safe to use in innerHTML/insertAdjacentHTML.
+     * @private
+     */
+    static #escapeHtml(str) {
+        if (str == null) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
     }
 
     /**
