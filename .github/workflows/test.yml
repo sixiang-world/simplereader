@@ -6,7 +6,6 @@ on:
       - main
       - dev
       - feature/**
-      - v2-design
       - refactor/**
   pull_request:
     branches:
