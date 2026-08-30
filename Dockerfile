@@ -13,7 +13,7 @@ COPY vite.config.js ./
 # Enable pnpm via corepack (pnpm is declared in package.json `packageManager`)
 # and install from the committed pnpm-lock.yaml. This keeps the dependency
 # tree identical across EdgeOne / Docker / local dev (single source of truth).
-RUN corepack enable && corepack prepare pnpm@$(node -p "require('./package.json').packageManager.replace(/pnpm@/, '')") --activate && pnpm install --frozen-lockfile --no-audit --no-fund
+RUN corepack enable && corepack prepare pnpm@$(node -p "require('./package.json').packageManager.replace(/pnpm@/, '')") --activate && pnpm install --frozen-lockfile
 
 # Copy source
 COPY index.html version.json help.json ./
