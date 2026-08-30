@@ -229,6 +229,21 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 | `github` | `https://github.com/sixiang-world/simplereader.git` | GitHub fork 镜像 |
 | `upstream` | `https://github.com/henryxrl/SimpleTextReader.git` | 原版上游，用于同步更新 |
 
+### 分支拓扑（2026-08-30 治理后）
+
+| 分支（origin） | 指向 | 角色 |
+|----------------|------|------|
+| `main` | 最新 dev tip | 稳定发布线，随 dev ff-only 推进 |
+| `dev` | 活跃开发 HEAD | 开发主线，含全部 v2 成果 |
+| `archive/v2-design` | 851f2a8 | v2 设计探索归档，main 不含 |
+
+**约定**：
+- `main` 仅接受 `dev` 的 ff-only 合并，不直接接收 feature 提交
+- 功能开发在 `dev` 上或从 `dev` 切 `feat/<name>` 短期分支，合并回 `dev`
+- 已并入 `main` 的功能分支删除；仅保留 `archive/<name>` 作历史锚点（且其 HEAD 不等于 `main` HEAD，否则无意义）
+- `feat/v2-features` 已删（drift 被 dev 的 d86cac7 升级覆盖，v2.0.0/v2.0.1 tag 由 dev 保留）
+- `archive/feature/url-settings-override` 已删（指向 main HEAD，功能早并入）
+
 ---
 
 ## 8. 配置同步系统（手动模式）
