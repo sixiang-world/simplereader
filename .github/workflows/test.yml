@@ -38,7 +38,7 @@ jobs:
         run: pnpm run lint
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
 
       - name: Build production bundle
         run: pnpm run build
