@@ -42,26 +42,6 @@ export function formatBytes(bytes, units = "si") {
 
 
 /**
- * Simplified version of byte size formatting using SI units
- * @public
- * @param {number} bytes - The size in bytes
- * @param {number} decimals - Number of decimal places to show
- * @returns {string} Formatted size string
- */
-export function formatBytes_simple(bytes, decimals = 2) {
-    if (!+bytes) return "0 Bytes";
-
-    const k = 1000;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-}
-
-
-/**
  * Truncates a text to a maximum length
  * @param {string} text - The text to truncate
  * @param {number} maxLength - The maximum length of the text
