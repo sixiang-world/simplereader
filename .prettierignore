@@ -1,0 +1,8 @@
+node_modules/
+dist/
+archive/
+client/lib/
+client/manifests/
+pnpm-lock.yaml
+**/*.min.js
+CHANGELOG.md
