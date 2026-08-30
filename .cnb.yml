@@ -1,15 +1,17 @@
 # .cnb.yml — CNB 流水线
 #
 # 流水线总览：
-#   1. dev 分支 push        → 构建 + 部署 EdgeOne Pages 预发环境（自动）
-#   2. web_trigger 手动触发  → 构建 + 部署 EdgeOne Pages 生产环境
-#   3. web_trigger 手动触发  → 推送到 GitHub 镜像（原有功能）
+#   dev 分支 push 自动触发（两条并行流水线）：
+#     1a. build-and-deploy-preview → 构建 + 部署 EdgeOne Pages 预发环境
+#     1b. sync-to-github          → 推送 dev 分支和 tags 到 GitHub 镜像
+#   手动触发（$ 兜底）：
+#     2. web_trigger_deploy_production → 构建 + 部署 EdgeOne Pages 生产环境
+#     3. web_trigger.sync-to-github    → 推送到 GitHub（备用，手动控制 force/分支）
 #
-# 密钥仓库：
-#   EdgeOne API Token 通过独立密钥仓库管理。
-#     https://cnb.cool/shisheng820/secret/-/blob/main/edgeone.yml
-#   仓库内 edgeone.yml 形如：
-#     EDGEONE_PAGES_API_TOKEN: <your-real-token>
+# 密钥仓库（shisheng820/secret）：
+#   - edgeone.yml → EDGEONE_PAGES_API_TOKEN
+#   - github.yml  → GITHUB_TOKEN
+#   仓库内文件格式：KEY: <value>
 #
 # 部署前提：
 #   - 已在 EdgeOne Makers 控制台创建项目 "simplereader"
@@ -51,6 +53,35 @@ dev:
             api_token: $EDGEONE_PAGES_API_TOKEN
             directory: ./dist
             environment: preview
+
+    - name: sync-to-github
+      imports:
+        - https://cnb.cool/shisheng820/secret/-/blob/main/github.yml
+      docker:
+        image: alpine/git:latest
+      env:
+        GITHUB_TOKEN: $GITHUB_TOKEN
+      stages:
+        - name: validate-token
+          script: |
+            if [ -z "$GITHUB_TOKEN" ]; then
+              echo "ERROR: GITHUB_TOKEN is required (from secret repo github.yml)"
+              exit 78
+            fi
+        - name: configure-git
+          script: |
+            git config user.name "cnb-sync[bot]"
+            git config user.email "cnb-sync[bot]@users.noreply.github.com"
+        - name: add-github-remote
+          script: |
+            git remote add github https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git || \
+              git remote set-url github https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git
+        - name: push-branch-and-tags
+          script: |
+            echo "Pushing branch: dev"
+            git push github dev 2>&1 || echo "WARN: failed to push branch dev"
+            echo "Pushing all tags..."
+            git push github --tags 2>&1 || echo "WARN: failed to push some tags"
 
 # ===== 2. 手动触发 → 部署生产环境 =====
 $:
