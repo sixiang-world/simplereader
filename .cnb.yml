@@ -1,7 +1,90 @@
 # .cnb.yml — CNB 流水线
-# 手动触发推送到 GitHub 镜像
+#
+# 流水线总览：
+#   1. dev 分支 push        → 构建 + 部署 EdgeOne Pages 预发环境（自动）
+#   2. web_trigger 手动触发  → 构建 + 部署 EdgeOne Pages 生产环境
+#   3. web_trigger 手动触发  → 推送到 GitHub 镜像（原有功能）
+#
+# 密钥仓库：
+#   EdgeOne API Token 通过独立密钥仓库管理。
+#     https://cnb.cool/shisheng820/secret/-/blob/main/edgeone.yml
+#   仓库内 edgeone.yml 形如：
+#     EDGEONE_PAGES_API_TOKEN: <your-real-token>
+#
+# 部署前提：
+#   - 已在 EdgeOne Makers 控制台创建项目 "simplereader"
+#   - 已获取 EdgeOne Pages API Token
+#   - 已创建密钥仓库并配置 EDGEONE_PAGES_API_TOKEN
 
+# ===== 1. dev 分支 push → 自动部署预发环境 =====
+dev:
+  push:
+    - name: build-and-deploy-preview
+      imports:
+        - https://cnb.cool/shisheng820/secret/-/blob/main/edgeone.yml
+      docker:
+        image: node:20.18.0-alpine
+      # 部署防并发：只保留最新排队的流水线
+      lock:
+        key: deploy-eopages-preview
+        wait: true
+        cancel-in-wait: true
+      stages:
+        - name: install
+          script: |
+            corepack enable
+            pnpm install --frozen-lockfile
+        - name: build
+          script: pnpm run build
+        - name: verify-dist
+          script: |
+            if [ ! -d dist ]; then
+              echo "ERROR: dist/ not found after build"
+              exit 1
+            fi
+            echo "dist size: $(du -sh dist | cut -f1)"
+        - name: 部署到 EdgeOne Pages 预发环境
+          image: tencentcom/deploy-eopages:latest
+          settings:
+            project_name: simplereader
+            api_token: $EDGEONE_PAGES_API_TOKEN
+            directory: ./dist
+            environment: preview
+
+# ===== 2. 手动触发 → 部署生产环境 =====
 $:
+  web_trigger_deploy_production:
+    - name: deploy-production
+      imports:
+        - https://cnb.cool/shisheng820/secret/-/blob/main/edgeone.yml
+      lock:
+        key: deploy-eopages-production
+        wait: true
+        cancel-in-wait: true
+      docker:
+        image: node:20.18.0-alpine
+      stages:
+        - name: install
+          script: |
+            corepack enable
+            pnpm install --frozen-lockfile
+        - name: build
+          script: pnpm run build
+        - name: verify-dist
+          script: |
+            if [ ! -d dist ]; then
+              echo "ERROR: dist/ not found after build"
+              exit 1
+            fi
+            echo "dist size: $(du -sh dist | cut -f1)"
+        - name: 部署到 EdgeOne Pages 生产环境
+          image: tencentcom/deploy-eopages:latest
+          settings:
+            project_name: simplereader
+            api_token: $EDGEONE_PAGES_API_TOKEN
+            directory: ./dist
+
+  # ===== 3. 手动触发 → 推送到 GitHub 镜像（原有功能） =====
   web_trigger:
     - name: sync-to-github
       docker:
