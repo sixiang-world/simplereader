@@ -185,6 +185,10 @@ export default defineConfig({
         minify: "esbuild",
         sourcemap: false,
     },
+    esbuild: {
+        drop: ["debugger"],
+        pure: ["console.log", "console.debug", "console.info"],
+    },
     // Expose /client, /shared, /server paths directly so dev server can serve
     // them with same relative URLs as production.
     resolve: {
