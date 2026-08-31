@@ -928,6 +928,8 @@ export class FileHandler {
             cbReg.go("saveProcessedBook", {
                 name: file.name,
                 is_epub: true,
+                converted: true,
+                epubConverterVersion: 1,
                 processed: true,
                 is_eastern_lan: CONFIG.VARS.IS_EASTERN_LAN,
                 encoding: "utf-8",
