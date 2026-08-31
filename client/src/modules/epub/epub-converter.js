@@ -139,10 +139,41 @@ export class EpubConverter {
         // --- Metadata ---
         // Use getElementsByTagNameNS to handle namespaced elements (dc:title, dc:creator)
         const metadata = {};
-        const titleEl = doc.getElementsByTagNameNS("*", "title")[0];
-        const creatorEl = doc.getElementsByTagNameNS("*", "creator")[0];
-        metadata.title = titleEl?.textContent?.trim() || "";
-        metadata.author = creatorEl?.textContent?.trim() || "";
+        const getDcText = (tag, preferRole) => {
+            const els = doc.getElementsByTagNameNS("*", tag);
+            if (preferRole) {
+                for (const el of els) {
+                    const role = el.getAttributeNS("http://www.idpf.org/2007/opf", "role");
+                    if (role === preferRole) return el.textContent?.trim() || "";
+                }
+            }
+            return els[0]?.textContent?.trim() || "";
+        };
+        const getDcAll = (tag) => Array.from(doc.getElementsByTagNameNS("*", tag))
+            .map((el) => el.textContent?.trim())
+            .filter(Boolean);
+
+        metadata.title = getDcText("title");
+        metadata.author = getDcText("creator", "aut") || getDcText("creator");
+        metadata.publisher = getDcText("publisher");
+        metadata.date = getDcText("date");
+        metadata.language = getDcText("language");
+        metadata.description = getDcText("description");
+        metadata.subjects = getDcAll("subject");
+        metadata.identifier = getDcText("identifier");
+
+        // EPUB2 cover image reference (<meta name="cover" content="cover-id"/>)
+        const metaEls = doc.getElementsByTagNameNS("*", "meta");
+        for (const metaEl of metaEls) {
+            if (metaEl.getAttribute("name") === "cover") {
+                const coverId = metaEl.getAttribute("content");
+                const coverItem = manifest[coverId];
+                if (coverItem) {
+                    metadata.coverHref = this.#resolveHref(coverItem.href, opfPath);
+                }
+                break;
+            }
+        }
 
         // --- Manifest ---
         // Use getElementsByTagNameNS("*", ...) to handle namespaced OPF (default xmlns)

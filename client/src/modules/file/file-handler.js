@@ -854,8 +854,9 @@ export class FileHandler {
                 .join(" ")
                 .replace(/<[^>]*>/g, "")
                 .slice(0, 500);
+            const languageHint = result.metadata?.language || "";
             CONFIG.VARS.IS_EASTERN_LAN = TextProcessor.getLanguage(
-                (bookName + " " + author + " " + contentSample).slice(0, 1000)
+                (bookName + " " + author + " " + languageHint + " " + contentSample).slice(0, 1000)
             );
             CONFIG.VARS.ENCODING = "utf-8";
             CONFIG.VARS.TITLE_PAGE_LINE_NUMBER_OFFSET = 0;
