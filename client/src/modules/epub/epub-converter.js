@@ -35,37 +35,37 @@ export class EpubConverter {
         };
 
         const t0 = performance.now();
-        console.log("[EPUB] Starting conversion...");
+        this.#logger.log("Starting conversion...");
         reportProgress("start");
 
         // 1. Unzip
-        console.log("[EPUB] Unzipping...");
+        this.#logger.log("Unzipping...");
         reportProgress("unzip");
         const buffer = await file.arrayBuffer();
-        console.log(`[EPUB] File size: ${(buffer.byteLength / 1024).toFixed(0)}KB`);
+        this.#logger.log(`File size: ${(buffer.byteLength / 1024).toFixed(0)}KB`);
         const zip = await JSZip.loadAsync(buffer);
-        console.log(`[EPUB] Unzipped: ${Object.keys(zip.files).length} files`);
+        this.#logger.log(`Unzipped: ${Object.keys(zip.files).length} files`);
 
         // 2. Parse container → find OPF path
-        console.log("[EPUB] Parsing container.xml...");
+        this.#logger.log("Parsing container.xml...");
         reportProgress("container");
         const opfPath = await this.#parseContainer(zip);
-        console.log(`[EPUB] OPF path: ${opfPath}`);
+        this.#logger.log(`OPF path: ${opfPath}`);
 
         // 3. Parse OPF → metadata, manifest, spine
-        console.log("[EPUB] Parsing OPF...");
+        this.#logger.log("Parsing OPF...");
         reportProgress("opf");
         const { metadata, manifest, spine } = await this.#parseOpf(zip, opfPath);
-        console.log(`[EPUB] Spine: ${spine.length} items, Manifest: ${Object.keys(manifest).length} items`);
+        this.#logger.log(`Spine: ${spine.length} items, Manifest: ${Object.keys(manifest).length} items`);
 
         // 4. Parse TOC (EPUB3 nav or EPUB2 NCX)
-        console.log("[EPUB] Parsing TOC...");
+        this.#logger.log("Parsing TOC...");
         reportProgress("toc");
         const tocEntries = await this.#parseToc(zip, manifest, opfPath);
-        console.log(`[EPUB] TOC entries: ${tocEntries.length}`);
+        this.#logger.log(`TOC entries: ${tocEntries.length}`);
 
         // 5. Process spine items in order
-        console.log("[EPUB] Processing spine...");
+        this.#logger.log("Processing spine...");
         reportProgress("spine", `${spine.length} items`);
         const { htmlLines, titles: spineTitles, spineBreaks, fileToLine, fragmentToLine } = await this.#processSpine(
             zip,
@@ -74,13 +74,13 @@ export class EpubConverter {
             opfPath,
             (current, total) => reportProgress("spine-item", `${current}/${total}`)
         );
-        console.log(`[EPUB] Spine done: ${htmlLines.length} lines, ${spineTitles.length} titles, ${spineBreaks.length} spine breaks`);
+        this.#logger.log(`Spine done: ${htmlLines.length} lines, ${spineTitles.length} titles, ${spineBreaks.length} spine breaks`);
 
         // 6. Build titles from NCX/TOC entries (using fileToLine mapping)
         //    Prefer NCX titles over auto-detected ones when available
         let titles;
         if (tocEntries.length > 0) {
-            console.log(`[EPUB] Mapping ${tocEntries.length} TOC entries to line numbers...`);
+            this.#logger.log(`Mapping ${tocEntries.length} TOC entries to line numbers...`);
             titles = [];
             const seenLines = new Set();
             for (const entry of tocEntries) {
@@ -106,7 +106,7 @@ export class EpubConverter {
                     seenLines.add(st[1]);
                 }
             }
-            console.log(`[EPUB] TOC mapping produced ${titles.length} titles (${tocEntries.length - titles.length} unmapped)`);
+            this.#logger.log(`TOC mapping produced ${titles.length} titles (${tocEntries.length - titles.length} unmapped)`);
         } else {
             titles = spineTitles;
         }
@@ -157,14 +157,14 @@ export class EpubConverter {
         }
 
         // 9. Build titlesInd
-        console.log("[EPUB] Building titlesInd...");
+        this.#logger.log("Building titlesInd...");
         const titlesInd = {};
         for (let i = 0; i < titles.length; i++) {
             titlesInd[titles[i][1]] = i;
         }
 
         const elapsed = performance.now() - t0;
-        console.log(`[EPUB] Conversion complete in ${elapsed.toFixed(0)}ms`);
+        this.#logger.log(`Conversion complete in ${elapsed.toFixed(0)}ms`);
         reportProgress("complete");
         return {
             source: { type: "epub", filename: file.name, size_bytes: buffer.byteLength },
@@ -399,7 +399,11 @@ export class EpubConverter {
                 const src = contentEl.getAttribute("src");
                 if (label && src) {
                     const [pathPart, fragment] = src.split("#");
-                    const resolvedPath = this.#resolveHref(pathPart, opfPath);
+                    // NCX content/@src is relative to the NCX file itself, not the
+                    // OPF. Using opfPath here only works when both live in the same
+                    // directory; subdirectory NCX (e.g. OEBPS/nav/toc.ncx) would
+                    // resolve to wrong paths and drop TOC entries.
+                    const resolvedPath = this.#resolveHref(pathPart, ncxPath);
                     const resolvedHref = fragment ? `${resolvedPath}#${fragment}` : resolvedPath;
                     entries.push({ label, href: resolvedHref });
                 }
@@ -450,21 +454,21 @@ export class EpubConverter {
         const fragmentToLine = {}; // {filePath#id: lineNumber}
         const missingFiles = [];
         let lineNumber = 0;
-        console.log(`[EPUB] Processing ${spine.length} spine items...`);
+        this.#logger.log(`Processing ${spine.length} spine items...`);
         for (const [idx, item] of spine.entries()) {
             const filePath = this.#resolveHref(item.href, opfPath);
             let file = zip.file(filePath);
 
             if (!file) {
                 missingFiles.push(filePath);
-                console.log(`[EPUB]   [${idx}] NOT FOUND: ${filePath}`);
+                this.#logger.warn(`Spine [${idx}] NOT FOUND: ${filePath} (skipping)`);
                 continue;
             }
 
             // Resolve fallback chain for non-HTML/XML spine items
             const effectiveItem = this.#resolveSpineItem(item, manifest);
             if (!effectiveItem) {
-                console.log(`[EPUB]   [${idx}] SKIP: ${filePath} (${item.mediaType}, no HTML/XML fallback)`);
+                this.#logger.log(`Spine [${idx}] SKIP: ${filePath} (${item.mediaType}, no HTML/XML fallback)`);
                 continue;
             }
 
@@ -473,10 +477,10 @@ export class EpubConverter {
                 file = zip.file(effectivePath);
                 if (!file) {
                     missingFiles.push(effectivePath);
-                    console.log(`[EPUB]   [${idx}] NOT FOUND (fallback): ${effectivePath}`);
+                    this.#logger.warn(`Spine [${idx}] NOT FOUND (fallback): ${effectivePath} (skipping)`);
                     continue;
                 }
-                console.log(`[EPUB]   [${idx}] FALLBACK: ${filePath} → ${effectivePath}`);
+                this.#logger.log(`Spine [${idx}] FALLBACK: ${filePath} → ${effectivePath}`);
             }
 
             // Record spine boundary (skip index 0 since spineBreaks already starts with 0)
@@ -497,7 +501,7 @@ export class EpubConverter {
             lineNumber += result.elements.length;
 
             if (result.elements.length > 0 || result.titles.length > 0) {
-                console.log(`[EPUB]   [${idx}] ${effectivePath}: ${result.elements.length} els, ${result.titles.length} titles (${elapsed}ms)`);
+                this.#logger.log(`Spine [${idx}] ${effectivePath}: ${result.elements.length} els, ${result.titles.length} titles (${elapsed}ms)`);
             }
             if (typeof onItemProgress === "function") {
                 try {
@@ -506,10 +510,16 @@ export class EpubConverter {
                     this.#logger.log("EPUB item progress callback error:", e);
                 }
             }
+            // Yield to the event loop between spine items so the progress UI can
+            // repaint and the tab stays responsive during long conversions.
+            await Promise.resolve();
         }
 
+        // Non-fatal: surface missing files as a warning but keep the successfully
+        // parsed content. Throwing here would discard the entire book just because
+        // one non-critical spine item (e.g. a missing copyright page) is absent.
         if (missingFiles.length > 0) {
-            throw new Error(`Invalid EPUB: missing spine file(s): ${missingFiles.join(", ")}`);
+            this.#logger.warn(`EPUB missing spine file(s): ${missingFiles.join(", ")}`);
         }
 
         return { htmlLines, titles, spineBreaks, fileToLine, fragmentToLine };
@@ -774,10 +784,19 @@ export class EpubConverter {
                 continue;
             }
 
-            // For sections/articles, recurse to get block children
-            if (["section", "article", "header", "footer", "nav", "aside"].includes(tag)) {
+            // For sections/articles/divs, recurse to get block children.
+            // Divs are included here (not pushed whole) so that wrappers like
+            // <div class="chapter"><p>...</p><ul>...</ul></div> preserve their
+            // inner block structure instead of being flattened to one paragraph.
+            // If recursion yields nothing (e.g. div with only inline text), fall
+            // back to pushing the div itself so its content is still rendered.
+            if (["section", "article", "header", "footer", "nav", "aside", "div"].includes(tag)) {
                 const subItems = this.#createBlockWalker(child);
-                result.push(...subItems);
+                if (subItems.length > 0) {
+                    result.push(...subItems);
+                } else {
+                    result.push(child);
+                }
                 continue;
             }
 
@@ -892,18 +911,31 @@ export class EpubConverter {
     }
 
     /**
-     * Get safe HTML attributes from an element (class, href, title only)
+     * Get safe HTML attributes from an element (class, href, title only).
+     * Class values are filtered against a whitelist so an attacker-crafted
+     * EPUB cannot inject arbitrary classes (e.g. "dropCap", "author") that
+     * would hijack reader CSS.
      * @param {Element} el
      * @returns {string} Attribute string like ' class="foo" href="bar"'
      */
     static #getSafeAttributes(el) {
+        const SAFE_CLASSES = new Set([
+            "dropCap", "first", "noIndent", "author", "end-page", "synthetic-page", "title",
+        ]);
         let attrs = "";
         const tag = el.tagName?.toLowerCase();
         const safeAttrs = ["class", "title"];
         for (const name of safeAttrs) {
             const val = el.getAttribute(name);
             if (val !== null && val !== "") {
-                attrs += ` ${name}="${this.#escapeHtml(val)}"`;
+                if (name === "class") {
+                    const filtered = val.split(/\s+/).filter((c) => SAFE_CLASSES.has(c)).join(" ");
+                    if (filtered) {
+                        attrs += ` class="${this.#escapeHtml(filtered)}"`;
+                    }
+                } else {
+                    attrs += ` ${name}="${this.#escapeHtml(val)}"`;
+                }
             }
         }
 
@@ -948,6 +980,9 @@ export class EpubConverter {
         for (const scheme of dangerousSchemes) {
             if (lower.startsWith(scheme)) return false;
         }
+        // Reject protocol-relative URLs (e.g. //evil.com) which would navigate
+        // the reader tab to an external site on click.
+        if (lower.startsWith("//")) return false;
         return true;
     }
 

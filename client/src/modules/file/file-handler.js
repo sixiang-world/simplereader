@@ -818,7 +818,27 @@ export class FileHandler {
         const metrics = {
             startTime: performance.now(),
         };
-        console.log(`[EPUB-handle] Starting: ${file.name}`);
+        this.#logger.log(`Starting: ${file.name}`);
+
+        // Hoist loading-text helpers above the try block so the catch handler can
+        // safely restore the original loading text even when the error occurs
+        // before/inside the conversion call. Declaring them inside try would mask
+        // the real error with a ReferenceError in catch.
+        const loadingEl = CONFIG.DOM_ELEMENT.LOADING_SCREEN;
+        const originalLoadingText = loadingEl?.style.getPropertyValue("--ui_dropZoneText_loading");
+        const epubLoadingBase = (() => {
+            if (!loadingEl) return "";
+            const v = getComputedStyle(loadingEl).getPropertyValue("--ui_dropZoneText_loading_epub").trim();
+            return v || "Parsing EPUB...";
+        })();
+        const setEpubLoadingText = (showEpub) => {
+            if (loadingEl) {
+                loadingEl.style.setProperty(
+                    "--ui_dropZoneText_loading",
+                    showEpub ? epubLoadingBase : originalLoadingText
+                );
+            }
+        };
 
         try {
             // Enforce EPUB file size limit
@@ -845,23 +865,11 @@ export class FileHandler {
             CONFIG.VARS.IS_BOOK_OPENED = true;
 
             // Convert EPUB to content structure
-            console.log("[EPUB-handle] Calling EpubConverter.convert()...");
-            const loadingEl = CONFIG.DOM_ELEMENT.LOADING_SCREEN;
-            const originalLoadingText = loadingEl?.style.getPropertyValue("--ui_dropZoneText_loading");
-            const setEpubLoadingText = (showEpub) => {
-                if (loadingEl) {
-                    loadingEl.style.setProperty(
-                        "--ui_dropZoneText_loading",
-                        showEpub ? "var(--ui_dropZoneText_loading_epub)" : originalLoadingText
-                    );
-                }
-            };
             setEpubLoadingText(true);
 
-            const convertResult = await EpubConverter.convert(file, (step, detail) => {
-                if (loadingEl && step !== "complete") {
-                    const base = getComputedStyle(loadingEl).getPropertyValue("--ui_dropZoneText_loading_epub").trim();
-                    loadingEl.style.setProperty("--ui_dropZoneText_loading", base || "Parsing EPUB...");
+            const convertResult = await EpubConverter.convert(file, (step) => {
+                if (step !== "complete") {
+                    setEpubLoadingText(true);
                 }
             });
 
@@ -869,12 +877,12 @@ export class FileHandler {
             const result = convertResult.source?.type === "epub"
                 ? convertResult
                 : { ...convertResult, source: { type: "epub", filename: file.name, size_bytes: file.size } };
-            console.log(`[EPUB-handle] Convert returned: ${result.htmlLines.length} lines, ${result.titles.length} titles`);
+            this.#logger.log(`Convert returned: ${result.htmlLines.length} lines, ${result.titles.length} titles`);
 
             // Set metadata
             const bookName = result.metadata.title || removeFileExtension(file.name);
             const author = result.metadata.author || "";
-            console.log(`[EPUB-handle] Book: "${bookName}" by "${author}"`);
+            this.#logger.log(`Book: "${bookName}" by "${author}"`);
             CONFIG.VARS.BOOK_AND_AUTHOR = {
                 bookName,
                 author,
@@ -926,45 +934,45 @@ export class FileHandler {
             CONFIG.VARS.PAGE_BREAKS = pageBreaks;
             CONFIG.VARS.TOTAL_PAGES = pageBreaks.length;
             CONFIG.VARS.CURRENT_PAGE = 1;
-            console.log(`[EPUB-handle] Pagination: ${pageBreaks.length} pages`);
+            this.#logger.log(`Pagination: ${pageBreaks.length} pages`);
 
             // Set title
-            console.log("[EPUB-handle] Setting title...");
+            this.#logger.log("Setting title...");
             setTitle(bookName);
 
             // Update UI language
-            console.log("[EPUB-handle] Updating UI language...");
+            this.#logger.log("Updating UI language...");
             cbReg.go("updateUILanguage", {
                 lang: getCurrentDisplayLanguage(),
                 saveToLocalStorage: false,
             });
 
             // Process TOC
-            console.log("[EPUB-handle] Processing TOC...");
+            this.#logger.log("Processing TOC...");
             reader.initTOC();
             reader.processTOC();
-            console.log(`[EPUB-handle] TOC processed: ${reader.getTOCEntries?.()?.length || 'N/A'} entries`);
+            this.#logger.log(`TOC processed: ${reader.getTOCEntries?.()?.length || 'N/A'} entries`);
 
             // Show content
-            console.log("[EPUB-handle] Rendering content...");
+            this.#logger.log("Rendering content...");
             CONFIG.VARS.INIT = false;
             reader.showCurrentPageContent();
-            console.log("[EPUB-handle] showCurrentPageContent done");
+            this.#logger.log("showCurrentPageContent done");
 
             reader.generatePagination();
-            console.log("[EPUB-handle] generatePagination done");
-            console.log("[EPUB-handle] updatePaginationCalculations...");
+            this.#logger.log("generatePagination done");
+            this.#logger.log("updatePaginationCalculations...");
             updatePaginationCalculations(false);
-            console.log("[EPUB-handle] GetScrollPositions...");
+            this.#logger.log("GetScrollPositions...");
             GetScrollPositions(false);
 
             // Save to bookshelf DB (fire-and-forget, error is handled internally)
-            console.log("[EPUB-handle] saveProcessedBook (fire & forget)...");
+            this.#logger.log("saveProcessedBook (fire & forget)...");
             cbReg.go("saveProcessedBook", {
                 name: file.name,
                 is_epub: true,
                 converted: true,
-                epubConverterVersion: 1,
+                epubConverterVersion: CONFIG.CONST_FILE.EPUB_CONVERTER_VERSION,
                 processed: true,
                 is_eastern_lan: CONFIG.VARS.IS_EASTERN_LAN,
                 encoding: "utf-8",
@@ -987,11 +995,11 @@ export class FileHandler {
 
             // Retrieve reading history (skip if no titles to avoid hanging on tocRendered)
             if (result.titles.length > 0) {
-                console.log("[EPUB-handle] Retrieving reading history...");
+                this.#logger.log("Retrieving reading history...");
                 await getHistoryAndSetChapterTitleActive(reader.gotoLine.bind(reader));
-                console.log("[EPUB-handle] History retrieved");
+                this.#logger.log("History retrieved");
             } else {
-                console.log("[EPUB-handle] Skipping history (no titles in this EPUB)");
+                this.#logger.log("Skipping history (no titles in this EPUB)");
             }
 
             // Run the file:afterProcess hook pipeline (T2S, etc.) BEFORE
@@ -999,17 +1007,17 @@ export class FileHandler {
             await FileHandler.#applyFileAfterProcessHook();
 
             // Finalize UI
-            console.log("[EPUB-handle] Hiding loading screen...");
+            this.#logger.log("Hiding loading screen...");
             setEpubLoadingText(false);
             hideDropZone(false);
             hideLoadingScreen(false);
             showContent();
-            console.log("[EPUB-handle] UI finalized, triggering fileAfter...");
+            this.#logger.log("UI finalized, triggering fileAfter...");
             await cbReg.go("fileAfter");
-            console.log("[EPUB-handle] Done.");
+            this.#logger.log("Done.");
 
             const elapsed = (performance.now() - metrics.startTime) / 1000;
-            console.log(`[EPUB] Book opened in ${elapsed.toFixed(3)}s: "${bookName}" by ${author}`);
+            this.#logger.log(`Book opened in ${elapsed.toFixed(3)}s: "${bookName}" by ${author}`);
 
         } catch (error) {
             setEpubLoadingText(false);

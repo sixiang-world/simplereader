@@ -417,8 +417,8 @@
     --ui_notification_text_fileSizeLimit_zh: 文件大小超过限制;
     --ui_notification_text_fileSizeLimit_en: File size exceeds limit;
     --ui_notification_text_epubTooLarge: "";
-    --ui_notification_text_epubTooLarge_zh: EPUB 文件过大（最大 128MB）;
-    --ui_notification_text_epubTooLarge_en: EPUB file is too large (max 128MB);
+    --ui_notification_text_epubTooLarge_zh: EPUB 文件过大（最大 50MB）;
+    --ui_notification_text_epubTooLarge_en: EPUB file is too large (max 50MB);
     --ui_notification_text_fontFileInvalid: "";
     --ui_notification_text_fontFileInvalid_zh: 无效的字体文件;
     --ui_notification_text_fontFileInvalid_en: Invalid font file;

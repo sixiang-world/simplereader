@@ -179,6 +179,109 @@ await asyncTest("resolves TOC fragment anchors to line numbers", async () => {
     assert.equal(tocEntry[1], targetLine.lineNumber);
 });
 
+console.log("\nEPUB converter — NCX TOC in subdirectory\n");
+
+await asyncTest("NCX TOC hrefs resolve against NCX path, not OPF path", async () => {
+    // NCX lives in OEBPS/nav/toc.ncx and references ../ch1.xhtml. If the
+    // converter wrongly resolves against opfPath (OEBPS/content.opf), the
+    // href would become OEBPS/ch1.xhtml — which doesn't exist — and the
+    // TOC entry would be dropped. Correct resolution against ncxPath
+    // yields OEBPS/../ch1.xhtml = ch1.xhtml... but we put ch1 in OEBPS/,
+    // so correct resolution is OEBPS/ch1.xhtml. Construct so the two
+    // resolutions produce different paths.
+    const zip = new JSZip();
+    zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+    zip.file("META-INF/container.xml", `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`);
+    zip.file("OEBPS/content.opf", `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>NCX Subdir Book</dc:title>
+    <dc:creator>Author</dc:creator>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ncx" href="nav/toc.ncx" media-type="application/x-dtbncx+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>`);
+    zip.file("OEBPS/ch1.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch1</title></head>
+<body><h1>Chapter 1</h1><p>Content.</p></body></html>`);
+    // NCX in subdirectory; its src is relative to the NCX file, so ../ch1.xhtml
+    // resolves to OEBPS/ch1.xhtml. If resolved against opfPath (OEBPS/content.opf),
+    // ../ch1.xhtml would resolve to ch1.xhtml (wrong).
+    zip.file("OEBPS/nav/toc.ncx", `<?xml version="1.0"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <navMap>
+    <navPoint><navLabel><text>Chapter 1</text></navLabel><content src="../ch1.xhtml"/></navPoint>
+  </navMap>
+</ncx>`);
+    const epubPath = path.join(tmpDir, "ncx-subdir.epub");
+    const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    fs.writeFileSync(epubPath, buffer);
+
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const tocEntry = result.titles.find(([label]) => label === "Chapter 1");
+    assert.ok(tocEntry, "NCX entry from subdirectory should be mapped, not dropped");
+});
+
+console.log("\nEPUB converter — div-wrapped block structure\n");
+
+await asyncTest("div wrapping ul/table/blockquote preserves block structure", async () => {
+    const epubPath = await buildEpub("div-wrap.epub", [
+        ["ch1.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch1</title></head>
+<body><div class="chapter">
+  <p>Intro</p>
+  <ul><li>One</li><li>Two</li></ul>
+  <table><tr><th>A</th></tr><tr><td>1</td></tr></table>
+</div></body></html>`],
+    ]);
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const types = result.htmlLines.map((l) => l.type);
+    assert.ok(types.includes("list"), "ul inside div should be preserved as a list line, not flattened");
+    assert.ok(types.includes("table"), "table inside div should be preserved as a table line");
+});
+
+console.log("\nEPUB converter — missing spine files are non-fatal\n");
+
+await asyncTest("missing spine file skips with warning, does not discard whole book", async () => {
+    // Build an EPUB whose spine references a chapter that doesn't exist in the zip.
+    const zip = new JSZip();
+    zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+    zip.file("META-INF/container.xml", `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`);
+    zip.file("OEBPS/content.opf", `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Missing Spine Book</dc:title><dc:creator>Author</dc:creator><dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ghost" href="ghost.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/><itemref idref="ghost"/></spine>
+</package>`);
+    zip.file("OEBPS/ch1.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch1</title></head>
+<body><p>Real content.</p></body></html>`);
+    // ghost.xhtml intentionally not present
+    const epubPath = path.join(tmpDir, "missing-spine.epub");
+    const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    fs.writeFileSync(epubPath, buffer);
+
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    // The book should still open with the real chapter's content.
+    const paragraph = result.htmlLines.find((l) => l.type === "paragraph" && l.content.includes("Real content"));
+    assert.ok(paragraph, "real spine items should still be processed when a sibling is missing");
+});
+
 console.log("\nEPUB converter — security\n");
 
 await asyncTest("strips dangerous href schemes", async () => {
