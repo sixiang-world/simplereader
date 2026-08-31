@@ -15,6 +15,33 @@
  * @param {string} units - Unit system to use ('si' or 'iec')
  * @returns {string} Formatted size string (e.g., "1.5 MB" or "1.5 MiB")
  */
+/**
+ * Simple byte formatter using SI units (no IEC option)
+ * @public
+ * @param {number} bytes - The size in bytes
+ * @returns {string} Formatted size string (e.g., "1.5 KB")
+ */
+export function formatBytes_simple(bytes) {
+    if ([-1, 0, 1].includes(bytes)) {
+        return `${bytes} Byte${bytes === 1 ? "" : "s"}`;
+    }
+
+    const UNITS = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+    const absBytes = Math.abs(bytes);
+    const exponent = Math.floor(Math.log(absBytes) / Math.log(1000));
+    const value = (absBytes / Math.pow(1000, exponent)) * Math.sign(bytes);
+
+    return `${value >= 99.995 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${UNITS[exponent]}`;
+}
+
+
+/**
+ * Formats byte size to human readable format using SI or IEC units
+ * @public
+ * @param {number} bytes - The size in bytes
+ * @param {string} units - Unit system to use ('si' or 'iec')
+ * @returns {string} Formatted size string (e.g., "1.5 MB" or "1.5 MiB")
+ */
 export function formatBytes(bytes, units = "si") {
     // Handle special cases
     if ([-1, 0, 1].includes(bytes)) {
