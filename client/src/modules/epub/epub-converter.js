@@ -492,6 +492,26 @@ export class EpubConverter {
                 continue;
             }
 
+            // Lists
+            if (tag === "ul" || tag === "ol") {
+                const content = this.#extractListHtml(node);
+                if (content.trim()) {
+                    elements.push({
+                        type: "list",
+                        tag,
+                        content,
+                        charCount: textContent.length,
+                        lineNumber,
+                        elementType: "l",
+                        source: "epub",
+                    });
+                    if (fragmentToLine && filePath && node.id) {
+                        fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
+                    }
+                }
+                continue;
+            }
+
             // Paragraphs and divs
             if (["p", "div", "blockquote", "li", "td", "th", "dt", "dd"].includes(tag)) {
                 const content = this.#extractInlineHtml(node);
@@ -570,12 +590,9 @@ export class EpubConverter {
             // Skip non-content containers
             if (["script", "style", "svg"].includes(tag)) continue;
 
-            // For lists, extract individual items
+            // Keep lists as whole blocks (processed as a "list" line type)
             if (tag === "ul" || tag === "ol") {
-                for (const li of child.querySelectorAll("li")) {
-                    result.push(li);
-                    skipChildren.add(li);
-                }
+                result.push(child);
                 continue;
             }
 
@@ -610,6 +627,33 @@ export class EpubConverter {
         }
 
         return result;
+    }
+
+    /**
+     * Extract list HTML, preserving only ul/ol/li structure and inline marks.
+     * @param {Node} node
+     * @returns {string} HTML string
+     */
+    static #extractListHtml(node) {
+        const tag = node.tagName?.toLowerCase();
+        if (tag !== "ul" && tag !== "ol") return "";
+
+        let html = `<${tag}>`;
+        for (const li of node.querySelectorAll(":scope > li")) {
+            html += "<li>";
+            // Nested lists
+            for (const child of li.children) {
+                const childTag = child.tagName?.toLowerCase();
+                if (childTag === "ul" || childTag === "ol") {
+                    html += this.#extractListHtml(child);
+                } else {
+                    html += this.#extractInlineHtml(child);
+                }
+            }
+            html += "</li>";
+        }
+        html += `</${tag}>`;
+        return html;
     }
 
     /**
