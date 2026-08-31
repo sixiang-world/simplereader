@@ -31,6 +31,7 @@ import { hooks } from "../../core/hooks.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { FileProcessor } from "./file-processor.js";
 import { EpubConverter } from "../epub/epub-converter.js";
+import { PaginationCalculator } from "../../../../shared/core/text/pagination-calculator.js";
 import { PopupManager } from "../../components/popup-manager.js";
 import { getFootnotes } from "../reader/footnotes.js";
 import {
@@ -869,40 +870,28 @@ export class FileHandler {
             CONFIG.VARS.FOOTNOTES = [];
             CONFIG.VARS.FOOTNOTE_PROCESSED_COUNTER = 0;
 
-            // Set pagination based on EPUB spine (chapter) boundaries
-            const MAX_LINES_PER_PAGE = 100;
-            const spineBreaks = result.spineBreaks || [0];
-            const totalLines = result.htmlLines.length;
-            console.log(`[EPUB-handle] Calculating pagination from ${spineBreaks.length} spine breaks (${totalLines} lines)...`);
-
-            // Refine: add sub-breaks for long spine items
-            const pageBreaks = [0];
-            for (let i = 1; i < spineBreaks.length; i++) {
-                const start = spineBreaks[i - 1];
-                const end = spineBreaks[i];
-                const length = end - start;
-
-                if (length > MAX_LINES_PER_PAGE) {
-                    // Add intermediate breaks
-                    for (let offset = MAX_LINES_PER_PAGE; offset < length; offset += MAX_LINES_PER_PAGE) {
-                        pageBreaks.push(start + offset);
-                    }
-                }
-                pageBreaks.push(end);
-            }
-            // Handle last spine item
-            const lastSpineStart = spineBreaks[spineBreaks.length - 1];
-            const lastSpineLength = totalLines - lastSpineStart;
-            if (lastSpineLength > MAX_LINES_PER_PAGE) {
-                for (let offset = MAX_LINES_PER_PAGE; offset < lastSpineLength; offset += MAX_LINES_PER_PAGE) {
-                    pageBreaks.push(lastSpineStart + offset);
-                }
-            }
+            // Set pagination using the shared PaginationCalculator
+            const paginationConfig = {
+                IS_EASTERN_LAN: CONFIG.VARS.IS_EASTERN_LAN,
+                BOOK_AND_AUTHOR: CONFIG.VARS.BOOK_AND_AUTHOR,
+                PAGE_BREAK_ON_TITLE: CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE,
+                COMPLETE_BOOK: true,
+                MAX_LINES: CONFIG.CONST_PAGINATION.MAX_LINES,
+                MIN_LINES: CONFIG.CONST_PAGINATION.MIN_LINES,
+                MAX_CHARS: CONFIG.CONST_PAGINATION.MAX_CHARS,
+                MIN_CHARS: CONFIG.CONST_PAGINATION.MIN_CHARS,
+                USE_CHAR_COUNT: CONFIG.CONST_PAGINATION.USE_CHAR_COUNT,
+                CHAR_MULTIPLIER: CONFIG.CONST_PAGINATION.CHAR_MULTIPLIER,
+            };
+            // PaginationCalculator requires at least one title; inject a synthetic one if needed
+            const calculatorTitles = result.titles.length > 0 ? result.titles : [[bookName, 0, bookName, false]];
+            const calculator = new PaginationCalculator(result.htmlLines, calculatorTitles, paginationConfig);
+            const pageBreaks = calculator.calculate();
 
             CONFIG.VARS.PAGE_BREAKS = pageBreaks;
             CONFIG.VARS.TOTAL_PAGES = pageBreaks.length;
             CONFIG.VARS.CURRENT_PAGE = 1;
-            console.log(`[EPUB-handle] Pagination: ${pageBreaks.length} pages from ${pageBreaks.length-1} spine breaks`);
+            console.log(`[EPUB-handle] Pagination: ${pageBreaks.length} pages`);
 
             // Set title
             console.log("[EPUB-handle] Setting title...");
