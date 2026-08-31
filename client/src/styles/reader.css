@@ -88,6 +88,22 @@ blockquote[data-source="epub"] {
     color: var(--fontColor);
     line-height: var(--p_lineHeight);
 }
+pre[data-source="epub"] {
+    white-space: pre;
+    font-family: monospace;
+    background: var(--bgColor_secondary, transparent);
+    padding: 0.75em;
+    overflow-x: auto;
+    font-size: var(--p_fontSize);
+    color: var(--fontColor);
+    line-height: var(--p_lineHeight);
+    margin: 1em 0;
+}
+[data-source="epub"] code,
+[data-source="epub"] kbd,
+[data-source="epub"] samp {
+    font-family: monospace;
+}
 .cover {
     width: 100%;
 }

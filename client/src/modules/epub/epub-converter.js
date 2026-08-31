@@ -552,6 +552,24 @@ export class EpubConverter {
                 continue;
             }
 
+            // Preformatted blocks
+            if (tag === "pre") {
+                const content = node.textContent || "";
+                elements.push({
+                    type: "preformatted",
+                    tag: "pre",
+                    content,
+                    charCount: content.length,
+                    lineNumber,
+                    elementType: "c",
+                    source: "epub",
+                });
+                if (fragmentToLine && filePath && node.id) {
+                    fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
+                }
+                continue;
+            }
+
             // Line breaks / horizontal rules
             if (tag === "br" || tag === "hr") {
                 elements.push({
