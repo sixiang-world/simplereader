@@ -50,7 +50,7 @@ export class EpubConverter {
 
         // 5. Process spine items in order
         console.log("[EPUB] Processing spine...");
-        const { htmlLines, titles: spineTitles, spineBreaks, fileToLine } = await this.#processSpine(zip, spine, manifest, opfPath);
+        const { htmlLines, titles: spineTitles, spineBreaks, fileToLine, fragmentToLine } = await this.#processSpine(zip, spine, manifest, opfPath);
         console.log(`[EPUB] Spine done: ${htmlLines.length} lines, ${spineTitles.length} titles, ${spineBreaks.length} spine breaks`);
 
         // 6. Build titles from NCX/TOC entries (using fileToLine mapping)
@@ -63,8 +63,15 @@ export class EpubConverter {
             for (const entry of tocEntries) {
                 // Resolve the entry href relative to OPF path
                 const resolved = this.#resolveHref(entry.href, opfPath);
-                const normalized = resolved.split("#")[0];
-                const lineNum = fileToLine[normalized];
+                const [filePath, fragment] = resolved.split("#");
+                // Prefer fragment-level mapping; fall back to file start
+                let lineNum;
+                if (fragment) {
+                    lineNum = fragmentToLine[`${filePath}#${fragment}`];
+                }
+                if (lineNum === undefined) {
+                    lineNum = fileToLine[filePath];
+                }
                 if (lineNum !== undefined && !seenLines.has(lineNum)) {
                     seenLines.add(lineNum);
                     titles.push([entry.label, lineNum, entry.label, false]);
@@ -184,8 +191,9 @@ export class EpubConverter {
             const id = item.getAttribute("id");
             const href = item.getAttribute("href");
             const mediaType = item.getAttribute("media-type");
+            const properties = item.getAttribute("properties");
             if (id && href) {
-                manifest[id] = { href, mediaType };
+                manifest[id] = { href, mediaType, properties };
             }
         }
 
@@ -215,8 +223,14 @@ export class EpubConverter {
      * @returns {Promise<Array<{label: string, href: string}>>}
      */
     static async #parseToc(zip, manifest, opfPath) {
-        // Try EPUB3 nav first
+        // Try EPUB3 nav first: manifest item whose properties include "nav"
         const navEntry = Object.values(manifest).find(
+            (item) =>
+                item.mediaType === "application/xhtml+xml" &&
+                item.properties &&
+                item.properties.split(/\s+/).includes("nav")
+        ) || Object.values(manifest).find(
+            // Fallback: href contains "nav" (less reliable)
             (item) => item.mediaType === "application/xhtml+xml" && item.href && item.href.includes("nav")
         );
 
@@ -316,6 +330,7 @@ export class EpubConverter {
         const titles = [];
         const spineBreaks = [0]; // First page always starts at 0
         const fileToLine = {};   // {filePath: startLineNumber}
+        const fragmentToLine = {}; // {filePath#id: lineNumber}
         let lineNumber = 0;
         console.log(`[EPUB] Processing ${spine.length} spine items...`);
         for (const [idx, item] of spine.entries()) {
@@ -342,7 +357,7 @@ export class EpubConverter {
 
             const xhtml = await file.async("text");
             const t1 = performance.now();
-            const result = this.#processXhtml(xhtml, lineNumber);
+            const result = this.#processXhtml(xhtml, lineNumber, filePath, fragmentToLine);
             const elapsed = (performance.now() - t1).toFixed(1);
 
             htmlLines.push(...result.elements);
@@ -354,16 +369,18 @@ export class EpubConverter {
             }
         }
 
-        return { htmlLines, titles, spineBreaks, fileToLine };
+        return { htmlLines, titles, spineBreaks, fileToLine, fragmentToLine };
     }
 
     /**
      * Process a single XHTML file into structure objects
      * @param {string} xhtml - The XHTML content
      * @param {number} lineOffset - Starting line number
+     * @param {string} [filePath] - Path of the XHTML file within the EPUB
+     * @param {Object} [fragmentToLine] - Map to populate with file#id → lineNumber
      * @returns {{elements: Array, titles: Array}}
      */
-    static #processXhtml(xhtml, lineOffset) {
+    static #processXhtml(xhtml, lineOffset, filePath, fragmentToLine) {
         const elements = [];
         const titles = [];
 
@@ -429,6 +446,9 @@ export class EpubConverter {
                     });
                     titles.push([textContent, lineNumber, textContent, false]);
                 }
+                if (fragmentToLine && filePath && node.id) {
+                    fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
+                }
                 continue;
             }
 
@@ -445,6 +465,9 @@ export class EpubConverter {
                         elementType: "p",
                         source: "epub",
                     });
+                    if (fragmentToLine && filePath && node.id) {
+                        fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
+                    }
                 }
                 continue;
             }
@@ -475,6 +498,9 @@ export class EpubConverter {
                     elementType: "p",
                     source: "epub",
                 });
+                if (fragmentToLine && filePath && node.id) {
+                    fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
+                }
             }
         }
 
