@@ -192,8 +192,9 @@ export class EpubConverter {
             const href = item.getAttribute("href");
             const mediaType = item.getAttribute("media-type");
             const properties = item.getAttribute("properties");
+            const fallback = item.getAttribute("fallback");
             if (id && href) {
-                manifest[id] = { href, mediaType, properties };
+                manifest[id] = { href, mediaType, properties, fallback };
             }
         }
 
@@ -325,26 +326,61 @@ export class EpubConverter {
      * @param {string} opfPath
      * @returns {Promise<{htmlLines: Array, titles: Array, spineBreaks: Array, fileToLine: Object}>}
      */
+    /**
+     * Resolve a spine manifest item to a processable HTML/XML item using OPF fallback chain.
+     * @param {Object} item - Spine manifest item
+     * @param {Object} manifest - Full manifest
+     * @param {number} depth - Recursion guard
+     * @returns {Object|null} Processable item or null
+     */
+    static #resolveSpineItem(item, manifest, depth = 0) {
+        if (!item) return null;
+        if (depth > 10) return null; // Prevent circular fallback loops
+        const mediaType = item.mediaType || "";
+        if (mediaType.includes("html") || mediaType.includes("xml")) {
+            return item;
+        }
+        if (item.fallback && manifest[item.fallback]) {
+            return this.#resolveSpineItem(manifest[item.fallback], manifest, depth + 1);
+        }
+        return null;
+    }
+
     static async #processSpine(zip, spine, manifest, opfPath) {
         const htmlLines = [];
         const titles = [];
         const spineBreaks = [0]; // First page always starts at 0
         const fileToLine = {};   // {filePath: startLineNumber}
         const fragmentToLine = {}; // {filePath#id: lineNumber}
+        const missingFiles = [];
         let lineNumber = 0;
         console.log(`[EPUB] Processing ${spine.length} spine items...`);
         for (const [idx, item] of spine.entries()) {
             const filePath = this.#resolveHref(item.href, opfPath);
-            const file = zip.file(filePath);
+            let file = zip.file(filePath);
 
             if (!file) {
+                missingFiles.push(filePath);
                 console.log(`[EPUB]   [${idx}] NOT FOUND: ${filePath}`);
                 continue;
             }
-            // Only process XHTML content
-            if (!item.mediaType || (!item.mediaType.includes("html") && !item.mediaType.includes("xml"))) {
-                console.log(`[EPUB]   [${idx}] SKIP: ${filePath} (${item.mediaType})`);
+
+            // Resolve fallback chain for non-HTML/XML spine items
+            const effectiveItem = this.#resolveSpineItem(item, manifest);
+            if (!effectiveItem) {
+                console.log(`[EPUB]   [${idx}] SKIP: ${filePath} (${item.mediaType}, no HTML/XML fallback)`);
                 continue;
+            }
+
+            const effectivePath = effectiveItem === item ? filePath : this.#resolveHref(effectiveItem.href, opfPath);
+            if (effectiveItem !== item) {
+                file = zip.file(effectivePath);
+                if (!file) {
+                    missingFiles.push(effectivePath);
+                    console.log(`[EPUB]   [${idx}] NOT FOUND (fallback): ${effectivePath}`);
+                    continue;
+                }
+                console.log(`[EPUB]   [${idx}] FALLBACK: ${filePath} → ${effectivePath}`);
             }
 
             // Record spine boundary (skip index 0 since spineBreaks already starts with 0)
@@ -353,11 +389,11 @@ export class EpubConverter {
             }
 
             // Map the normalized file path to its starting line number for NCX matching
-            fileToLine[filePath] = lineNumber;
+            fileToLine[effectivePath] = lineNumber;
 
             const xhtml = await file.async("text");
             const t1 = performance.now();
-            const result = this.#processXhtml(xhtml, lineNumber, filePath, fragmentToLine);
+            const result = this.#processXhtml(xhtml, lineNumber, effectivePath, fragmentToLine);
             const elapsed = (performance.now() - t1).toFixed(1);
 
             htmlLines.push(...result.elements);
@@ -365,8 +401,12 @@ export class EpubConverter {
             lineNumber += result.elements.length;
 
             if (result.elements.length > 0 || result.titles.length > 0) {
-                console.log(`[EPUB]   [${idx}] ${filePath}: ${result.elements.length} els, ${result.titles.length} titles (${elapsed}ms)`);
+                console.log(`[EPUB]   [${idx}] ${effectivePath}: ${result.elements.length} els, ${result.titles.length} titles (${elapsed}ms)`);
             }
+        }
+
+        if (missingFiles.length > 0) {
+            throw new Error(`Invalid EPUB: missing spine file(s): ${missingFiles.join(", ")}`);
         }
 
         return { htmlLines, titles, spineBreaks, fileToLine, fragmentToLine };
