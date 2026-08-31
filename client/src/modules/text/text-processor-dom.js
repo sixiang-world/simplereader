@@ -127,6 +127,14 @@ export class TextProcessorDOM {
                 return [setLineNum(tempBlockquote), elementType];
             }
 
+            case "preformatted": {
+                const tempPre = document.createElement("pre");
+                tempPre.id = `line${lineNumber}`;
+                tempPre.setAttribute("data-source", "epub");
+                tempPre.textContent = content;
+                return [setLineNum(tempPre), elementType];
+            }
+
             case "empty":
             default: {
                 const tempSpan = document.createElement("span");
