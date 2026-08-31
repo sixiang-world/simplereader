@@ -72,6 +72,9 @@
     --ui_dropZoneText_loading: "";
     --ui_dropZoneText_loading_zh: "正在努力加载...";
     --ui_dropZoneText_loading_en: "Getting ready...";
+    --ui_dropZoneText_loading_epub: "";
+    --ui_dropZoneText_loading_epub_zh: "正在解析 EPUB...";
+    --ui_dropZoneText_loading_epub_en: "Parsing EPUB...";
     --ui_dropZoneText_loading_1: "◔";
     --ui_dropZoneText_loading_2: "◑";
     --ui_dropZoneText_loading_3: "◕";
@@ -654,6 +657,7 @@
     --ui_titlePage: var(--ui_titlePage_zh);
     --ui_endPage: var(--ui_endPage_zh);
     --ui_dropZoneText_loading: var(--ui_dropZoneText_loading_zh);
+    --ui_dropZoneText_loading_epub: var(--ui_dropZoneText_loading_epub_zh);
     --ui_dropZoneText: var(--ui_dropZoneText_zh);
     --ui_dropZoneText_anonymous: var(--ui_dropZoneText_anonymous_zh);
     --fontFamily_title: var(--fontFamily_title_zh);
@@ -827,6 +831,7 @@
     --ui_titlePage: var(--ui_titlePage_en);
     --ui_endPage: var(--ui_endPage_en);
     --ui_dropZoneText_loading: var(--ui_dropZoneText_loading_en);
+    --ui_dropZoneText_loading_epub: var(--ui_dropZoneText_loading_epub_en);
     --ui_dropZoneText: var(--ui_dropZoneText_en);
     --ui_dropZoneText_anonymous: var(--ui_dropZoneText_anonymous_en);
     --fontFamily_title: var(--fontFamily_title_en);

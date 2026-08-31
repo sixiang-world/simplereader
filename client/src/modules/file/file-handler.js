@@ -846,7 +846,25 @@ export class FileHandler {
 
             // Convert EPUB to content structure
             console.log("[EPUB-handle] Calling EpubConverter.convert()...");
-            const convertResult = await EpubConverter.convert(file);
+            const loadingEl = CONFIG.DOM_ELEMENT.LOADING_SCREEN;
+            const originalLoadingText = loadingEl?.style.getPropertyValue("--ui_dropZoneText_loading");
+            const setEpubLoadingText = (showEpub) => {
+                if (loadingEl) {
+                    loadingEl.style.setProperty(
+                        "--ui_dropZoneText_loading",
+                        showEpub ? "var(--ui_dropZoneText_loading_epub)" : originalLoadingText
+                    );
+                }
+            };
+            setEpubLoadingText(true);
+
+            const convertResult = await EpubConverter.convert(file, (step, detail) => {
+                if (loadingEl && step !== "complete") {
+                    const base = getComputedStyle(loadingEl).getPropertyValue("--ui_dropZoneText_loading_epub").trim();
+                    loadingEl.style.setProperty("--ui_dropZoneText_loading", base || "Parsing EPUB...");
+                }
+            });
+
             // Normalize new envelope shape { source, htmlLines, ... } and legacy flat shape
             const result = convertResult.source?.type === "epub"
                 ? convertResult
@@ -982,6 +1000,7 @@ export class FileHandler {
 
             // Finalize UI
             console.log("[EPUB-handle] Hiding loading screen...");
+            setEpubLoadingText(false);
             hideDropZone(false);
             hideLoadingScreen(false);
             showContent();
@@ -993,6 +1012,7 @@ export class FileHandler {
             console.log(`[EPUB] Book opened in ${elapsed.toFixed(3)}s: "${bookName}" by ${author}`);
 
         } catch (error) {
+            setEpubLoadingText(false);
             CONFIG.VARS.IS_BOOK_OPENED = false;
             await resetUI();
             PopupManager.showNotification({
