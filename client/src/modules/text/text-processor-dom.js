@@ -86,7 +86,19 @@ export class TextProcessorDOM {
                 const tempAnchor = document.createElement("a");
                 tempAnchor.href = `#line${lineNumber}`;
                 tempAnchor.classList.add("prevent-select", "title");
-                tempAnchor.textContent = this.#escapeHtml(content.replace(":", "").replace("：", ""));
+                // For EPUB, content is an inline-HTML string; sanitize it for safe
+                // insertion, then use the resulting text for the anchor so the TOC
+                // label still matches. For TXT, content is plain text and the
+                // escape is a no-op. Unescaped <em>...</em> would otherwise show
+                // as literal text via textContent.
+                if (source === "epub") {
+                    const sanitized = this.#sanitizeHtml(content);
+                    const temp = document.createElement("div");
+                    temp.innerHTML = sanitized;
+                    tempAnchor.textContent = temp.textContent.replace(":", "").replace("：", "");
+                } else {
+                    tempAnchor.textContent = this.#escapeHtml(content.replace(":", "").replace("：", ""));
+                }
                 this.#addTitleClickHandler(tempAnchor);
                 const tempH2 = document.createElement("h2");
                 tempH2.id = `line${lineNumber}`;
@@ -206,8 +218,6 @@ export class TextProcessorDOM {
         // does not execute inline scripts.
         const temp = document.createElement("div");
         temp.innerHTML = html;
-        const root = temp;
-        if (!root) return this.#escapeHtml(html);
 
         const cleanNode = (node) => {
             if (node.nodeType === Node.TEXT_NODE) {
@@ -233,8 +243,22 @@ export class TextProcessorDOM {
                 let safe = false;
                 if (href) {
                     const lower = href.trim().toLowerCase();
-                    safe = lower.startsWith("http:") || lower.startsWith("https:") || lower.startsWith("mailto:") || lower.startsWith("#") || !/^[a-z][a-z0-9+.-]*:/i.test(href);
-                    if (safe) el.setAttribute("href", href);
+                    // Reject protocol-relative URLs (//evil.com) — they navigate
+                    // the reader tab to an external site on click.
+                    if (lower.startsWith("//")) {
+                        safe = false;
+                    } else {
+                        safe = lower.startsWith("http:") || lower.startsWith("https:") || lower.startsWith("mailto:") || lower.startsWith("#") || !/^[a-z][a-z0-9+.-]*:/i.test(href);
+                    }
+                    if (safe) {
+                        el.setAttribute("href", href);
+                        // For external links, open in a new tab and cut the
+                        // opener relationship to prevent reverse tabnabbing.
+                        if (lower.startsWith("http:") || lower.startsWith("https:") || lower.startsWith("mailto:")) {
+                            el.setAttribute("target", "_blank");
+                            el.setAttribute("rel", "noopener noreferrer");
+                        }
+                    }
                 }
                 const title = node.getAttribute("title");
                 if (title) el.setAttribute("title", title);
@@ -255,7 +279,15 @@ export class TextProcessorDOM {
                 if (rowspan && /^\d+$/.test(rowspan)) el.setAttribute("rowspan", rowspan);
             }
             const cls = node.getAttribute("class");
-            if (cls) el.setAttribute("class", cls);
+            if (cls) {
+                // Filter class values against a whitelist so EPUB-injected
+                // classes cannot hijack reader CSS (e.g. "dropCap", "author").
+                const SAFE_CLASSES = new Set([
+                    "dropCap", "first", "noIndent", "author", "end-page", "synthetic-page", "title",
+                ]);
+                const filtered = cls.split(/\s+/).filter((c) => SAFE_CLASSES.has(c)).join(" ");
+                if (filtered) el.setAttribute("class", filtered);
+            }
             for (const child of node.childNodes) {
                 const cleaned = cleanNode(child);
                 if (cleaned) el.appendChild(cleaned);
@@ -264,7 +296,7 @@ export class TextProcessorDOM {
         };
 
         const container = document.createElement("div");
-        for (const child of root.childNodes) {
+        for (const child of temp.childNodes) {
             const cleaned = cleanNode(child);
             if (cleaned) container.appendChild(cleaned);
         }

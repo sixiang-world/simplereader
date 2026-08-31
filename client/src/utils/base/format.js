@@ -9,13 +9,6 @@
  */
 
 /**
- * Formats byte size to human readable format using SI or IEC units
- * @public
- * @param {number} bytes - The size in bytes
- * @param {string} units - Unit system to use ('si' or 'iec')
- * @returns {string} Formatted size string (e.g., "1.5 MB" or "1.5 MiB")
- */
-/**
  * Simple byte formatter using SI units (no IEC option)
  * @public
  * @param {number} bytes - The size in bytes
@@ -33,7 +26,6 @@ export function formatBytes_simple(bytes) {
 
     return `${value >= 99.995 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${UNITS[exponent]}`;
 }
-
 
 /**
  * Formats byte size to human readable format using SI or IEC units

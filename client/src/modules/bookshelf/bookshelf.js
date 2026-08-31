@@ -596,6 +596,12 @@ const bookshelf = {
                 const book_encoding = fetchedBook?.encoding ?? null;
                 const book_processed = fetchedBook?.processed ?? false;
                 const book_pageBreakOnTitle = fetchedBook?.pageBreakOnTitle ?? true;
+                // Cached EPUB conversions are only valid for the converter
+                // version that produced them. Stale caches (older format, bug
+                // fixes in the converter) must be re-converted on open.
+                const book_epubConverterStale =
+                    fetchedBook?.is_epub &&
+                    fetchedBook?.epubConverterVersion !== CONFIG.CONST_FILE.EPUB_CONVERTER_VERSION;
                 if (book) {
                     if (book instanceof File) {
                         book[this._CACHE_FLAG_] = true;
@@ -603,6 +609,7 @@ const bookshelf = {
                     resetVars();
                     if (
                         !book_processed ||
+                        book_epubConverterStale ||
                         CONFIG.RUNTIME_CONFIG.ALWAYS_PROCESS ||
                         book_pageBreakOnTitle !== CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE ||
                         forceRefresh
