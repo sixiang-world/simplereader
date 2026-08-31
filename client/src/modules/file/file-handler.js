@@ -821,6 +821,23 @@ export class FileHandler {
         console.log(`[EPUB-handle] Starting: ${file.name}`);
 
         try {
+            // Enforce EPUB file size limit
+            if (file.size > CONFIG.CONST_FILE.MAX_EPUB_FILE_SIZE) {
+                PopupManager.showNotification({
+                    iconName: "WRONG_FILE_TYPE",
+                    iconColor: "error",
+                    text: constructNotificationMessageFromArray(
+                        CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_epubTooLarge,
+                        [file.name],
+                        {
+                            language: getCurrentDisplayLanguage(),
+                            maxItems: 1,
+                        }
+                    ),
+                });
+                throw new Error(`EPUB file too large: ${file.size} bytes`);
+            }
+
             hideDropZone();
             hideContent();
             showLoadingScreen();
