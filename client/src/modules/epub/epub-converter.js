@@ -512,8 +512,28 @@ export class EpubConverter {
                 continue;
             }
 
+            // Blockquotes
+            if (tag === "blockquote") {
+                const content = this.#extractInlineHtml(node);
+                if (content.trim()) {
+                    elements.push({
+                        type: "quote",
+                        tag: "blockquote",
+                        content,
+                        charCount: textContent.length,
+                        lineNumber,
+                        elementType: "q",
+                        source: "epub",
+                    });
+                    if (fragmentToLine && filePath && node.id) {
+                        fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
+                    }
+                }
+                continue;
+            }
+
             // Paragraphs and divs
-            if (["p", "div", "blockquote", "li", "td", "th", "dt", "dd"].includes(tag)) {
+            if (["p", "div", "li", "td", "th", "dt", "dd"].includes(tag)) {
                 const content = this.#extractInlineHtml(node);
                 if (content.trim()) {
                     elements.push({
