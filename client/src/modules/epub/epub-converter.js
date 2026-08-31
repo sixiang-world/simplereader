@@ -84,9 +84,8 @@ export class EpubConverter {
             titles = [];
             const seenLines = new Set();
             for (const entry of tocEntries) {
-                // Resolve the entry href relative to OPF path
-                const resolved = this.#resolveHref(entry.href, opfPath);
-                const [filePath, fragment] = resolved.split("#");
+                // parseToc has already resolved hrefs to zip-root absolute paths.
+                const [filePath, fragment] = entry.href.split("#");
                 // Prefer fragment-level mapping; fall back to file start
                 let lineNum;
                 if (fragment) {
@@ -146,7 +145,11 @@ export class EpubConverter {
         });
 
         // Prepend title page and append end page
-        const adjustedHtmlLines = [...syntheticLines.slice(0, hasTitleAtStart ? 0 : 1), ...htmlLines, syntheticLines[syntheticLines.length - 1]];
+        const adjustedHtmlLines = [...htmlLines];
+        if (!hasTitleAtStart && metadata.title) {
+            adjustedHtmlLines.unshift(syntheticLines[0]);
+        }
+        adjustedHtmlLines.push(syntheticLines[syntheticLines.length - 1]);
 
         // Reassign line numbers sequentially
         for (let i = 0; i < adjustedHtmlLines.length; i++) {
@@ -209,19 +212,30 @@ export class EpubConverter {
         const doc = new DOMParser().parseFromString(xml, "application/xml");
 
         // --- Metadata ---
-        // Use getElementsByTagNameNS to handle namespaced elements (dc:title, dc:creator)
+        // Use getElementsByTagNameNS with the DC namespace first, then fall back to
+        // prefixed tag names for environments (e.g. linkedom) that don't handle
+        // wildcard namespaces in getElementsByTagNameNS.
+        const DC_NS = "http://purl.org/dc/elements/1.1/";
+        const OPF_NS = "http://www.idpf.org/2007/opf";
         const metadata = {};
+        const getDcElements = (tag) => {
+            const byNs = doc.getElementsByTagNameNS(DC_NS, tag);
+            if (byNs.length > 0) return Array.from(byNs);
+            const byName = doc.getElementsByTagName(`dc:${tag}`);
+            if (byName.length > 0) return Array.from(byName);
+            return [];
+        };
         const getDcText = (tag, preferRole) => {
-            const els = doc.getElementsByTagNameNS("*", tag);
+            const els = getDcElements(tag);
             if (preferRole) {
                 for (const el of els) {
-                    const role = el.getAttributeNS("http://www.idpf.org/2007/opf", "role");
+                    const role = el.getAttributeNS(OPF_NS, "role");
                     if (role === preferRole) return el.textContent?.trim() || "";
                 }
             }
             return els[0]?.textContent?.trim() || "";
         };
-        const getDcAll = (tag) => Array.from(doc.getElementsByTagNameNS("*", tag))
+        const getDcAll = (tag) => getDcElements(tag)
             .map((el) => el.textContent?.trim())
             .filter(Boolean);
 
@@ -233,19 +247,6 @@ export class EpubConverter {
         metadata.description = getDcText("description");
         metadata.subjects = getDcAll("subject");
         metadata.identifier = getDcText("identifier");
-
-        // EPUB2 cover image reference (<meta name="cover" content="cover-id"/>)
-        const metaEls = doc.getElementsByTagNameNS("*", "meta");
-        for (const metaEl of metaEls) {
-            if (metaEl.getAttribute("name") === "cover") {
-                const coverId = metaEl.getAttribute("content");
-                const coverItem = manifest[coverId];
-                if (coverItem) {
-                    metadata.coverHref = this.#resolveHref(coverItem.href, opfPath);
-                }
-                break;
-            }
-        }
 
         // --- Manifest ---
         // Use getElementsByTagNameNS("*", ...) to handle namespaced OPF (default xmlns)
@@ -260,6 +261,19 @@ export class EpubConverter {
             const fallback = item.getAttribute("fallback");
             if (id && href) {
                 manifest[id] = { href, mediaType, properties, fallback };
+            }
+        }
+
+        // EPUB2 cover image reference (<meta name="cover" content="cover-id"/>)
+        const metaEls = doc.getElementsByTagNameNS("*", "meta");
+        for (const metaEl of metaEls) {
+            if (metaEl.getAttribute("name") === "cover") {
+                const coverId = metaEl.getAttribute("content");
+                const coverItem = manifest[coverId];
+                if (coverItem) {
+                    metadata.coverHref = this.#resolveHref(coverItem.href, opfPath);
+                }
+                break;
             }
         }
 
@@ -332,8 +346,19 @@ export class EpubConverter {
         const html = await navFile.async("text");
         const doc = new DOMParser().parseFromString(html, "application/xhtml+xml");
 
-        // Find <nav epub:type="toc">
-        const navEl = doc.querySelector('nav[*|type="toc"]') || doc.querySelector("nav");
+        // Find <nav epub:type="toc">. Namespace-aware CSS selectors are not
+        // reliable in all DOM implementations (e.g. linkedom), so scan navs.
+        let navEl;
+        for (const nav of doc.querySelectorAll("nav")) {
+            const type = nav.getAttribute("epub:type") || nav.getAttribute("type");
+            if (type === "toc") {
+                navEl = nav;
+                break;
+            }
+        }
+        if (!navEl) {
+            navEl = doc.querySelector("nav");
+        }
         if (!navEl) return [];
 
         const entries = [];
@@ -342,7 +367,10 @@ export class EpubConverter {
             const href = link.getAttribute("href");
             const label = link.textContent?.trim();
             if (href && label) {
-                entries.push({ label, href: this.#resolveHref(href, navPath) });
+                const [pathPart, fragment] = href.split("#");
+                const resolvedPath = this.#resolveHref(pathPart, navPath);
+                const resolvedHref = fragment ? `${resolvedPath}#${fragment}` : resolvedPath;
+                entries.push({ label, href: resolvedHref });
             }
         }
 
@@ -370,7 +398,10 @@ export class EpubConverter {
                 const label = labelEl.textContent?.trim();
                 const src = contentEl.getAttribute("src");
                 if (label && src) {
-                    entries.push({ label, href: this.#resolveHref(src, opfPath) });
+                    const [pathPart, fragment] = src.split("#");
+                    const resolvedPath = this.#resolveHref(pathPart, opfPath);
+                    const resolvedHref = fragment ? `${resolvedPath}#${fragment}` : resolvedPath;
+                    entries.push({ label, href: resolvedHref });
                 }
             }
         }
@@ -805,13 +836,16 @@ export class EpubConverter {
         let html = `<${tag}>`;
         for (const li of node.querySelectorAll(":scope > li")) {
             html += "<li>";
-            // Nested lists
-            for (const child of li.children) {
-                const childTag = child.tagName?.toLowerCase();
-                if (childTag === "ul" || childTag === "ol") {
-                    html += this.#extractListHtml(child);
-                } else {
-                    html += this.#extractInlineHtml(child);
+            for (const child of li.childNodes) {
+                if (child.nodeType === Node.TEXT_NODE) {
+                    html += this.#escapeHtml(child.textContent);
+                } else if (child.nodeType === Node.ELEMENT_NODE) {
+                    const childTag = child.tagName?.toLowerCase();
+                    if (childTag === "ul" || childTag === "ol") {
+                        html += this.#extractListHtml(child);
+                    } else {
+                        html += this.#extractInlineHtml(child);
+                    }
                 }
             }
             html += "</li>";
@@ -868,7 +902,7 @@ export class EpubConverter {
         const safeAttrs = ["class", "title"];
         for (const name of safeAttrs) {
             const val = el.getAttribute(name);
-            if (val !== null) {
+            if (val !== null && val !== "") {
                 attrs += ` ${name}="${this.#escapeHtml(val)}"`;
             }
         }

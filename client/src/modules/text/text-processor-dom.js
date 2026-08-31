@@ -199,10 +199,14 @@ export class TextProcessorDOM {
             "blockquote",
             "pre",
             "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+            "h1", "h2", "h3", "h4", "h5", "h6", "p",
         ]);
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
-        const root = doc.body.firstElementChild;
+        // Parse the snippet in a detached <div>. This works reliably across
+        // browsers and lightweight Node DOM implementations (e.g. linkedom) and
+        // does not execute inline scripts.
+        const temp = document.createElement("div");
+        temp.innerHTML = html;
+        const root = temp;
         if (!root) return this.#escapeHtml(html);
 
         const cleanNode = (node) => {
@@ -213,6 +217,8 @@ export class TextProcessorDOM {
                 return null;
             }
             const tag = node.tagName.toLowerCase();
+            // Drop executable/style content entirely.
+            if (tag === "script" || tag === "style" || tag === "noscript") return null;
             if (!allowedTags.has(tag)) {
                 const frag = document.createDocumentFragment();
                 for (const child of node.childNodes) {
@@ -224,13 +230,23 @@ export class TextProcessorDOM {
             const el = document.createElement(tag);
             if (tag === "a") {
                 const href = node.getAttribute("href");
+                let safe = false;
                 if (href) {
                     const lower = href.trim().toLowerCase();
-                    const safe = lower.startsWith("http:") || lower.startsWith("https:") || lower.startsWith("mailto:") || lower.startsWith("#") || !/^[a-z][a-z0-9+.-]*:/i.test(href);
+                    safe = lower.startsWith("http:") || lower.startsWith("https:") || lower.startsWith("mailto:") || lower.startsWith("#") || !/^[a-z][a-z0-9+.-]*:/i.test(href);
                     if (safe) el.setAttribute("href", href);
                 }
                 const title = node.getAttribute("title");
                 if (title) el.setAttribute("title", title);
+                if (!safe) {
+                    // Unsafe href: unwrap to plain text rather than keep a bare <a>.
+                    const frag = document.createDocumentFragment();
+                    for (const child of node.childNodes) {
+                        const cleaned = cleanNode(child);
+                        if (cleaned) frag.appendChild(cleaned);
+                    }
+                    return frag;
+                }
             }
             if (tag === "th" || tag === "td") {
                 const colspan = node.getAttribute("colspan");
