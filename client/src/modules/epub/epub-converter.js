@@ -20,14 +20,27 @@ export class EpubConverter {
     /**
      * Convert an EPUB File to SimpleTextReader content structure
      * @param {File} file - The EPUB file
+     * @param {Function} [onProgress] - Callback(step, detail) for progress updates
      * @returns {Promise<{source: Object, htmlLines: Array, titles: Array, titlesInd: Object, metadata: Object, spineBreaks: Array}>}
      */
-    static async convert(file) {
+    static async convert(file, onProgress) {
+        const reportProgress = (step, detail = "") => {
+            if (typeof onProgress === "function") {
+                try {
+                    onProgress(step, detail);
+                } catch (e) {
+                    this.#logger.log("EPUB progress callback error:", e);
+                }
+            }
+        };
+
         const t0 = performance.now();
         console.log("[EPUB] Starting conversion...");
+        reportProgress("start");
 
         // 1. Unzip
         console.log("[EPUB] Unzipping...");
+        reportProgress("unzip");
         const buffer = await file.arrayBuffer();
         console.log(`[EPUB] File size: ${(buffer.byteLength / 1024).toFixed(0)}KB`);
         const zip = await JSZip.loadAsync(buffer);
@@ -35,22 +48,32 @@ export class EpubConverter {
 
         // 2. Parse container → find OPF path
         console.log("[EPUB] Parsing container.xml...");
+        reportProgress("container");
         const opfPath = await this.#parseContainer(zip);
         console.log(`[EPUB] OPF path: ${opfPath}`);
 
         // 3. Parse OPF → metadata, manifest, spine
         console.log("[EPUB] Parsing OPF...");
+        reportProgress("opf");
         const { metadata, manifest, spine } = await this.#parseOpf(zip, opfPath);
         console.log(`[EPUB] Spine: ${spine.length} items, Manifest: ${Object.keys(manifest).length} items`);
 
         // 4. Parse TOC (EPUB3 nav or EPUB2 NCX)
         console.log("[EPUB] Parsing TOC...");
+        reportProgress("toc");
         const tocEntries = await this.#parseToc(zip, manifest, opfPath);
         console.log(`[EPUB] TOC entries: ${tocEntries.length}`);
 
         // 5. Process spine items in order
         console.log("[EPUB] Processing spine...");
-        const { htmlLines, titles: spineTitles, spineBreaks, fileToLine, fragmentToLine } = await this.#processSpine(zip, spine, manifest, opfPath);
+        reportProgress("spine", `${spine.length} items`);
+        const { htmlLines, titles: spineTitles, spineBreaks, fileToLine, fragmentToLine } = await this.#processSpine(
+            zip,
+            spine,
+            manifest,
+            opfPath,
+            (current, total) => reportProgress("spine-item", `${current}/${total}`)
+        );
         console.log(`[EPUB] Spine done: ${htmlLines.length} lines, ${spineTitles.length} titles, ${spineBreaks.length} spine breaks`);
 
         // 6. Build titles from NCX/TOC entries (using fileToLine mapping)
@@ -98,6 +121,7 @@ export class EpubConverter {
 
         const elapsed = performance.now() - t0;
         console.log(`[EPUB] Conversion complete in ${elapsed.toFixed(0)}ms`);
+        reportProgress("complete");
         return {
             source: { type: "epub", filename: file.name, size_bytes: buffer.byteLength },
             htmlLines,
@@ -346,7 +370,7 @@ export class EpubConverter {
         return null;
     }
 
-    static async #processSpine(zip, spine, manifest, opfPath) {
+    static async #processSpine(zip, spine, manifest, opfPath, onItemProgress) {
         const htmlLines = [];
         const titles = [];
         const spineBreaks = [0]; // First page always starts at 0
@@ -402,6 +426,13 @@ export class EpubConverter {
 
             if (result.elements.length > 0 || result.titles.length > 0) {
                 console.log(`[EPUB]   [${idx}] ${effectivePath}: ${result.elements.length} els, ${result.titles.length} titles (${elapsed}ms)`);
+            }
+            if (typeof onItemProgress === "function") {
+                try {
+                    onItemProgress(idx + 1, spine.length);
+                } catch (e) {
+                    this.#logger.log("EPUB item progress callback error:", e);
+                }
             }
         }
 
