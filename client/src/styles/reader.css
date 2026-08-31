@@ -104,6 +104,25 @@ pre[data-source="epub"] {
 [data-source="epub"] samp {
     font-family: monospace;
 }
+table[data-source="epub"] {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+    font-family: var(--fontFamily_body);
+    font-size: var(--p_fontSize);
+    color: var(--fontColor);
+    line-height: var(--p_lineHeight);
+}
+table[data-source="epub"] th,
+table[data-source="epub"] td {
+    border: 1px solid var(--mainColor_inactive);
+    padding: 0.5em;
+    text-align: start;
+}
+table[data-source="epub"] th {
+    font-weight: bold;
+    background: var(--bgColor_secondary, transparent);
+}
 .cover {
     width: 100%;
 }

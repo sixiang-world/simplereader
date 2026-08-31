@@ -452,7 +452,7 @@ export class EpubConverter {
             if (!textContent && tag !== "br" && tag !== "hr") continue;
 
             // Skip non-content elements
-            if (["script", "style", "svg", "img", "table", "figure", "figcaption"].includes(tag)) continue;
+            if (["script", "style", "svg", "img", "figure", "figcaption"].includes(tag)) continue;
 
             const lineNumber = lineOffset + elements.length;
 
@@ -488,6 +488,26 @@ export class EpubConverter {
                 }
                 if (fragmentToLine && filePath && node.id) {
                     fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
+                }
+                continue;
+            }
+
+            // Tables
+            if (tag === "table") {
+                const content = this.#extractTableHtml(node);
+                if (content.trim()) {
+                    elements.push({
+                        type: "table",
+                        tag: "table",
+                        content,
+                        charCount: textContent.length,
+                        lineNumber,
+                        elementType: "b",
+                        source: "epub",
+                    });
+                    if (fragmentToLine && filePath && node.id) {
+                        fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
+                    }
                 }
                 continue;
             }
@@ -645,12 +665,9 @@ export class EpubConverter {
                 continue;
             }
 
-            // For tables, extract cell content as paragraphs
+            // Keep tables as whole blocks
             if (tag === "table") {
-                for (const cell of child.querySelectorAll("td, th")) {
-                    result.push(cell);
-                    skipChildren.add(cell);
-                }
+                result.push(child);
                 continue;
             }
 
@@ -665,6 +682,43 @@ export class EpubConverter {
         }
 
         return result;
+    }
+
+    /**
+     * Extract table HTML, preserving only table/thead/tbody/tr/th/td structure.
+     * @param {Node} node
+     * @returns {string} HTML string
+     */
+    static #extractTableHtml(node) {
+        const serializeRow = (row) => {
+            let html = "<tr>";
+            for (const cell of row.querySelectorAll(":scope > th, :scope > td")) {
+                const cellTag = cell.tagName.toLowerCase();
+                const colspan = cell.getAttribute("colspan");
+                const rowspan = cell.getAttribute("rowspan");
+                let attrs = "";
+                if (colspan && /^\d+$/.test(colspan)) attrs += ` colspan="${colspan}"`;
+                if (rowspan && /^\d+$/.test(rowspan)) attrs += ` rowspan="${rowspan}"`;
+                html += `<${cellTag}${attrs}>${this.#extractInlineHtml(cell)}</${cellTag}>`;
+            }
+            html += "</tr>";
+            return html;
+        };
+
+        let html = "<table>";
+        for (const section of node.querySelectorAll(":scope > thead, :scope > tbody, :scope > tfoot")) {
+            const sectionTag = section.tagName.toLowerCase();
+            html += `<${sectionTag}>`;
+            for (const row of section.querySelectorAll(":scope > tr")) {
+                html += serializeRow(row);
+            }
+            html += `</${sectionTag}>`;
+        }
+        for (const row of node.querySelectorAll(":scope > tr")) {
+            html += serializeRow(row);
+        }
+        html += "</table>";
+        return html;
     }
 
     /**
