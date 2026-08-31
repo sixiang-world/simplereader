@@ -111,6 +111,14 @@ export class TextProcessorDOM {
                 return [setLineNum(tempP), elementType];
             }
 
+            case "list": {
+                const tempDiv = document.createElement("div");
+                tempDiv.id = `line${lineNumber}`;
+                tempDiv.setAttribute("data-source", "epub");
+                tempDiv.innerHTML = this.#sanitizeHtml(content);
+                return [setLineNum(tempDiv), elementType];
+            }
+
             case "empty":
             default: {
                 const tempSpan = document.createElement("span");

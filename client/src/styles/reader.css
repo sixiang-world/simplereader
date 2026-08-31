@@ -60,6 +60,24 @@ p::-moz-selection {
     background: var(--mainColor_active) !important;
     color: var(--bgColor) !important;
 }
+[data-source="epub"] ul,
+[data-source="epub"] ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+    font-family: var(--fontFamily_body);
+    font-size: var(--p_fontSize);
+    color: var(--fontColor);
+    line-height: var(--p_lineHeight);
+}
+[data-source="epub"] ul {
+    list-style: disc;
+}
+[data-source="epub"] ol {
+    list-style: decimal;
+}
+[data-source="epub"] li {
+    margin: 0.25em 0;
+}
 .cover {
     width: 100%;
 }
