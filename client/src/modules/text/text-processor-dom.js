@@ -21,7 +21,7 @@ export class TextProcessorDOM {
      * @public
      */
     static createFromStructure(structure) {
-        const { type, tag, content, lineNumber, elementType, dropCap, className, source } = structure;
+        const { type, tag, content, lineNumber, elementType, dropCap, className, source, synthetic } = structure;
 
         // Helper to set data-line-num on an element
         const setLineNum = (el) => {
@@ -33,6 +33,20 @@ export class TextProcessorDOM {
 
         switch (type) {
             case "title": {
+                if (synthetic) {
+                    // Synthetic title/end pages: render the provided HTML safely.
+                    const wrapper = document.createElement("div");
+                    wrapper.innerHTML = this.#sanitizeHtml(content);
+                    const container = document.createElement("div");
+                    container.id = `line${lineNumber}`;
+                    container.setAttribute("data-source", "epub");
+                    container.classList.add("synthetic-page");
+                    for (const child of [...wrapper.children]) {
+                        container.appendChild(child);
+                    }
+                    return [setLineNum(container), elementType];
+                }
+
                 // content is expected to be a structural HTML tag like <h1>...</h1> or <span>...</span>.
                 // Parse via a detached template to avoid executing inline event handlers or <script>.
                 const wrapper = document.createElement("div");

@@ -112,7 +112,48 @@ export class EpubConverter {
             titles = spineTitles;
         }
 
-        // 7. Build titlesInd
+        // 7. Synthetic title page if the EPUB doesn't start with a title
+        const syntheticLines = [];
+        const hasTitleAtStart = htmlLines.length > 0 && htmlLines[0].type === "title";
+        if (!hasTitleAtStart && metadata.title) {
+            const authorHtml = metadata.author ? `<p class="author">${this.#escapeHtml(metadata.author)}</p>` : "";
+            syntheticLines.push({
+                type: "title",
+                tag: "div",
+                content: `<h1>${this.#escapeHtml(metadata.title)}</h1>${authorHtml}`,
+                charCount: (metadata.title + (metadata.author || "")).length,
+                lineNumber: 0,
+                elementType: "t",
+                source: "epub",
+                synthetic: true,
+            });
+            // Shift existing titles
+            for (const title of titles) {
+                title[1] += 1;
+            }
+        }
+
+        // 8. Synthetic end page
+        syntheticLines.push({
+            type: "title",
+            tag: "div",
+            content: "<h1 class=\"end-page\">THE END</h1>",
+            charCount: 7,
+            lineNumber: htmlLines.length + syntheticLines.length,
+            elementType: "t",
+            source: "epub",
+            synthetic: true,
+        });
+
+        // Prepend title page and append end page
+        const adjustedHtmlLines = [...syntheticLines.slice(0, hasTitleAtStart ? 0 : 1), ...htmlLines, syntheticLines[syntheticLines.length - 1]];
+
+        // Reassign line numbers sequentially
+        for (let i = 0; i < adjustedHtmlLines.length; i++) {
+            adjustedHtmlLines[i].lineNumber = i;
+        }
+
+        // 9. Build titlesInd
         console.log("[EPUB] Building titlesInd...");
         const titlesInd = {};
         for (let i = 0; i < titles.length; i++) {
@@ -124,7 +165,7 @@ export class EpubConverter {
         reportProgress("complete");
         return {
             source: { type: "epub", filename: file.name, size_bytes: buffer.byteLength },
-            htmlLines,
+            htmlLines: adjustedHtmlLines,
             titles,
             titlesInd,
             metadata,
