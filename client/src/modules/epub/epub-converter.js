@@ -559,13 +559,27 @@ export class EpubConverter {
      */
     static #getSafeAttributes(el) {
         let attrs = "";
-        const safeAttrs = ["class", "href", "title", "id"];
+        const tag = el.tagName?.toLowerCase();
+        const safeAttrs = ["class", "title"];
         for (const name of safeAttrs) {
             const val = el.getAttribute(name);
             if (val !== null) {
                 attrs += ` ${name}="${this.#escapeHtml(val)}"`;
             }
         }
+
+        // href is allowed only for <a> with safe schemes
+        const href = el.getAttribute("href");
+        if (href !== null && tag === "a" && this.#isAllowedHref(href)) {
+            attrs += ` href="${this.#escapeHtml(href)}"`;
+        }
+
+        // id is allowed only as a fragment anchor (e.g., <a id="note">)
+        const id = el.getAttribute("id");
+        if (id !== null && /^[a-zA-Z][\w\-:.]*$/.test(id)) {
+            attrs += ` id="${this.#escapeHtml(id)}"`;
+        }
+
         return attrs;
     }
 
@@ -583,12 +597,31 @@ export class EpubConverter {
     }
 
     /**
+     * Check whether an href value is safe to preserve
+     * @param {string} href
+     * @returns {boolean}
+     */
+    static #isAllowedHref(href) {
+        if (!href) return false;
+        const lower = href.trim().toLowerCase();
+        // Reject dangerous URL schemes
+        const dangerousSchemes = ["javascript:", "data:", "vbscript:", "file:", "about:"];
+        for (const scheme of dangerousSchemes) {
+            if (lower.startsWith(scheme)) return false;
+        }
+        return true;
+    }
+
+    /**
      * Resolve a relative href against a base path within the EPUB
      * @param {string} href - Relative or absolute href
      * @param {string} basePath - The path of the referencing file
      * @returns {string} Resolved path relative to zip root
      */
     static #resolveHref(href, basePath) {
+        // Reject dangerous hrefs early
+        if (!this.#isAllowedHref(href)) return "";
+
         // Strip fragment identifiers
         const cleanHref = href.split("#")[0];
         if (!cleanHref) return basePath;
