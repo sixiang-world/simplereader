@@ -135,6 +135,14 @@ export class TextProcessorDOM {
                 return [setLineNum(tempPre), elementType];
             }
 
+            case "table": {
+                const tempTable = document.createElement("table");
+                tempTable.id = `line${lineNumber}`;
+                tempTable.setAttribute("data-source", "epub");
+                tempTable.innerHTML = this.#sanitizeHtml(content);
+                return [setLineNum(tempTable), elementType];
+            }
+
             case "empty":
             default: {
                 const tempSpan = document.createElement("span");
@@ -170,7 +178,14 @@ export class TextProcessorDOM {
      */
     static #sanitizeHtml(html) {
         if (html == null) return "";
-        const allowedTags = new Set(["em", "strong", "b", "i", "u", "a", "span", "small", "sub", "sup", "mark", "br", "code", "kbd", "samp"]);
+        const allowedTags = new Set([
+            "em", "strong", "b", "i", "u", "a", "span", "small", "sub", "sup", "mark", "br",
+            "code", "kbd", "samp",
+            "ul", "ol", "li",
+            "blockquote",
+            "pre",
+            "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+        ]);
         const parser = new DOMParser();
         const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
         const root = doc.body.firstElementChild;
@@ -202,6 +217,12 @@ export class TextProcessorDOM {
                 }
                 const title = node.getAttribute("title");
                 if (title) el.setAttribute("title", title);
+            }
+            if (tag === "th" || tag === "td") {
+                const colspan = node.getAttribute("colspan");
+                const rowspan = node.getAttribute("rowspan");
+                if (colspan && /^\d+$/.test(colspan)) el.setAttribute("colspan", colspan);
+                if (rowspan && /^\d+$/.test(rowspan)) el.setAttribute("rowspan", rowspan);
             }
             const cls = node.getAttribute("class");
             if (cls) el.setAttribute("class", cls);
