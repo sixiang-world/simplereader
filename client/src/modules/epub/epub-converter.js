@@ -20,7 +20,7 @@ export class EpubConverter {
     /**
      * Convert an EPUB File to SimpleTextReader content structure
      * @param {File} file - The EPUB file
-     * @returns {Promise<{htmlLines: Array, titles: Array, titlesInd: Object, metadata: Object}>}
+     * @returns {Promise<{source: Object, htmlLines: Array, titles: Array, titlesInd: Object, metadata: Object, spineBreaks: Array}>}
      */
     static async convert(file) {
         const t0 = performance.now();
@@ -91,7 +91,14 @@ export class EpubConverter {
 
         const elapsed = performance.now() - t0;
         console.log(`[EPUB] Conversion complete in ${elapsed.toFixed(0)}ms`);
-        return { htmlLines, titles, titlesInd, metadata, spineBreaks };
+        return {
+            source: { type: "epub", filename: file.name, size_bytes: buffer.byteLength },
+            htmlLines,
+            titles,
+            titlesInd,
+            metadata,
+            spineBreaks,
+        };
     }
 
     // ──────────────────────────────────────────────
@@ -375,6 +382,7 @@ export class EpubConverter {
                         charCount: textContent.length,
                         lineNumber,
                         elementType: "t",
+                        source: "epub",
                     });
                     titles.push([textContent, lineNumber, textContent, false]);
                 } else {
@@ -386,6 +394,7 @@ export class EpubConverter {
                         charCount: textContent.length,
                         lineNumber,
                         elementType: "h",
+                        source: "epub",
                     });
                     titles.push([textContent, lineNumber, textContent, false]);
                 }
@@ -403,6 +412,7 @@ export class EpubConverter {
                         charCount: textContent.length,
                         lineNumber,
                         elementType: "p",
+                        source: "epub",
                     });
                 }
                 continue;
@@ -417,6 +427,7 @@ export class EpubConverter {
                     charCount: 0,
                     lineNumber,
                     elementType: "e",
+                    source: "epub",
                 });
                 continue;
             }
@@ -431,6 +442,7 @@ export class EpubConverter {
                     charCount: textContent.length,
                     lineNumber,
                     elementType: "p",
+                    source: "epub",
                 });
             }
         }

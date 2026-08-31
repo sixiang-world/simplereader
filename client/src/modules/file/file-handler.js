@@ -828,7 +828,11 @@ export class FileHandler {
 
             // Convert EPUB to content structure
             console.log("[EPUB-handle] Calling EpubConverter.convert()...");
-            const result = await EpubConverter.convert(file);
+            const convertResult = await EpubConverter.convert(file);
+            // Normalize new envelope shape { source, htmlLines, ... } and legacy flat shape
+            const result = convertResult.source?.type === "epub"
+                ? convertResult
+                : { ...convertResult, source: { type: "epub", filename: file.name, size_bytes: file.size } };
             console.log(`[EPUB-handle] Convert returned: ${result.htmlLines.length} lines, ${result.titles.length} titles`);
 
             // Set metadata
