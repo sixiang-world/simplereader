@@ -39,12 +39,23 @@ p {
     font-size: var(--p_fontSize);
     color: var(--fontColor);
     text-align: var(--p_textAlign_value);
-    text-indent: var(--p_paragraphIndent_value);
     line-height: var(--p_lineHeight);
     margin: 0;
     position: relative;
     top: var(--p_top, 0);
     left: var(--p_left, 0);
+}
+p:not([data-source="epub"]) {
+    text-indent: var(--p_paragraphIndent_value);
+}
+p[data-source="epub"] {
+    margin-bottom: var(--p_paragraphSpacing);
+    text-indent: var(--p_paragraphIndent_value);
+}
+p[data-source="epub"]:first-of-type,
+p[data-source="epub"].first,
+p[data-source="epub"].noIndent {
+    text-indent: 0;
 }
 p.first,
 p.noIndent {
