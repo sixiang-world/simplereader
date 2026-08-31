@@ -78,6 +78,16 @@ p::-moz-selection {
 [data-source="epub"] li {
     margin: 0.25em 0;
 }
+blockquote[data-source="epub"] {
+    margin: 1em 2em;
+    padding-left: 1em;
+    border-left: 3px solid var(--mainColor_inactive);
+    font-style: italic;
+    font-family: var(--fontFamily_body);
+    font-size: var(--p_fontSize);
+    color: var(--fontColor);
+    line-height: var(--p_lineHeight);
+}
 .cover {
     width: 100%;
 }
