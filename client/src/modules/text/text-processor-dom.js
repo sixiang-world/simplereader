@@ -21,7 +21,7 @@ export class TextProcessorDOM {
      * @public
      */
     static createFromStructure(structure) {
-        const { type, tag, content, lineNumber, elementType, dropCap, className } = structure;
+        const { type, tag, content, lineNumber, elementType, dropCap, className, source } = structure;
 
         // Helper to set data-line-num on an element
         const setLineNum = (el) => {
@@ -86,16 +86,27 @@ export class TextProcessorDOM {
                 if (className) {
                     tempP.classList.add(className);
                 }
+                if (source === "epub") {
+                    tempP.setAttribute("data-source", "epub");
+                }
 
                 if (dropCap) {
                     const tempSpan = document.createElement("span");
                     tempSpan.classList.add("dropCap");
                     tempSpan.innerText = dropCap.content;
                     tempP.appendChild(tempSpan);
-                    // Escape before assigning to innerHTML to prevent injected markup from running.
-                    tempP.insertAdjacentHTML("beforeend", this.#escapeHtml(content));
+                    if (source === "epub") {
+                        tempP.insertAdjacentHTML("beforeend", this.#sanitizeHtml(content));
+                    } else {
+                        // Escape before assigning to innerHTML to prevent injected markup from running.
+                        tempP.insertAdjacentHTML("beforeend", this.#escapeHtml(content));
+                    }
                 } else {
-                    tempP.textContent = content;
+                    if (source === "epub") {
+                        tempP.innerHTML = this.#sanitizeHtml(content);
+                    } else {
+                        tempP.textContent = content;
+                    }
                 }
                 return [setLineNum(tempP), elementType];
             }
@@ -124,6 +135,65 @@ export class TextProcessorDOM {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#39;");
+    }
+
+    /**
+     * Sanitize inline HTML for EPUB paragraphs.
+     * Only allows a small whitelist of inline tags and safe attributes.
+     * @param {string} html - Raw HTML string.
+     * @returns {string} Sanitized HTML string.
+     * @private
+     */
+    static #sanitizeHtml(html) {
+        if (html == null) return "";
+        const allowedTags = new Set(["em", "strong", "b", "i", "u", "a", "span", "small", "sub", "sup", "mark", "br", "code", "kbd", "samp"]);
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
+        const root = doc.body.firstElementChild;
+        if (!root) return this.#escapeHtml(html);
+
+        const cleanNode = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                return document.createTextNode(node.textContent);
+            }
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                return null;
+            }
+            const tag = node.tagName.toLowerCase();
+            if (!allowedTags.has(tag)) {
+                const frag = document.createDocumentFragment();
+                for (const child of node.childNodes) {
+                    const cleaned = cleanNode(child);
+                    if (cleaned) frag.appendChild(cleaned);
+                }
+                return frag;
+            }
+            const el = document.createElement(tag);
+            if (tag === "a") {
+                const href = node.getAttribute("href");
+                if (href) {
+                    const lower = href.trim().toLowerCase();
+                    const safe = lower.startsWith("http:") || lower.startsWith("https:") || lower.startsWith("mailto:") || lower.startsWith("#") || !/^[a-z][a-z0-9+.-]*:/i.test(href);
+                    if (safe) el.setAttribute("href", href);
+                }
+                const title = node.getAttribute("title");
+                if (title) el.setAttribute("title", title);
+            }
+            const cls = node.getAttribute("class");
+            if (cls) el.setAttribute("class", cls);
+            for (const child of node.childNodes) {
+                const cleaned = cleanNode(child);
+                if (cleaned) el.appendChild(cleaned);
+            }
+            return el;
+        };
+
+        const container = document.createElement("div");
+        for (const child of root.childNodes) {
+            const cleaned = cleanNode(child);
+            if (cleaned) container.appendChild(cleaned);
+        }
+        return container.innerHTML;
     }
 
     /**
