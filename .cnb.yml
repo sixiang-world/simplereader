@@ -64,9 +64,21 @@
       git config user.email "cnb-sync[bot]@users.noreply.github.com"
   - name: add-github-remote
     script: |
-      git remote set-url github "https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git" || \
+      # 幂等设置/添加 github remote（URL 含 token，不打印）
+      if git remote get-url github >/dev/null 2>&1; then
+        git remote set-url github "https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git"
+      else
         git remote add github "https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git"
-      git config "remote.github.fetch" "+refs/heads/*:refs/remotes/github/*"
+      fi
+      # 校验 token 被注入：URL 里不能含字面量 $GITHUB_TOKEN 或空 token
+      URL="$(git remote get-url github)"
+      case "$URL" in
+        *'$GITHUB_TOKEN'*|*'x-access-token:@'*)
+          echo "ERROR: GITHUB_TOKEN not substituted or empty in remote URL"
+          exit 78
+          ;;
+      esac
+      echo "github remote configured (token hidden)"
   - name: push-branch-and-tags
     script: |
       BRANCH="${CNB_BRANCH}"
