@@ -115,8 +115,6 @@ dev:
         - https://cnb.cool/shisheng820/secret/-/blob/main/github.yml
       docker:
         image: alpine/git:latest
-      env:
-        GITHUB_TOKEN: $GITHUB_TOKEN
       stages: *sync-github-stages
 
 # ===== 2. main 分支 push → 构建并部署生产环境 =====
@@ -148,8 +146,6 @@ main:
         - https://cnb.cool/shisheng820/secret/-/blob/main/github.yml
       docker:
         image: alpine/git:latest
-      env:
-        GITHUB_TOKEN: $GITHUB_TOKEN
       stages: *sync-github-stages
 
 # ===== 3. $ 兜底（所有其他分支）push → 自动同步 GitHub =====
@@ -160,8 +156,6 @@ $:
         - https://cnb.cool/shisheng820/secret/-/blob/main/github.yml
       docker:
         image: alpine/git:latest
-      env:
-        GITHUB_TOKEN: $GITHUB_TOKEN
       stages: *sync-github-stages
 
   # ===== 手动触发：部署生产（仅 main 显示） =====
@@ -212,6 +206,6 @@ $:
     - name: sync-to-github
       docker:
         image: alpine/git:latest
-      env:
-        GITHUB_TOKEN: $GITHUB_TOKEN
+      imports:
+        - https://cnb.cool/shisheng820/secret/-/blob/main/github.yml
       stages: *sync-github-stages
