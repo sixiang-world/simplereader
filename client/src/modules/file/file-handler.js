@@ -144,9 +144,30 @@ export class FileHandler {
         // Processing input files
         const allFiles = Array.from(fileList);
 
-        // Separate EPUB files from the rest
-        const epubFiles = allFiles.filter((file) => file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT));
-        const nonEpubFiles = allFiles.filter((file) => !file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT));
+        // Separate EPUB files from the rest. A file "looks like an EPUB" only
+        // when BOTH conditions hold: its name ends with `.epub` AND its magic
+        // number is a ZIP signature. Files that merely have the .epub extension
+        // but aren't actually zips (commonly mis-named TXTs) fall through to
+        // the TXT path below, so the user still gets to read them instead of
+        // hitting an opaque JSZip "Can't find end of central directory" error.
+        const epubCandidates = allFiles.filter((file) => file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT));
+        const epubFiles = [];
+        const nonEpubFiles = [];
+        for (const file of epubCandidates) {
+            if (await FileHandler.#isLikelyEpub(file)) {
+                epubFiles.push(file);
+            } else {
+                // Misnamed .epub — treat as TXT so user can still read it.
+                // Override the .type so the TXT branch accepts it (File.type
+                // is empty when the OS didn't recognize the extension).
+                nonEpubFiles.push(file);
+            }
+        }
+        for (const file of allFiles) {
+            if (!file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT)) {
+                nonEpubFiles.push(file);
+            }
+        }
 
         // Handle EPUB files (first one wins, same as TXT single-file behavior)
         if (epubFiles.length > 0) {
@@ -169,7 +190,20 @@ export class FileHandler {
         }
 
         let txtFiles = nonEpubFiles.filter((file) => file.type === CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE);
-        const otherFiles = nonEpubFiles.filter((file) => file.type !== CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE);
+        // Files we reclassified from .epub → TXT path above have .type set by
+        // the browser as "application/epub+zip" (because of the extension),
+        // not "text/plain". If we left them in otherFiles they'd be sent to
+        // the font validator and rejected as invalid fonts. Pick them out
+        // here and treat as TXT so the user can still read the content.
+        const misnamedEpubs = nonEpubFiles.filter(
+            (file) => file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT) &&
+                       !txtFiles.includes(file)
+        );
+        txtFiles = txtFiles.concat(misnamedEpubs);
+        const otherFiles = nonEpubFiles.filter(
+            (file) => file.type !== CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE &&
+                       !misnamedEpubs.includes(file)
+        );
         // const fontFiles = allFiles.filter((file) => CONFIG.CONST_FONT.SUPPORTED_FONT_TYPES.includes(file.type));
 
         // Validate font files
@@ -1023,9 +1057,12 @@ export class FileHandler {
             setEpubLoadingText(false);
             CONFIG.VARS.IS_BOOK_OPENED = false;
             await resetUI();
+            const isZipError = /central directory|is this a zip/i.test(error?.message || "");
             PopupManager.showNotification({
-                iconName: "ERROR",
-                text: "Failed to open EPUB file. The file may be corrupted or DRM-protected.",
+                iconName: isZipError ? "WRONG_FILE_TYPE" : "ERROR",
+                text: isZipError
+                    ? (CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_epubInvalid || "Invalid EPUB file (not a valid zip)")
+                    : "Failed to open EPUB file. The file may be corrupted or DRM-protected.",
                 iconColor: "error",
             });
             throw new Error("Error processing EPUB file: " + error);
@@ -1041,6 +1078,36 @@ export class FileHandler {
                 CONFIG.VARS.ALL_TITLES_IND
             );
             throw new Error(`${messageHeader} All titles and all titles indices length mismatch.`);
+        }
+    }
+
+    /**
+     * Quick magic-number check: is this File actually a ZIP (EPUB) container?
+     * EPUBs are ZIP files; the first 4 bytes are `PK\x03\x04` (or `PK\x05\x06`
+     * for an empty zip). Files that fail this check are almost certainly TXT
+     * or other formats that were misnamed .epub — we let them fall through to
+     * the TXT path instead of handing them to JSZip (which throws an opaque
+     * "Can't find end of central directory" error).
+     *
+     * @private
+     * @static
+     * @param {File} file
+     * @returns {Promise<boolean>} true if the file starts with a ZIP signature
+     */
+    static async #isLikelyEpub(file) {
+        try {
+            // Only need the first 4 bytes to check the magic number.
+            // slice(0, 4) on a File returns a Blob; arrayBuffer() resolves to
+            // a small ArrayBuffer regardless of original file size.
+            const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+            // PK\x03\x04 = regular zip entry; PK\x05\x06 = empty archive
+            return (
+                head[0] === 0x50 && head[1] === 0x4b &&
+                ((head[2] === 0x03 && head[3] === 0x04) || (head[2] === 0x05 && head[3] === 0x06))
+            );
+        } catch (e) {
+            this.#logger.log("isLikelyEpub check failed:", e);
+            return false;
         }
     }
 

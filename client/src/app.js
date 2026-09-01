@@ -272,8 +272,17 @@ async function loadFontsInBackground() {
                     window.FONT_STATUS[font] = "loaded";
                     _finalizeSingleFontLoading(font);
                 } catch (e) {
+                    // Single-file local-only fonts (e.g. fzskbxk which relies
+                    // on the user having 方正宋刻本秀楷 installed) have no
+                    // url() in their @font-face; when the font is absent
+                    // document.fonts.load() rejects with a NetworkError.
+                    // This is an expected, non-fatal case — the font simply
+                    // isn't available — so we log at debug level instead of
+                    // warning, which would otherwise look like a real failure.
                     window.FONT_STATUS[font] = "failed";
-                    console.warn(`[FAILED] "${font}" failed to load`, e);
+                    if (window.console?.debug) {
+                        console.debug(`[font] "${font}" not available locally`, e?.message || "");
+                    }
                 } finally {
                     if (window.consoleTime) console.timeEnd(`[time][background] Load Font "${font}"`);
                 }
