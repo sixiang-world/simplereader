@@ -64,8 +64,9 @@
       git config user.email "cnb-sync[bot]@users.noreply.github.com"
   - name: add-github-remote
     script: |
-      git remote add github https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git || \
-        git remote set-url github https://x-access-token:${G_TOKEN}@github.com/sixiang-world/simplereader.git
+      git remote set-url github "https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git" || \
+        git remote add github "https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git"
+      git config "remote.github.fetch" "+refs/heads/*:refs/remotes/github/*"
   - name: push-branch-and-tags
     script: |
       BRANCH="${CNB_BRANCH}"
