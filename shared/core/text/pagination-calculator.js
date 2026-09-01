@@ -615,8 +615,15 @@ export class PaginationCalculator {
             const end = breaks[i + 1];
 
             if (this.#isLongChapter(start, end)) {
+                // start may not correspond to a title (e.g. the synthetic
+                // break at 0 when the first title is at line 1). Guard the
+                // lookup so we don't throw and abort pagination — which
+                // would otherwise leave the user with a single page
+                // containing the entire book.
+                const titleIdx = this.#allTitlesInd[start];
+                const title = titleIdx !== undefined ? this.#allTitles[titleIdx][0] : null;
                 this.#logger.log("Processing long chapter", {
-                    title: this.#allTitles[this.#allTitlesInd[start]][0],
+                    title,
                     start_line: start,
                     end_line: end,
                 });
@@ -626,12 +633,15 @@ export class PaginationCalculator {
 
         // Handle remaining short chapters, where start = breaks[i+1], end = this.#contentChunks.length
         if (this.#isLongChapter(breaks[breaks.length - 1], this.#contentChunks.length)) {
+            const lastStart = breaks[breaks.length - 1];
+            const titleIdx = this.#allTitlesInd[lastStart];
+            const title = titleIdx !== undefined ? this.#allTitles[titleIdx][0] : null;
             this.#logger.log("Processing long chapter", {
-                title: this.#allTitles[this.#allTitlesInd[breaks[breaks.length - 1]]][0],
-                start_line: breaks[breaks.length - 1],
+                title,
+                start_line: lastStart,
                 end_line: this.#contentChunks.length,
             });
-            this.#processLongChapter(breaks[breaks.length - 1], this.#contentChunks.length);
+            this.#processLongChapter(lastStart, this.#contentChunks.length);
         }
     }
 
