@@ -12,9 +12,11 @@
  * Simple byte formatter using SI units (no IEC option)
  * @public
  * @param {number} bytes - The size in bytes
- * @returns {string} Formatted size string (e.g., "1.5 KB")
+ * @param {number} [decimals=1] - Number of decimal places (0-3, clamped). Ignored for Bytes and values ≥ 100 of the chosen unit.
+ * @returns {string} Formatted size string (e.g., "1.5 KB"); returns "0 Bytes" for non-finite input.
  */
-export function formatBytes_simple(bytes) {
+export function formatBytes_simple(bytes, decimals = 1) {
+    if (!Number.isFinite(bytes)) return "0 Bytes";
     if ([-1, 0, 1].includes(bytes)) {
         return `${bytes} Byte${bytes === 1 ? "" : "s"}`;
     }
@@ -23,8 +25,9 @@ export function formatBytes_simple(bytes) {
     const absBytes = Math.abs(bytes);
     const exponent = Math.floor(Math.log(absBytes) / Math.log(1000));
     const value = (absBytes / Math.pow(1000, exponent)) * Math.sign(bytes);
+    const dec = Math.max(0, Math.min(3, Math.floor(decimals)));
 
-    return `${value >= 99.995 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${UNITS[exponent]}`;
+    return `${value >= 99.995 || exponent === 0 ? value.toFixed(0) : value.toFixed(dec)} ${UNITS[exponent]}`;
 }
 
 /**
