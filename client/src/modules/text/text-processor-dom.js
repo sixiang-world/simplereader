@@ -242,13 +242,18 @@ export class TextProcessorDOM {
                 const href = node.getAttribute("href");
                 let safe = false;
                 if (href) {
-                    const lower = href.trim().toLowerCase();
+                    // Strip ASCII control chars and whitespace (0x00-0x20, 0x7f)
+                    // before scheme check: browsers strip these when navigating,
+                    // so `java\nscript:alert(1)` would still execute as
+                    // `javascript:`. Compare the cleaned value, but keep the
+                    // original href verbatim when emitting.
+                    const lower = href.replace(/[\u0000-\u0020\u007f]+/g, "").toLowerCase();
                     // Reject protocol-relative URLs (//evil.com) — they navigate
                     // the reader tab to an external site on click.
                     if (lower.startsWith("//")) {
                         safe = false;
                     } else {
-                        safe = lower.startsWith("http:") || lower.startsWith("https:") || lower.startsWith("mailto:") || lower.startsWith("#") || !/^[a-z][a-z0-9+.-]*:/i.test(href);
+                        safe = lower.startsWith("http:") || lower.startsWith("https:") || lower.startsWith("mailto:") || lower.startsWith("#") || !/^[a-z][a-z0-9+.-]*:/i.test(lower);
                     }
                     if (safe) {
                         el.setAttribute("href", href);

@@ -974,7 +974,10 @@ export class EpubConverter {
      */
     static #isAllowedHref(href) {
         if (!href) return false;
-        const lower = href.trim().toLowerCase();
+        // Strip ASCII control chars and whitespace (0x00-0x20, 0x7f) before
+        // scheme check: browsers strip these when navigating, so a value like
+        // `java\nscript:alert(1)` would still execute as `javascript:`.
+        const lower = href.replace(/[\u0000-\u0020\u007f]+/g, "").toLowerCase();
         // Reject dangerous URL schemes
         const dangerousSchemes = ["javascript:", "data:", "vbscript:", "file:", "about:"];
         for (const scheme of dangerousSchemes) {
