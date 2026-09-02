@@ -157,9 +157,8 @@ export class FileHandler {
             if (await FileHandler.#isLikelyEpub(file)) {
                 epubFiles.push(file);
             } else {
-                // Misnamed .epub — treat as TXT so user can still read it.
-                // Override the .type so the TXT branch accepts it (File.type
-                // is empty when the OS didn't recognize the extension).
+                // Misnamed .epub — let it fall through to the TXT path below,
+                // where #isLikelyText will decide whether it is readable text.
                 nonEpubFiles.push(file);
             }
         }
@@ -929,15 +928,25 @@ export class FileHandler {
                 }
             });
 
-            // Normalize new envelope shape { source, htmlLines, ... } and legacy flat shape
-            const result = convertResult.source?.type === "epub"
-                ? convertResult
-                : { ...convertResult, source: { type: "epub", filename: file.name, size_bytes: file.size } };
-            this.#logger.log(`Convert returned: ${result.htmlLines.length} lines, ${result.titles.length} titles`);
+            this.#logger.log(`Convert returned: ${convertResult.htmlLines.length} lines, ${convertResult.titles.length} titles`);
+
+            // Surface missing spine files so the user knows the book loaded incompletely.
+            if (convertResult.missingFiles?.length > 0) {
+                this.#logger.warn(`EPUB missing spine file(s): ${convertResult.missingFiles.join(", ")}`);
+                PopupManager.showNotification({
+                    iconName: "BOOK",
+                    iconColor: "warning",
+                    text: constructNotificationMessageFromArray(
+                        CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_epubMissingSpine,
+                        convertResult.missingFiles,
+                        { language: getCurrentDisplayLanguage(), maxItems: 3 }
+                    ),
+                });
+            }
 
             // Set metadata
-            const bookName = result.metadata.title || removeFileExtension(file.name);
-            const author = result.metadata.author || "";
+            const bookName = convertResult.metadata.title || removeFileExtension(file.name);
+            const author = convertResult.metadata.author || "";
             this.#logger.log(`Book: "${bookName}" by "${author}"`);
             CONFIG.VARS.BOOK_AND_AUTHOR = {
                 bookName,
@@ -947,14 +956,14 @@ export class FileHandler {
             };
             CONFIG.VARS.FILENAME = file.name;
             // Detect language from actual content, not just title/author
-            const contentSample = result.htmlLines
+            const contentSample = convertResult.htmlLines
                 .filter(l => l.elementType === "p" || l.elementType === "h")
                 .slice(0, 10)
                 .map(l => l.content || "")
                 .join(" ")
                 .replace(/<[^>]*>/g, "")
                 .slice(0, 500);
-            const languageHint = result.metadata?.language || "";
+            const languageHint = convertResult.metadata?.language || "";
             CONFIG.VARS.IS_EASTERN_LAN = TextProcessor.getLanguage(
                 (bookName + " " + author + " " + languageHint + " " + contentSample).slice(0, 1000)
             );
@@ -962,9 +971,9 @@ export class FileHandler {
             CONFIG.VARS.TITLE_PAGE_LINE_NUMBER_OFFSET = 0;
 
             // Set content
-            CONFIG.VARS.FILE_CONTENT_CHUNKS = result.htmlLines;
-            CONFIG.VARS.ALL_TITLES = result.titles;
-            CONFIG.VARS.ALL_TITLES_IND = result.titlesInd;
+            CONFIG.VARS.FILE_CONTENT_CHUNKS = convertResult.htmlLines;
+            CONFIG.VARS.ALL_TITLES = convertResult.titles;
+            CONFIG.VARS.ALL_TITLES_IND = convertResult.titlesInd;
             FileHandler.#verifyTitleAndIndexCount("[handleEpubFile]");
             CONFIG.VARS.FOOTNOTES = [];
             CONFIG.VARS.FOOTNOTE_PROCESSED_COUNTER = 0;
@@ -983,8 +992,8 @@ export class FileHandler {
                 CHAR_MULTIPLIER: CONFIG.CONST_PAGINATION.CHAR_MULTIPLIER,
             };
             // PaginationCalculator requires at least one title; inject a synthetic one if needed
-            const calculatorTitles = result.titles.length > 0 ? result.titles : [[bookName, 0, bookName, false]];
-            const calculator = new PaginationCalculator(result.htmlLines, calculatorTitles, paginationConfig);
+            const calculatorTitles = convertResult.titles.length > 0 ? convertResult.titles : [[bookName, 0, bookName, false]];
+            const calculator = new PaginationCalculator(convertResult.htmlLines, calculatorTitles, paginationConfig);
             const pageBreaks = calculator.calculate();
 
             CONFIG.VARS.PAGE_BREAKS = pageBreaks;
@@ -1036,9 +1045,9 @@ export class FileHandler {
                 title_page_line_number_offset: 0,
                 seal_rotate_en: "",
                 seal_left: -1,
-                file_content_chunks: result.htmlLines,
-                all_titles: result.titles,
-                all_titles_ind: result.titlesInd,
+                file_content_chunks: convertResult.htmlLines,
+                all_titles: convertResult.titles,
+                all_titles_ind: convertResult.titlesInd,
                 footnotes: [],
                 footnote_processed_counter: 0,
                 page_breaks: pageBreaks,
@@ -1050,7 +1059,7 @@ export class FileHandler {
             FileHandler.markDBSaveComplete();
 
             // Retrieve reading history (skip if no titles to avoid hanging on tocRendered)
-            if (result.titles.length > 0) {
+            if (convertResult.titles.length > 0) {
                 this.#logger.log("Retrieving reading history...");
                 await getHistoryAndSetChapterTitleActive(reader.gotoLine.bind(reader));
                 this.#logger.log("History retrieved");
@@ -1144,9 +1153,11 @@ export class FileHandler {
      * name ends in .epub may in fact be a renamed binary (e.g. an image or
      * office document). Feeding such bytes to the text decoder produces
      * unreadable garbage. We sample the first 1KB and count NUL bytes and
-     * non-text bytes (outside tab/newline/cr and printable ASCII ranges);
-     * either ratio above 30% ⇒ treat as binary, surface an epubInvalid
-     * notification, and skip the TXT path.
+     * non-text control bytes (outside tab/newline/cr and printable ASCII
+     * ranges). NULs are essentially never present in genuine text files, so
+     * we reject at 1%; control characters are also rare, so we reject at 10%.
+     * High-bit bytes (≥128) are allowed because they are typical of UTF-8/GBK
+     * multibyte sequences in CJK text.
      * @private
      * @static
      * @param {File} file
@@ -1161,9 +1172,9 @@ export class FileHandler {
             for (let i = 0; i < sample.length; i++) {
                 const b = sample[i];
                 if (b === 0) nulls++;
-                // Allow tab(9), LF(10), CR(13), printable ASCII (32-126),
-                // and high-bit bytes (≥128) which are typical of UTF-8/GBK
-                // multibyte sequences in CJK text.
+                // Count bytes outside tab(9), LF(10), CR(13), printable ASCII
+                // (32-126), and high-bit CJK bytes (≥128). These are control
+                // characters that should be rare in any text file.
                 if (
                     b !== 9 && b !== 10 && b !== 13 &&
                     !(b >= 32 && b <= 126) && b < 128
@@ -1172,7 +1183,7 @@ export class FileHandler {
                 }
             }
             const n = sample.length;
-            return nulls / n <= 0.3 && nonText / n <= 0.3;
+            return nulls / n <= 0.01 && nonText / n <= 0.1;
         } catch (e) {
             this.#logger.log("isLikelyText check failed:", e);
             // On check failure, fall back to the historical behavior

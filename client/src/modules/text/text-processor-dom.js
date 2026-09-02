@@ -50,7 +50,7 @@ export class TextProcessorDOM {
                 // content is expected to be a structural HTML tag like <h1>...</h1> or <span>...</span>.
                 // Parse via a detached template to avoid executing inline event handlers or <script>.
                 const wrapper = document.createElement("div");
-                wrapper.innerHTML = content;
+                wrapper.innerHTML = source === "epub" ? this.#sanitizeHtml(content) : content;
                 // Drop any element that isn't h1/span (the only structural tags the title branch
                 // is designed to handle); this also removes <script>, <img onerror=...>, etc.
                 for (const node of [...wrapper.children]) {
@@ -75,7 +75,11 @@ export class TextProcessorDOM {
                 const tempAnchor = document.createElement("a");
                 tempAnchor.href = `#line${lineNumber}`;
                 tempAnchor.classList.add("prevent-select", "title");
-                tempAnchor.textContent = tempElement.textContent;
+                if (source === "epub" && wrapper.firstElementChild) {
+                    tempAnchor.innerHTML = this.#stripColonsFromHtml(wrapper.firstElementChild.innerHTML);
+                } else {
+                    tempAnchor.textContent = tempElement.textContent;
+                }
                 this.#addTitleClickHandler(tempAnchor);
                 tempElement.innerHTML = "";
                 tempElement.appendChild(tempAnchor);
@@ -86,18 +90,14 @@ export class TextProcessorDOM {
                 const tempAnchor = document.createElement("a");
                 tempAnchor.href = `#line${lineNumber}`;
                 tempAnchor.classList.add("prevent-select", "title");
-                // For EPUB, content is an inline-HTML string; sanitize it for safe
-                // insertion, then use the resulting text for the anchor so the TOC
-                // label still matches. For TXT, content is plain text and the
-                // escape is a no-op. Unescaped <em>...</em> would otherwise show
-                // as literal text via textContent.
+                // For EPUB, content is an inline-HTML string; sanitize it and
+                // preserve whitelisted inline markup (em/strong/etc.) in the
+                // rendered heading. For TXT, content is plain text and the
+                // escape is a no-op.
                 if (source === "epub") {
-                    const sanitized = this.#sanitizeHtml(content);
-                    const temp = document.createElement("div");
-                    temp.innerHTML = sanitized;
-                    tempAnchor.textContent = temp.textContent.replace(":", "").replace("：", "");
+                    tempAnchor.innerHTML = this.#stripColonsFromHtml(this.#sanitizeHtml(content));
                 } else {
-                    tempAnchor.textContent = this.#escapeHtml(content.replace(":", "").replace("：", ""));
+                    tempAnchor.textContent = this.#escapeHtml(content.replace(/:/g, "").replace(/：/g, ""));
                 }
                 this.#addTitleClickHandler(tempAnchor);
                 const tempH2 = document.createElement("h2");
@@ -193,6 +193,29 @@ export class TextProcessorDOM {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#39;");
+    }
+
+    /**
+     * Strip colon-like characters from text nodes in an HTML fragment while
+     * leaving attributes intact. Used for chapter anchors where the original
+     * TXT pipeline removed colons from TOC labels.
+     * @param {string} html - Raw HTML string.
+     * @returns {string} HTML string with colons removed from text nodes.
+     * @private
+     */
+    static #stripColonsFromHtml(html) {
+        if (html == null) return "";
+        const temp = document.createElement("div");
+        temp.innerHTML = html;
+        const strip = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                node.textContent = node.textContent.replace(/:/g, "").replace(/：/g, "");
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                for (const child of node.childNodes) strip(child);
+            }
+        };
+        for (const child of temp.childNodes) strip(child);
+        return temp.innerHTML;
     }
 
     /**

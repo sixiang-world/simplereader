@@ -305,6 +305,8 @@ await asyncTest("missing spine file skips with warning, does not discard whole b
     // The book should still open with the real chapter's content.
     const paragraph = result.htmlLines.find((l) => l.type === "paragraph" && l.content.includes("Real content"));
     assert.ok(paragraph, "real spine items should still be processed when a sibling is missing");
+    assert.ok(Array.isArray(result.missingFiles));
+    assert.ok(result.missingFiles.includes("OEBPS/ghost.xhtml"), "missing spine path should be reported");
 });
 
 console.log("\nEPUB converter — security\n");

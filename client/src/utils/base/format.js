@@ -16,14 +16,17 @@
  * @returns {string} Formatted size string (e.g., "1.5 KB"); returns "0 Bytes" for non-finite input.
  */
 export function formatBytes_simple(bytes, decimals = 1) {
-    if (!Number.isFinite(bytes)) return "0 Bytes";
-    if ([-1, 0, 1].includes(bytes)) {
-        return `${bytes} Byte${bytes === 1 ? "" : "s"}`;
-    }
+    if (!Number.isFinite(bytes) || bytes === 0) return "0 Bytes";
 
     const UNITS = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
     const absBytes = Math.abs(bytes);
-    const exponent = Math.floor(Math.log(absBytes) / Math.log(1000));
+
+    // Sub-byte values (e.g. 0.5) would yield a negative exponent and an
+    // undefined unit; keep them in Bytes.
+    if (absBytes < 1) return `${bytes} Bytes`;
+
+    const maxExponent = UNITS.length - 1;
+    const exponent = Math.min(maxExponent, Math.floor(Math.log(absBytes) / Math.log(1000)));
     const value = (absBytes / Math.pow(1000, exponent)) * Math.sign(bytes);
     const dec = Math.max(0, Math.min(3, Math.floor(decimals)));
 

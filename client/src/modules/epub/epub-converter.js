@@ -69,7 +69,7 @@ export class EpubConverter {
         // 5. Process spine items in order
         this.#logger.log("Processing spine...");
         reportProgress("spine", `${spine.length} items`);
-        const { htmlLines, titles: spineTitles, spineBreaks, fileToLine, fragmentToLine } = await this.#processSpine(
+        const { htmlLines, titles: spineTitles, spineBreaks, fileToLine, fragmentToLine, missingFiles } = await this.#processSpine(
             zip,
             spine,
             manifest,
@@ -140,12 +140,13 @@ export class EpubConverter {
             }
         }
 
-        // 8. Synthetic end page
+        // 8. Synthetic end page. Text is supplied by CSS via the existing
+        // --ui_endPage variable so it respects the current display language.
         syntheticLines.push({
             type: "title",
             tag: "div",
-            content: "<h1 class=\"end-page\">THE END</h1>",
-            charCount: 7,
+            content: "<h1 class=\"end-page\"></h1>",
+            charCount: 0,
             lineNumber: htmlLines.length + syntheticLines.length,
             elementType: "t",
             source: "epub",
@@ -181,6 +182,7 @@ export class EpubConverter {
             titlesInd,
             metadata,
             spineBreaks,
+            missingFiles,
         };
     }
 
@@ -530,7 +532,7 @@ export class EpubConverter {
             this.#logger.warn(`EPUB missing spine file(s): ${missingFiles.join(", ")}`);
         }
 
-        return { htmlLines, titles, spineBreaks, fileToLine, fragmentToLine };
+        return { htmlLines, titles, spineBreaks, fileToLine, fragmentToLine, missingFiles };
     }
 
     /**

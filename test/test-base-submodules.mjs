@@ -242,6 +242,12 @@ test("formatBytes_simple(1500, 0) → '2 KB' (zero decimals)", () => {
 test("formatBytes_simple(1500, 10) → clamps to 3 decimals", () => {
     assert.equal(formatBytes_simple(1500, 10), "1.500 KB");
 });
+test("formatBytes_simple(0.5) → '0.5 Bytes' (sub-byte values stay in Bytes)", () => {
+    assert.equal(formatBytes_simple(0.5), "0.5 Bytes");
+});
+test("formatBytes_simple(-0.5) → '-0.5 Bytes' (negative sub-byte values stay in Bytes)", () => {
+    assert.equal(formatBytes_simple(-0.5), "-0.5 Bytes");
+});
 
 console.log("\nbase/format.js — convertUTCTimestampToLocalString\n");
 
