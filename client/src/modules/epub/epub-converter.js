@@ -22,6 +22,8 @@ export class EpubConverter {
      * @param {File} file - The EPUB file
      * @param {Function} [onProgress] - Callback(step, detail) for progress updates
      * @returns {Promise<{source: Object, htmlLines: Array, titles: Array, titlesInd: Object, metadata: Object, spineBreaks: Array}>}
+     *   spineBreaks is shifted (+1 for non-zero breaks) when a synthetic
+     *   title page is prepended, so values stay aligned with htmlLines.
      */
     static async convert(file, onProgress) {
         const reportProgress = (step, detail = "") => {
@@ -129,6 +131,12 @@ export class EpubConverter {
             // Shift existing titles
             for (const title of titles) {
                 title[1] += 1;
+            }
+            // Shift spine breaks to keep them aligned with the prepended
+            // synthetic title page. Non-zero breaks move by +1; the implicit
+            // break at 0 (first spine item) stays anchored to the new line 0.
+            for (let i = 0; i < spineBreaks.length; i++) {
+                if (spineBreaks[i] > 0) spineBreaks[i] += 1;
             }
         }
 
