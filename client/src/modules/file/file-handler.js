@@ -195,14 +195,34 @@ export class FileHandler {
         // not "text/plain". If we left them in otherFiles they'd be sent to
         // the font validator and rejected as invalid fonts. Pick them out
         // here and treat as TXT so the user can still read the content.
-        const misnamedEpubs = nonEpubFiles.filter(
+        // BUT: a misnamed .epub that isn't actually a zip may also not be
+        // text (e.g. a renamed image). Reading such bytes as TXT produces
+        // garbage, so run a text/binary heuristic and surface an
+        // epubInvalid notification for the ones that fail.
+        const misnamedEpubCandidates = nonEpubFiles.filter(
             (file) => file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT) &&
                        !txtFiles.includes(file)
         );
+        const misnamedEpubs = [];
+        for (const file of misnamedEpubCandidates) {
+            if (await FileHandler.#isLikelyText(file)) {
+                misnamedEpubs.push(file);
+            } else {
+                PopupManager.showNotification({
+                    iconName: "WRONG_FILE_TYPE",
+                    iconColor: "error",
+                    text: constructNotificationMessageFromArray(
+                        CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_epubInvalid,
+                        [file.name],
+                        { language: getCurrentDisplayLanguage(), maxItems: 1 }
+                    ),
+                });
+            }
+        }
         txtFiles = txtFiles.concat(misnamedEpubs);
         const otherFiles = nonEpubFiles.filter(
             (file) => file.type !== CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE &&
-                       !misnamedEpubs.includes(file)
+                       !misnamedEpubCandidates.includes(file)
         );
         // const fontFiles = allFiles.filter((file) => CONFIG.CONST_FONT.SUPPORTED_FONT_TYPES.includes(file.type));
 
@@ -1115,6 +1135,49 @@ export class FileHandler {
         } catch (e) {
             this.#logger.log("isLikelyEpub check failed:", e);
             return false;
+        }
+    }
+
+    /**
+     * Heuristic text/binary check for misnamed .epub files that are not
+     * actually ZIPs. A file reclassified from .epub → TXT only because its
+     * name ends in .epub may in fact be a renamed binary (e.g. an image or
+     * office document). Feeding such bytes to the text decoder produces
+     * unreadable garbage. We sample the first 1KB and count NUL bytes and
+     * non-text bytes (outside tab/newline/cr and printable ASCII ranges);
+     * either ratio above 30% ⇒ treat as binary, surface an epubInvalid
+     * notification, and skip the TXT path.
+     * @private
+     * @static
+     * @param {File} file
+     * @returns {Promise<boolean>} true if the file looks like text
+     */
+    static async #isLikelyText(file) {
+        try {
+            const sample = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
+            if (sample.length === 0) return true; // empty file ≈ empty text
+            let nulls = 0;
+            let nonText = 0;
+            for (let i = 0; i < sample.length; i++) {
+                const b = sample[i];
+                if (b === 0) nulls++;
+                // Allow tab(9), LF(10), CR(13), printable ASCII (32-126),
+                // and high-bit bytes (≥128) which are typical of UTF-8/GBK
+                // multibyte sequences in CJK text.
+                if (
+                    b !== 9 && b !== 10 && b !== 13 &&
+                    !(b >= 32 && b <= 126) && b < 128
+                ) {
+                    nonText++;
+                }
+            }
+            const n = sample.length;
+            return nulls / n <= 0.3 && nonText / n <= 0.3;
+        } catch (e) {
+            this.#logger.log("isLikelyText check failed:", e);
+            // On check failure, fall back to the historical behavior
+            // (treat as text) so we don't regress the "still readable" case.
+            return true;
         }
     }
 
