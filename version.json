@@ -1,6 +1,39 @@
 {
-    "version": "2.1.0",
+    "version": "2.2.0",
     "changelog": {
+        "2.2.0": {
+            "date": "2026-09-02",
+            "changes": {
+                "zh": [
+                    "**EPUB 排版保真** — 列表（项目符号/编号/嵌套）、引用块、预格式化与代码块空白、表格结构均按原书保留，不再退化为纯文本",
+                    "**EPUB 元数据提取** — 读取出版社、出版日期、语言、简介与封面，写入书籍信息",
+                    "**EPUB 转换进度** — 转换期间显示进度提示，大型书籍不再表现为界面无响应",
+                    "**EPUB 转换缓存** — 转换结果缓存，再次打开同一本书无需重新解析",
+                    "**EPUB 生成封面页与结束页** — 缺失封面时自动生成，阅读体验更完整",
+                    "**EPUB 分页改用 PaginationCalculator** — 替换原先硬编码的每页 100 行，分页结果与正文一致",
+                    "**修复 EPUB 目录锚点** — 保留 TOC fragment 锚点，收紧 EPUB3 nav 检测，跳转定位更准确",
+                    "**修复 EPUB 误识别** — 错名 .epub 文件在降级为 TXT 前先校验文本特征；超大 EPUB 的大小限制提示不再被重复通知覆盖",
+                    "**修复 EPUB 段落间距与首行缩进** — 排版设置对 EPUB 正文正确生效",
+                    "**安全加固** — 修复换行混淆 href 绕过黑名单的 XSS，并净化 EPUB 解析后的链接与内联属性",
+                    "**修复分页崩溃** — `#handleLongChapters` 在非标题分页点崩溃；`formatBytes_simple` 对非有限数值回退",
+                    "**工程与测试** — 引入 ESLint + Prettier（非阻塞）；新增 EPUB 转换器与渲染两组单元测试；CI 新增 EdgeOne Pages 部署与 GitHub 同步"
+                ],
+                "en": [
+                    "**EPUB layout fidelity** — lists (bullets/numbering/nesting), blockquotes, preformatted & code whitespace, and tables are preserved as structured markup instead of degrading to plain text",
+                    "**EPUB metadata extraction** — publisher, date, language, description and cover are read into book info",
+                    "**EPUB conversion progress** — a progress indicator is shown during conversion so large books no longer look frozen",
+                    "**EPUB conversion caching** — converted results are cached; reopening the same book skips re-parsing",
+                    "**EPUB generated cover and end pages** — auto-generated when absent, for a more complete reading experience",
+                    "**EPUB pagination now uses PaginationCalculator** — replaces the hardcoded 100-lines-per-page split so results match body text",
+                    "**Fixed EPUB TOC anchors** — preserve TOC fragment anchors and tighten EPUB3 nav detection for accurate jump targets",
+                    "**Fixed EPUB misdetection** — misnamed .epub files are validated for text characteristics before falling back to TXT; oversized-EPUB size-limit notices are no longer hidden by duplicate toasts",
+                    "**Fixed EPUB paragraph spacing and first-line indent** — typography settings now apply correctly to EPUB body text",
+                    "**Security hardening** — fixed an XSS bypass where newline-obfuscated hrefs slipped past the blacklist, and sanitized resolved EPUB links plus allowed inline attributes",
+                    "**Fixed pagination crashes** — `#handleLongChapters` crashed on non-title page breaks; `formatBytes_simple` now falls back for non-finite values",
+                    "**Tooling & tests** — added ESLint + Prettier (non-blocking); new unit tests for the EPUB converter and rendering; CI gained EdgeOne Pages deploy and GitHub sync workflows"
+                ]
+            }
+        },
         "2.1.0": {
             "date": "2026-07-27",
             "changes": {
