@@ -297,6 +297,23 @@ await asyncTest("strips dangerous href schemes", async () => {
     assert.ok(paragraph.content.includes("chapter.xhtml#note"), "safe href should be preserved");
 });
 
+await asyncTest("strips href with embedded control chars that obfuscate scheme", async () => {
+    // Browsers strip ASCII whitespace/control chars (0x00-0x20, 0x7f) when
+    // navigating, so `java\nscript:` executes as `javascript:`. The converter
+    // must reject such hrefs at sanitize time, not after the browser normalizes.
+    const epubPath = await buildEpub("xss-ctrl.epub", [
+        ["ch1.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch1</title></head>
+<body><p><a href="java\nscript:alert(1)">bad</a> <a href="chapter.xhtml#note">good</a></p></body></html>`],
+    ]);
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const paragraph = result.htmlLines.find((l) => l.type === "paragraph");
+    assert.ok(paragraph);
+    assert.ok(!paragraph.content.includes("javascript:"), "obfuscated javascript: href should be removed");
+    assert.ok(!paragraph.content.includes("java\nscript:"), "raw obfuscated scheme should not leak into output");
+    assert.ok(paragraph.content.includes("chapter.xhtml#note"), "safe href should be preserved");
+});
+
 try {
     fs.rmSync(tmpDir, { recursive: true, force: true });
 } catch (_e) {

@@ -158,6 +158,22 @@ test("EPUB paragraph strips dangerous href", () => {
     assert.equal(el.querySelector("a").getAttribute("href"), "https://example.com");
 });
 
+test("EPUB paragraph strips href with embedded control chars obfuscating scheme", () => {
+    // Browsers strip ASCII whitespace/control chars (0x00-0x20, 0x7f) when
+    // navigating, so `java\nscript:` executes as `javascript:`. The renderer
+    // must reject such hrefs at sanitize time.
+    const [el] = TextProcessorDOM.createFromStructure({
+        type: "paragraph",
+        tag: "p",
+        content: '<a href="java\nscript:alert(1)">bad</a><a href="https://example.com">good</a>',
+        lineNumber: 8,
+        elementType: "p",
+        source: "epub",
+    });
+    assert.equal(el.querySelectorAll("a").length, 1);
+    assert.equal(el.querySelector("a").getAttribute("href"), "https://example.com");
+});
+
 test("synthetic title page renders HTML directly", () => {
     const [el] = TextProcessorDOM.createFromStructure({
         type: "title",
