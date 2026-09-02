@@ -189,6 +189,38 @@ test("synthetic title page renders HTML directly", () => {
     assert.equal(el.querySelector(".author").textContent, "Tester");
 });
 
+test("EPUB heading preserves whitelisted inline HTML", () => {
+    const [el] = TextProcessorDOM.createFromStructure({
+        type: "heading",
+        tag: "h2",
+        content: "Chapter <em>One</em>: <strong>Beginnings</strong>",
+        lineNumber: 9,
+        elementType: "h",
+        source: "epub",
+    });
+    assert.equal(el.tagName.toLowerCase(), "h2");
+    const anchor = el.querySelector("a");
+    assert.ok(anchor);
+    assert.ok(anchor.innerHTML.includes("<em>One</em>"));
+    assert.ok(anchor.innerHTML.includes("<strong>Beginnings</strong>"));
+    assert.ok(!anchor.textContent.includes(":"));
+    assert.ok(!anchor.textContent.includes("："));
+});
+
+test("TXT heading escapes inline HTML and strips colons", () => {
+    const [el] = TextProcessorDOM.createFromStructure({
+        type: "heading",
+        tag: "h2",
+        content: "Chapter <em>One</em>: Beginnings",
+        lineNumber: 10,
+        elementType: "h",
+    });
+    const anchor = el.querySelector("a");
+    assert.ok(!anchor.innerHTML.includes("<em>"), "literal <em> tag should not appear as markup");
+    assert.ok(anchor.textContent.includes("&lt;em&gt;One&lt;/em&gt;"), "<em> should be escaped in textContent");
+    assert.ok(!anchor.textContent.includes(":"));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
     process.exit(1);

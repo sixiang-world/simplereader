@@ -152,6 +152,9 @@ table[data-source="epub"] th {
     font-size: 1.2em;
     color: var(--mainColor_inactive);
 }
+.synthetic-page[data-source="epub"] h1.end-page::before {
+    content: var(--ui_endPage);
+}
 .cover {
     width: 100%;
 }

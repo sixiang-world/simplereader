@@ -422,6 +422,9 @@
     --ui_notification_text_epubInvalid: "";
     --ui_notification_text_epubInvalid_zh: 无效的 EPUB 文件（不是有效的 zip，可能已损坏或被误改名）;
     --ui_notification_text_epubInvalid_en: Invalid EPUB file (not a valid zip; may be corrupted or misnamed);
+    --ui_notification_text_epubMissingSpine: "";
+    --ui_notification_text_epubMissingSpine_zh: EPUB 部分章节文件缺失，已跳过;
+    --ui_notification_text_epubMissingSpine_en: Some EPUB chapter files are missing and were skipped;
     --ui_notification_text_fontFileInvalid: "";
     --ui_notification_text_fontFileInvalid_zh: 无效的字体文件;
     --ui_notification_text_fontFileInvalid_en: Invalid font file;
@@ -804,6 +807,7 @@
     --ui_notification_text_fileSizeLimit: var(--ui_notification_text_fileSizeLimit_zh);
     --ui_notification_text_epubTooLarge: var(--ui_notification_text_epubTooLarge_zh);
     --ui_notification_text_epubInvalid: var(--ui_notification_text_epubInvalid_zh);
+    --ui_notification_text_epubMissingSpine: var(--ui_notification_text_epubMissingSpine_zh);
     --ui_notification_text_fontFileInvalid: var(--ui_notification_text_fontFileInvalid_zh);
     --ui_notification_text_fontNotSupportedInSafari: var(--ui_notification_text_fontNotSupportedInSafari_zh);
     --ui_notification_text_failedToSave: var(--ui_notification_text_failedToSave_zh);
@@ -979,6 +983,7 @@
     --ui_notification_text_fileSizeLimit: var(--ui_notification_text_fileSizeLimit_en);
     --ui_notification_text_epubTooLarge: var(--ui_notification_text_epubTooLarge_en);
     --ui_notification_text_epubInvalid: var(--ui_notification_text_epubInvalid_en);
+    --ui_notification_text_epubMissingSpine: var(--ui_notification_text_epubMissingSpine_en);
     --ui_notification_text_fontFileInvalid: var(--ui_notification_text_fontFileInvalid_en);
     --ui_notification_text_fontNotSupportedInSafari: var(--ui_notification_text_fontNotSupportedInSafari_en);
     --ui_notification_text_failedToSave: var(--ui_notification_text_failedToSave_en);
