@@ -889,7 +889,9 @@ export class FileHandler {
                         }
                     ),
                 });
-                throw new Error(`EPUB file too large: ${file.size} bytes`);
+                const err = new Error(`EPUB file too large: ${file.size} bytes`);
+                err.code = "EPUB_TOO_LARGE";
+                throw err;
             }
 
             hideDropZone();
@@ -1057,14 +1059,19 @@ export class FileHandler {
             setEpubLoadingText(false);
             CONFIG.VARS.IS_BOOK_OPENED = false;
             await resetUI();
-            const isZipError = /central directory|is this a zip/i.test(error?.message || "");
-            PopupManager.showNotification({
-                iconName: isZipError ? "WRONG_FILE_TYPE" : "ERROR",
-                text: isZipError
-                    ? (CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_epubInvalid || "Invalid EPUB file (not a valid zip)")
-                    : "Failed to open EPUB file. The file may be corrupted or DRM-protected.",
-                iconColor: "error",
-            });
+            // EPUB_TOO_LARGE already surfaced a specific notification above;
+            // skip the generic catch notification to avoid a double popup
+            // whose generic message would overwrite the specific reason.
+            if (error?.code !== "EPUB_TOO_LARGE") {
+                const isZipError = /central directory|is this a zip/i.test(error?.message || "");
+                PopupManager.showNotification({
+                    iconName: isZipError ? "WRONG_FILE_TYPE" : "ERROR",
+                    text: isZipError
+                        ? (CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_epubInvalid || "Invalid EPUB file (not a valid zip)")
+                        : "Failed to open EPUB file. The file may be corrupted or DRM-protected.",
+                    iconColor: "error",
+                });
+            }
             throw new Error("Error processing EPUB file: " + error);
         }
     }
