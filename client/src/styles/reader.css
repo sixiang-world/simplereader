@@ -39,12 +39,23 @@ p {
     font-size: var(--p_fontSize);
     color: var(--fontColor);
     text-align: var(--p_textAlign_value);
-    text-indent: var(--p_paragraphIndent_value);
     line-height: var(--p_lineHeight);
     margin: 0;
     position: relative;
     top: var(--p_top, 0);
     left: var(--p_left, 0);
+}
+p:not([data-source="epub"]) {
+    text-indent: var(--p_paragraphIndent_value);
+}
+p[data-source="epub"] {
+    margin-bottom: var(--p_paragraphSpacing);
+    text-indent: var(--p_paragraphIndent_value);
+}
+p[data-source="epub"]:first-of-type,
+p[data-source="epub"].first,
+p[data-source="epub"].noIndent {
+    text-indent: 0;
 }
 p.first,
 p.noIndent {
@@ -59,6 +70,90 @@ p::-moz-selection {
     background-color: var(--mainColor_active) !important;
     background: var(--mainColor_active) !important;
     color: var(--bgColor) !important;
+}
+[data-source="epub"] ul,
+[data-source="epub"] ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+    font-family: var(--fontFamily_body);
+    font-size: var(--p_fontSize);
+    color: var(--fontColor);
+    line-height: var(--p_lineHeight);
+}
+[data-source="epub"] ul {
+    list-style: disc;
+}
+[data-source="epub"] ol {
+    list-style: decimal;
+}
+[data-source="epub"] li {
+    margin: 0.25em 0;
+}
+blockquote[data-source="epub"] {
+    margin: 1em 2em;
+    padding-left: 1em;
+    border-left: 3px solid var(--mainColor_inactive);
+    font-style: italic;
+    font-family: var(--fontFamily_body);
+    font-size: var(--p_fontSize);
+    color: var(--fontColor);
+    line-height: var(--p_lineHeight);
+}
+pre[data-source="epub"] {
+    white-space: pre;
+    font-family: monospace;
+    background: var(--bgColor_secondary, transparent);
+    padding: 0.75em;
+    overflow-x: auto;
+    font-size: var(--p_fontSize);
+    color: var(--fontColor);
+    line-height: var(--p_lineHeight);
+    margin: 1em 0;
+}
+[data-source="epub"] code,
+[data-source="epub"] kbd,
+[data-source="epub"] samp {
+    font-family: monospace;
+}
+table[data-source="epub"] {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+    font-family: var(--fontFamily_body);
+    font-size: var(--p_fontSize);
+    color: var(--fontColor);
+    line-height: var(--p_lineHeight);
+}
+table[data-source="epub"] th,
+table[data-source="epub"] td {
+    border: 1px solid var(--mainColor_inactive);
+    padding: 0.5em;
+    text-align: start;
+}
+table[data-source="epub"] th {
+    font-weight: bold;
+    background: var(--bgColor_secondary, transparent);
+}
+.synthetic-page[data-source="epub"] {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    text-align: center;
+    font-family: var(--fontFamily_body);
+    color: var(--fontColor);
+}
+.synthetic-page[data-source="epub"] h1 {
+    font-size: 2em;
+    margin-bottom: 0.5em;
+}
+.synthetic-page[data-source="epub"] .author {
+    font-size: 1.2em;
+    color: var(--mainColor_inactive);
+}
+.synthetic-page[data-source="epub"] h1.end-page::before {
+    content: var(--ui_endPage);
 }
 .cover {
     width: 100%;

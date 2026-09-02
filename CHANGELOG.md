@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.2.0] — 2026-09-02
+
+### 新增
+- **EPUB 排版保真** — 列表（项目符号 / 编号 / 嵌套）、引用块、预格式化与代码块空白、表格结构均按原书保留，不再退化为纯文本
+- **EPUB 元数据提取** — 读取出版社、出版日期、语言、简介与封面（`4c870ae`）
+- **EPUB 转换进度 UI** — 转换期间显示进度，大型书籍不再表现为界面无响应（`7391d50`）
+- **EPUB 转换缓存** — 结果缓存，再次打开同一本书无需重新解析（`2860370`）
+- **EPUB 生成封面页与结束页** — 缺失时自动生成（`f9ba927`）
+- **EPUB 段落 HTML 安全渲染** — 引入 `source` 标志区分来源，EPUB 走受限 HTML 渲染、TXT 仍保持转义（`2c5ad8c`、`8f2ff47`）
+
+### 变更
+- **EPUB 分页改用 `PaginationCalculator`** — 替换原先硬编码的每页 100 行（`8631db3`）
+- **EPUB 文件大小限制** — 超出限制时明确提示（`4013e41`）
+- **工程工具链** — 引入 ESLint + Prettier，配置为非阻塞（`7a97c8f`）
+- **CI** — 新增 EdgeOne Pages 部署工作流与 dev 分支自动同步 GitHub 镜像；重构流水线触发与权限配置；`pnpm install` 改用 corepack prepare（`359813b`、`e4773e0`、`a87edfb`、`130aa7d`、`16d8d1c`）
+
+### 修复
+- **EPUB 目录锚点** — 保留 TOC fragment 锚点，收紧 EPUB3 nav 检测（`024fa1a`）
+- **EPUB 链接净化** — 净化解析后的 href，限制允许的内联属性（`5c0ce9a`）
+- **EPUB 缺失文件** — 报告缺失 spine 文件并允许非 HTML fallback 项；改进缺失文件提示与标题渲染（`1d6e427`、`ac28c1f`）
+- **EPUB 误识别** — 错名 `.epub` 在降级为 TXT 前先校验文本特征（`ea95976`）；超大 EPUB 的大小限制原因不再被重复通知覆盖（`31fd0fd`）；合成标题页插入后同步平移 `spineBreaks`（`642d2b8`）
+- **EPUB 排版设置** — 段落间距与首行缩进对 EPUB 正文正确生效（`04da676`）
+- **PWA icon 404 与 `fzskbxk` 字体加载警告**（`1089db4`）
+- **安全：XSS** — 修复换行混淆 href 绕过黑名单（`3b2e627`）；中和 `TextProcessorDOM` 内容渲染中的 XSS（`00c93b1`）
+- **分页崩溃** — `#handleLongChapters` 在非标题分页点崩溃（`e849e0f`）
+- **`formatBytes_simple`** — 保留 `decimals` 参数并对非有限数值回退（`4e7fc1c`）
+
+### 测试
+- 新增 `test-epub-converter.mjs`（353 行）与 `test-epub-rendering.mjs`（227 行），覆盖 EPUB 转换与渲染
+- `test-base-submodules.mjs` 补充 `formatBytes_simple` 导出断言
+
+---
+
 ## [2.1.0] — 2026-07-27
 
 ### 新增

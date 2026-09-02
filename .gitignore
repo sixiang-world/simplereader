@@ -38,6 +38,7 @@ client/lib/opencc/full.js
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
+.eslintcache
 *.py[cod]
 *$py.class
 

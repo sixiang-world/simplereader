@@ -72,6 +72,9 @@
     --ui_dropZoneText_loading: "";
     --ui_dropZoneText_loading_zh: "正在努力加载...";
     --ui_dropZoneText_loading_en: "Getting ready...";
+    --ui_dropZoneText_loading_epub: "";
+    --ui_dropZoneText_loading_epub_zh: "正在解析 EPUB...";
+    --ui_dropZoneText_loading_epub_en: "Parsing EPUB...";
     --ui_dropZoneText_loading_1: "◔";
     --ui_dropZoneText_loading_2: "◑";
     --ui_dropZoneText_loading_3: "◕";
@@ -413,6 +416,15 @@
     --ui_notification_text_fileSizeLimit: "";
     --ui_notification_text_fileSizeLimit_zh: 文件大小超过限制;
     --ui_notification_text_fileSizeLimit_en: File size exceeds limit;
+    --ui_notification_text_epubTooLarge: "";
+    --ui_notification_text_epubTooLarge_zh: EPUB 文件过大（最大 50MB）;
+    --ui_notification_text_epubTooLarge_en: EPUB file is too large (max 50MB);
+    --ui_notification_text_epubInvalid: "";
+    --ui_notification_text_epubInvalid_zh: 无效的 EPUB 文件（不是有效的 zip，可能已损坏或被误改名）;
+    --ui_notification_text_epubInvalid_en: Invalid EPUB file (not a valid zip; may be corrupted or misnamed);
+    --ui_notification_text_epubMissingSpine: "";
+    --ui_notification_text_epubMissingSpine_zh: EPUB 部分章节文件缺失，已跳过;
+    --ui_notification_text_epubMissingSpine_en: Some EPUB chapter files are missing and were skipped;
     --ui_notification_text_fontFileInvalid: "";
     --ui_notification_text_fontFileInvalid_zh: 无效的字体文件;
     --ui_notification_text_fontFileInvalid_en: Invalid font file;
@@ -651,6 +663,7 @@
     --ui_titlePage: var(--ui_titlePage_zh);
     --ui_endPage: var(--ui_endPage_zh);
     --ui_dropZoneText_loading: var(--ui_dropZoneText_loading_zh);
+    --ui_dropZoneText_loading_epub: var(--ui_dropZoneText_loading_epub_zh);
     --ui_dropZoneText: var(--ui_dropZoneText_zh);
     --ui_dropZoneText_anonymous: var(--ui_dropZoneText_anonymous_zh);
     --fontFamily_title: var(--fontFamily_title_zh);
@@ -792,6 +805,9 @@
     --ui_notification_text_andMore: var(--ui_notification_text_andMore_zh);
     --ui_notification_text_wrongFileType: var(--ui_notification_text_wrongFileType_zh);
     --ui_notification_text_fileSizeLimit: var(--ui_notification_text_fileSizeLimit_zh);
+    --ui_notification_text_epubTooLarge: var(--ui_notification_text_epubTooLarge_zh);
+    --ui_notification_text_epubInvalid: var(--ui_notification_text_epubInvalid_zh);
+    --ui_notification_text_epubMissingSpine: var(--ui_notification_text_epubMissingSpine_zh);
     --ui_notification_text_fontFileInvalid: var(--ui_notification_text_fontFileInvalid_zh);
     --ui_notification_text_fontNotSupportedInSafari: var(--ui_notification_text_fontNotSupportedInSafari_zh);
     --ui_notification_text_failedToSave: var(--ui_notification_text_failedToSave_zh);
@@ -823,6 +839,7 @@
     --ui_titlePage: var(--ui_titlePage_en);
     --ui_endPage: var(--ui_endPage_en);
     --ui_dropZoneText_loading: var(--ui_dropZoneText_loading_en);
+    --ui_dropZoneText_loading_epub: var(--ui_dropZoneText_loading_epub_en);
     --ui_dropZoneText: var(--ui_dropZoneText_en);
     --ui_dropZoneText_anonymous: var(--ui_dropZoneText_anonymous_en);
     --fontFamily_title: var(--fontFamily_title_en);
@@ -964,6 +981,9 @@
     --ui_notification_text_andMore: var(--ui_notification_text_andMore_en);
     --ui_notification_text_wrongFileType: var(--ui_notification_text_wrongFileType_en);
     --ui_notification_text_fileSizeLimit: var(--ui_notification_text_fileSizeLimit_en);
+    --ui_notification_text_epubTooLarge: var(--ui_notification_text_epubTooLarge_en);
+    --ui_notification_text_epubInvalid: var(--ui_notification_text_epubInvalid_en);
+    --ui_notification_text_epubMissingSpine: var(--ui_notification_text_epubMissingSpine_en);
     --ui_notification_text_fontFileInvalid: var(--ui_notification_text_fontFileInvalid_en);
     --ui_notification_text_fontNotSupportedInSafari: var(--ui_notification_text_fontNotSupportedInSafari_en);
     --ui_notification_text_failedToSave: var(--ui_notification_text_failedToSave_en);

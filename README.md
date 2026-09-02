@@ -133,20 +133,32 @@
 
 ## Docker 部署
 
-```bash
-# 基础运行
-docker run -d --name simpletextreader \
--p 8866:8866 \
---restart unless-stopped \
-henryxrl/simpletextreader:latest
+v2 镜像仅含静态前端（Vite 构建产物 `dist/`），由 Caddy 静态服务，暴露 `:80`。先从仓库根构建镜像：
 
-# 挂载图书库目录
-docker run -d --name simpletextreader \
--p 8866:8866 \
--v /path/to/your/books:/app/books \
---restart unless-stopped \
-henryxrl/simpletextreader:latest
+```bash
+docker build -t simplereader .
 ```
+
+基础运行（映射到宿主 8866）：
+
+```bash
+docker run -d --name simpletextreader \
+-p 8866:80 \
+--restart unless-stopped \
+simplereader:latest
+```
+
+挂载本地图书库目录（`books/` 是 Caddy 静态服务的卷）：
+
+```bash
+docker run -d --name simpletextreader \
+-p 8866:80 \
+-v /path/to/your/books:/srv/books \
+--restart unless-stopped \
+simplereader:latest
+```
+
+> 注：原版 `henryxrl/simpletextreader` 镜像基于 v1（Node + Express + Prisma 后端，`:8866`），**与本 fork 的 v2 静态镜像不兼容**，请使用上述自建镜像。
 
 ## URL 参数（调试用）
 

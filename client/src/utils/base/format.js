@@ -9,6 +9,31 @@
  */
 
 /**
+ * Simple byte formatter using SI units (no IEC option)
+ * @public
+ * @param {number} bytes - The size in bytes
+ * @param {number} [decimals=1] - Number of decimal places (0-3, clamped). Ignored for Bytes and values ≥ 100 of the chosen unit.
+ * @returns {string} Formatted size string (e.g., "1.5 KB"); returns "0 Bytes" for non-finite input.
+ */
+export function formatBytes_simple(bytes, decimals = 1) {
+    if (!Number.isFinite(bytes) || bytes === 0) return "0 Bytes";
+
+    const UNITS = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+    const absBytes = Math.abs(bytes);
+
+    // Sub-byte values (e.g. 0.5) would yield a negative exponent and an
+    // undefined unit; keep them in Bytes.
+    if (absBytes < 1) return `${bytes} Bytes`;
+
+    const maxExponent = UNITS.length - 1;
+    const exponent = Math.min(maxExponent, Math.floor(Math.log(absBytes) / Math.log(1000)));
+    const value = (absBytes / Math.pow(1000, exponent)) * Math.sign(bytes);
+    const dec = Math.max(0, Math.min(3, Math.floor(decimals)));
+
+    return `${value >= 99.995 || exponent === 0 ? value.toFixed(0) : value.toFixed(dec)} ${UNITS[exponent]}`;
+}
+
+/**
  * Formats byte size to human readable format using SI or IEC units
  * @public
  * @param {number} bytes - The size in bytes
@@ -38,26 +63,6 @@ export function formatBytes(bytes, units = "si") {
     const value = (absBytes / Math.pow(config.base, exponent)) * Math.sign(bytes);
 
     return `${value >= 99.995 || exponent === 0 ? value.toFixed(0) : value.toFixed(2)} ${config.units[exponent]}`;
-}
-
-
-/**
- * Simplified version of byte size formatting using SI units
- * @public
- * @param {number} bytes - The size in bytes
- * @param {number} decimals - Number of decimal places to show
- * @returns {string} Formatted size string
- */
-export function formatBytes_simple(bytes, decimals = 2) {
-    if (!+bytes) return "0 Bytes";
-
-    const k = 1000;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
 

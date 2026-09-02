@@ -227,6 +227,27 @@ test("formatBytes_simple(0) → '0 Bytes'", () => {
 test("formatBytes_simple(1500) → '1.5 KB' (SI only)", () => {
     assert.equal(formatBytes_simple(1500), "1.5 KB");
 });
+test("formatBytes_simple(NaN) → '0 Bytes' (non-finite fallback)", () => {
+    assert.equal(formatBytes_simple(NaN), "0 Bytes");
+});
+test("formatBytes_simple('abc') → '0 Bytes' (non-number fallback)", () => {
+    assert.equal(formatBytes_simple("abc"), "0 Bytes");
+});
+test("formatBytes_simple(1500, 2) → '1.50 KB' (decimals param honored)", () => {
+    assert.equal(formatBytes_simple(1500, 2), "1.50 KB");
+});
+test("formatBytes_simple(1500, 0) → '2 KB' (zero decimals)", () => {
+    assert.equal(formatBytes_simple(1500, 0), "2 KB");
+});
+test("formatBytes_simple(1500, 10) → clamps to 3 decimals", () => {
+    assert.equal(formatBytes_simple(1500, 10), "1.500 KB");
+});
+test("formatBytes_simple(0.5) → '0.5 Bytes' (sub-byte values stay in Bytes)", () => {
+    assert.equal(formatBytes_simple(0.5), "0.5 Bytes");
+});
+test("formatBytes_simple(-0.5) → '-0.5 Bytes' (negative sub-byte values stay in Bytes)", () => {
+    assert.equal(formatBytes_simple(-0.5), "-0.5 Bytes");
+});
 
 console.log("\nbase/format.js — convertUTCTimestampToLocalString\n");
 

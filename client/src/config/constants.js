@@ -135,6 +135,15 @@ export const CONST_FILE = Object.freeze({
     LOOKUP_SAMPLE_SMALL: 4096,
     LOOKUP_SAMPLE: 65536,
     MAX_FILE_SIZE: 1024 * 1024 * 128, // 128MB
+    // EPUB conversion is synchronous and runs on the main thread; capping at
+    // 128MB (same as TXT) would freeze the UI for seconds on large books. 50MB
+    // covers virtually all real-world EPUBs while bounding worst-case jank.
+    // If raised, also update the epubTooLarge notification text in variables.css.
+    MAX_EPUB_FILE_SIZE: 1024 * 1024 * 50, // 50MB
+    // Bump when EpubConverter output format changes in a way that invalidates
+    // cached conversions. Bookshelf entries saved with an older version are
+    // re-converted on open instead of reusing the stale cache.
+    EPUB_CONVERTER_VERSION: 1,
     SUPPORTED_FILE_EXT,
     EXT_REGEX: new RegExp(`(${SUPPORTED_FILE_EXT}|${SUPPORTED_EPUB_EXT}|${SUPPORTED_FONT_EXT.join("|")})$`, "i"),
     SUPPORTED_FILE_TYPE: "text/plain",

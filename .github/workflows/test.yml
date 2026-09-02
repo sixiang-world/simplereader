@@ -6,7 +6,6 @@ on:
       - main
       - dev
       - feature/**
-      - v2-design
       - refactor/**
   pull_request:
     branches:
@@ -35,8 +34,11 @@ jobs:
       - name: Setup pnpm via corepack
         run: corepack enable
 
+      - name: Lint
+        run: pnpm run lint
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
 
       - name: Build production bundle
         run: pnpm run build
