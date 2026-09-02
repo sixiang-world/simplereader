@@ -620,8 +620,7 @@ export class PaginationCalculator {
                 // lookup so we don't throw and abort pagination — which
                 // would otherwise leave the user with a single page
                 // containing the entire book.
-                const titleIdx = this.#allTitlesInd[start];
-                const title = titleIdx !== undefined ? this.#allTitles[titleIdx][0] : null;
+                const title = this.#getTitleAt(start);
                 this.#logger.log("Processing long chapter", {
                     title,
                     start_line: start,
@@ -634,8 +633,7 @@ export class PaginationCalculator {
         // Handle remaining short chapters, where start = breaks[i+1], end = this.#contentChunks.length
         if (this.#isLongChapter(breaks[breaks.length - 1], this.#contentChunks.length)) {
             const lastStart = breaks[breaks.length - 1];
-            const titleIdx = this.#allTitlesInd[lastStart];
-            const title = titleIdx !== undefined ? this.#allTitles[titleIdx][0] : null;
+            const title = this.#getTitleAt(lastStart);
             this.#logger.log("Processing long chapter", {
                 title,
                 start_line: lastStart,
@@ -658,6 +656,21 @@ export class PaginationCalculator {
         const maxLimit = this.#getMaxLimit();
 
         return contentLength > maxLimit;
+    }
+
+    /**
+     * @private
+     * @method #getTitleAt
+     * @param {number} line - The break start line to look up
+     * @returns {?string} The title at this line, or null when the line is not
+     *   a title break (e.g. the synthetic break at 0 when the first title is
+     *   at line 1). Returning null avoids throwing — which would otherwise
+     *   abort pagination and leave the user with a single page containing the
+     *   entire book.
+     */
+    #getTitleAt(line) {
+        const titleIdx = this.#allTitlesInd[line];
+        return titleIdx !== undefined ? this.#allTitles[titleIdx][0] : null;
     }
 
     /**
