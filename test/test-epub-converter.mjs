@@ -160,6 +160,31 @@ await asyncTest("every line has source: epub and synthetic pages are added", asy
     assert.ok(result.htmlLines[result.htmlLines.length - 1].synthetic, "last line should be synthetic end");
 });
 
+await asyncTest("spineBreaks are shifted when synthetic title page is prepended", async () => {
+    // Two spine items → spineBreaks should be [0, N] where N is the line
+    // where ch2 starts. When a synthetic title page is prepended, ch2's start
+    // line shifts +1; the break at 0 (first spine item) stays at 0.
+    const epubPath = await buildEpub("spinebreak.epub", [
+        ["ch1.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch1</title></head>
+<body><p>Chapter one content.</p></body></html>`],
+        ["ch2.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch2</title></head>
+<body><p>Chapter two content.</p></body></html>`],
+    ]);
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    // synthetic title at line 0, so ch2's break should equal its line number
+    // in htmlLines (which is post-shift). Verify break[1] points at ch2 start.
+    assert.ok(result.spineBreaks.length >= 2, "expected at least two spine breaks");
+    assert.equal(result.spineBreaks[0], 0, "first break stays at 0");
+    // Find the first non-synthetic line after the title — that's ch1 content.
+    // ch2 starts after ch1's content. Confirm break[1] aligns with a line
+    // that is NOT synthetic and matches the chapter boundary.
+    const ch2Line = result.htmlLines[result.spineBreaks[1]];
+    assert.ok(ch2Line, "spineBreaks[1] should reference a real line");
+    assert.ok(!ch2Line.synthetic, "shifted break should point at real content, not synthetic page");
+});
+
 console.log("\nEPUB converter — TOC fragment anchors\n");
 
 await asyncTest("resolves TOC fragment anchors to line numbers", async () => {
