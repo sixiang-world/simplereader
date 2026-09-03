@@ -205,6 +205,109 @@ test("figure with safe img + figcaption renders intact", () => {
     assert.ok(el.querySelector("img"), "safe figure img preserved");
 });
 
+// ── Regression tests for bugs found by independent testing ──
+
+async function buildEpubWithBody(bodyHtml, extraManifest = "", extraFiles = {}) {
+    const zip = new JSZip();
+    zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+    zip.file("META-INF/container.xml", `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`);
+    zip.file("OEBPS/content.opf", `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Reg Test</dc:title><dc:creator>Author</dc:creator><dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="c1" href="chap1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="img1" href="Images/pic1.png" media-type="image/png"/>
+    ${extraManifest}
+  </manifest>
+  <spine><itemref idref="c1"/></spine>
+</package>`);
+    zip.file("OEBPS/Images/pic1.png", pngBuffer);
+    for (const [name, buf] of Object.entries(extraFiles)) {
+        zip.file(`OEBPS/${name}`, buf);
+    }
+    zip.file("OEBPS/chap1.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>c1</title></head>
+<body>${bodyHtml}</body></html>`);
+    const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    const epubPath = path.join(tmpDir, `reg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.epub`);
+    fs.writeFileSync(epubPath, buffer);
+    return epubPath;
+}
+
+console.log("\nEPUB image rendering — regression tests\n");
+
+await test("Bug1: <li> containing an inline <img> preserves the image", async () => {
+    const epubPath = await buildEpubWithBody(
+        '<ul><li>Text <img src="Images/pic1.png" alt="li"/> more</li></ul>'
+    );
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const listBlock = result.htmlLines.find((l) => l.type === "list");
+    assert.ok(listBlock, "list block present");
+    assert.ok(listBlock.content.includes("<img"), "img tag preserved in list item");
+    assert.ok(listBlock.content.includes("data:image/png;base64,"), "img inlined as data URL");
+    assert.ok(listBlock.content.includes("Text") && listBlock.content.includes("more"), "text preserved around img");
+});
+
+await test("Bug2: <p><img/></p> (image-only paragraph) is not dropped", async () => {
+    const epubPath = await buildEpubWithBody(
+        '<p><img src="Images/pic1.png" alt="only"/></p>'
+    );
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const imgBlock = result.htmlLines.find((l) => l.elementType === "img" || (l.content && l.content.includes("data:image/png;base64,")));
+    assert.ok(imgBlock, "image-only paragraph should produce an image block, not be dropped");
+});
+
+await test("Bug3: <figure> with multiple <img> preserves all images", async () => {
+    const epubPath = await buildEpubWithBody(
+        '<figure><img src="Images/pic1.png" alt="first"/><img src="Images/pic1.png" alt="second"/><figcaption>Two</figcaption></figure>'
+    );
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const figureBlock = result.htmlLines.find((l) => l.content && l.content.includes("<figure>"));
+    assert.ok(figureBlock, "figure block present");
+    const imgCount = (figureBlock.content.match(/<img\b/g) || []).length;
+    assert.equal(imgCount, 2, `figure should contain 2 imgs, got ${imgCount}`);
+    assert.ok(figureBlock.content.includes('alt="first"') && figureBlock.content.includes('alt="second"'), "both imgs preserved with alt");
+});
+
+await test("Issue4: converter drops data:text/html src (defense-in-depth)", async () => {
+    const epubPath = await buildEpubWithBody(
+        '<p><img src="data:text/html;base64,PHNjcmlwdD4=" alt="bad"/></p>'
+    );
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const allContent = result.htmlLines.map((l) => l.content || "").join("");
+    assert.ok(!allContent.includes("data:text/html"), "data:text/html must not appear in output");
+    assert.ok(!allContent.includes("<img"), "non-image data URL img should be dropped");
+});
+
+await test("Issue5: paragraph with inline img has increased charCount for pagination", async () => {
+    const epubPath = await buildEpubWithBody(
+        '<p>Before <img src="Images/pic1.png" alt="mid"/> after.</p>'
+    );
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const para = result.htmlLines.find((l) => l.type === "paragraph" && l.content && l.content.includes("Before"));
+    assert.ok(para, "paragraph found");
+    // "Before  after." = 13 chars; inline img should add equivalent line weight
+    assert.ok(para.charCount > 13, `charCount (${para.charCount}) should exceed plain text length (13) due to inline img weight`);
+});
+
+await test("Issue6: extension-less image uses manifest media-type", async () => {
+    // Image file with no extension, but manifest declares image/png
+    const epubPath = await buildEpubWithBody(
+        '<p><img src="Images/noext" alt="noext"/></p>',
+        '<item id="img2" href="Images/noext" media-type="image/png"/>',
+        { "Images/noext": pngBuffer }
+    );
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const para = result.htmlLines.find((l) => l.type === "paragraph" && l.content && l.content.includes("<img"));
+    assert.ok(para, "paragraph with extension-less img found");
+    assert.ok(para.content.includes("data:image/png;base64,"), "extension-less image should be inlined using manifest media-type");
+});
+
 try {
     fs.rmSync(tmpDir, { recursive: true, force: true });
 } catch (_e) {

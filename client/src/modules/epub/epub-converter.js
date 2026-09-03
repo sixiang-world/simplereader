@@ -9,6 +9,7 @@
  */
 
 import { Logger } from "../../../../shared/utils/logger.js";
+import { CONST_PAGINATION } from "../../config/constants.js";
 
 /**
  * @class EpubConverter
@@ -469,8 +470,11 @@ export class EpubConverter {
                 if (!abs || registry[src]) continue;
                 const file = zip.file(abs);
                 if (!file) continue;
-                const mime = this.#guessImageMime(abs);
-                if (!mime) continue;
+                // Prefer the media-type declared in the OPF manifest
+                // (handles extension-less images); fall back to extension.
+                let mime = this.#lookupManifestMediaType(manifest, abs);
+                if (!mime) mime = this.#guessImageMime(abs);
+                if (!mime || !mime.startsWith("image/")) continue;
                 try {
                     const b64 = await file.async("base64");
                     registry[src] = `data:${mime};base64,${b64}`;
@@ -503,7 +507,7 @@ export class EpubConverter {
                 if (child.nodeType !== Node.ELEMENT_NODE) continue;
                 const childTag = child.tagName?.toLowerCase();
                 if (childTag === "img") {
-                    imgHtml = this.#renderInlineImage(child, imageRegistry) || "";
+                    imgHtml += this.#renderInlineImage(child, imageRegistry) || "";
                 } else if (childTag === "figcaption") {
                     captionHtml = this.#extractInlineHtml(child, imageRegistry);
                 }
@@ -526,7 +530,11 @@ export class EpubConverter {
     static #renderInlineImage(img, imageRegistry) {
         const src = img.getAttribute("src");
         let dataUrl = "";
-        if (src && /^(data:|blob:)/i.test(src)) {
+        if (src && /^data:image\//i.test(src)) {
+            // Defense-in-depth: only pass through image data: URLs.
+            // Non-image data: URLs (e.g. data:text/html) are dropped here;
+            // the sanitize layer also enforces this, but converter-level
+            // filtering protects any future path that might bypass sanitize.
             dataUrl = src;
         } else if (src && imageRegistry && imageRegistry[src]) {
             dataUrl = imageRegistry[src];
@@ -539,6 +547,26 @@ export class EpubConverter {
         if (title !== null) html += ` title="${this.#escapeHtml(title)}"`;
         html += ">";
         return html;
+    }
+
+    /**
+     * Look up an image's media-type from the OPF manifest by matching the
+     * zip-absolute path. Handles extension-less images that #guessImageMime
+     * cannot classify. Returns null when no manifest match is found.
+     * @param {Object} manifest - {id: {href, mediaType, ...}}
+     * @param {string} absPath - Zip-absolute path of the image
+     * @returns {string|null}
+     */
+    static #lookupManifestMediaType(manifest, absPath) {
+        if (!manifest || !absPath) return null;
+        const base = absPath.split("/").pop();
+        for (const item of Object.values(manifest)) {
+            if (!item || !item.href || !item.mediaType) continue;
+            if (item.href.split("/").pop() === base) {
+                return item.mediaType;
+            }
+        }
+        return null;
     }
 
     /**
@@ -717,8 +745,9 @@ export class EpubConverter {
                 continue;
             }
 
-            // Skip empty elements
-            if (!textContent && tag !== "br" && tag !== "hr") continue;
+            // Skip empty elements, but keep containers that hold images
+            // (e.g. <p><img/></p> has no textContent but must render).
+            if (!textContent && tag !== "br" && tag !== "hr" && !node.querySelector("img")) continue;
 
             // Skip non-content elements
             if (["script", "style", "svg"].includes(tag)) continue;
@@ -891,6 +920,17 @@ export class EpubConverter {
             }
         }
 
+        // Inline images inside paragraphs don't contribute to textContent,
+        // so pagination would under-count their visual space. Add an
+        // equivalent char count per inline image (≈ one line of text).
+        const inlineImgWeight = Math.max(1, Math.round(CONST_PAGINATION.MAX_CHARS / CONST_PAGINATION.MAX_LINES));
+        for (const el of elements) {
+            if (el.type === "paragraph" && el.content && el.content.includes("<img")) {
+                const imgCount = (el.content.match(/<img\b/g) || []).length;
+                el.charCount += imgCount * inlineImgWeight;
+            }
+        }
+
         return { elements, titles };
     }
 
@@ -1035,6 +1075,13 @@ export class EpubConverter {
      * @returns {string} HTML string
      */
     static #extractInlineHtml(node, imageRegistry = null) {
+        // Guard: if an <img> is passed directly (e.g. from #extractListHtml
+        // iterating li children, or #extractTableHtml on a cell containing
+        // only an img), render it inline. img is a void element with no
+        // childNodes, so without this guard the function returns empty.
+        if (node.nodeType === Node.ELEMENT_NODE && node.tagName?.toLowerCase() === "img") {
+            return this.#renderInlineImage(node, imageRegistry);
+        }
         const allowedTags = new Set(["em", "strong", "a", "b", "i", "u", "sub", "sup", "small", "mark", "span", "br", "img"]);
 
         let html = "";
