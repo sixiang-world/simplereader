@@ -137,6 +137,18 @@ export class TextProcessorDOM {
                 return [setLineNum(tempP), elementType];
             }
 
+            case "image": {
+                // Standalone EPUB image block (figure/img) rendered from
+                // already-sanitized inline HTML. sanitizeHtml only allows
+                // inlined data:image/*;base64 URLs, so this stays safe.
+                const tempFigure = document.createElement("div");
+                tempFigure.id = `line${lineNumber}`;
+                tempFigure.setAttribute("data-source", "epub");
+                tempFigure.className = "epub-image-block";
+                tempFigure.innerHTML = this.#sanitizeHtml(content);
+                return [setLineNum(tempFigure), elementType];
+            }
+
             case "list": {
                 const tempDiv = document.createElement("div");
                 tempDiv.id = `line${lineNumber}`;
@@ -235,6 +247,7 @@ export class TextProcessorDOM {
             "pre",
             "table", "thead", "tbody", "tfoot", "tr", "th", "td",
             "h1", "h2", "h3", "h4", "h5", "h6", "p",
+            "img", "figure", "figcaption",
         ]);
         // Parse the snippet in a detached <div>. This works reliably across
         // browsers and lightweight Node DOM implementations (e.g. linkedom) and
@@ -299,6 +312,28 @@ export class TextProcessorDOM {
                     }
                     return frag;
                 }
+            }
+            if (tag === "img") {
+                // Only render images that were inlined as data: URLs by the
+                // EPUB converter (privacy/anti-tracking: external http(s)
+                // and blob: URLs are deliberately not allowed here). Any
+                // other src (javascript:, remote URL, relative path) is
+                // dropped and the img unwrapped to its (empty) children.
+                const src = node.getAttribute("src");
+                const isSafeDataUrl = src != null && /^data:image\/(png|jpe?g|gif|webp|avif|bmp|svg\+xml);base64,[a-z0-9+/=]+$/i.test(src.trim());
+                if (!isSafeDataUrl) {
+                    const frag = document.createDocumentFragment();
+                    for (const child of node.childNodes) {
+                        const cleaned = cleanNode(child);
+                        if (cleaned) frag.appendChild(cleaned);
+                    }
+                    return frag;
+                }
+                el.setAttribute("src", src);
+                const alt = node.getAttribute("alt");
+                if (alt != null) el.setAttribute("alt", alt);
+                const title = node.getAttribute("title");
+                if (title != null) el.setAttribute("title", title);
             }
             if (tag === "th" || tag === "td") {
                 const colspan = node.getAttribute("colspan");

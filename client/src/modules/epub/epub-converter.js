@@ -443,6 +443,124 @@ export class EpubConverter {
      * @param {number} depth - Recursion guard
      * @returns {Object|null} Processable item or null
      */
+    /**
+     * Scan an XHTML file for <img> elements and extract referenced images
+     * from the zip as data: URLs. Returns a map of raw src → data URL.
+     * External (http/https) and already-inline images are skipped.
+     * @param {JSZip} zip
+     * @param {Object} manifest - EPUB manifest
+     * @param {string} filePath - Zip-absolute path of the XHTML spine file
+     * @param {string} xhtml - The XHTML source
+     * @returns {Promise<Object<string,string>>}
+     */
+    static async #buildImageRegistry(zip, manifest, filePath, xhtml) {
+        const registry = {};
+        try {
+            const doc = new DOMParser().parseFromString(xhtml, "application/xhtml+xml");
+            const imgs = doc.querySelectorAll("img");
+            for (const img of imgs) {
+                const src = img.getAttribute("src");
+                if (!src) continue;
+                // Already inline or external: leave external images out
+                // entirely (privacy / anti-tracking) and skip data:/blob:.
+                if (/^(data:|blob:)/i.test(src)) continue;
+                if (/^(https?:|\/\/)/i.test(src)) continue;
+                const abs = this.#resolveHref(src, filePath);
+                if (!abs || registry[src]) continue;
+                const file = zip.file(abs);
+                if (!file) continue;
+                const mime = this.#guessImageMime(abs);
+                if (!mime) continue;
+                try {
+                    const b64 = await file.async("base64");
+                    registry[src] = `data:${mime};base64,${b64}`;
+                } catch (e) {
+                    this.#logger.warn(`[epub] Failed to extract image: ${abs}`);
+                }
+            }
+        } catch (e) {
+            this.#logger.warn("[epub] buildImageRegistry failed:", e.message);
+        }
+        return registry;
+    }
+
+    /**
+     * Render a standalone <img> or <figure> as a block element with an
+     * inlined data: URL. Returns null when the image cannot be inlined.
+     * @param {Element} node - The <img> or <figure> element
+     * @param {Object|null} imageRegistry - src → data URL map
+     * @returns {string|null}
+     */
+    static #extractImageBlock(node, imageRegistry) {
+        const tag = node.tagName?.toLowerCase();
+        if (tag === "img") {
+            return this.#renderInlineImage(node, imageRegistry) || null;
+        }
+        if (tag === "figure") {
+            let imgHtml = "";
+            let captionHtml = "";
+            for (const child of node.childNodes) {
+                if (child.nodeType !== Node.ELEMENT_NODE) continue;
+                const childTag = child.tagName?.toLowerCase();
+                if (childTag === "img") {
+                    imgHtml = this.#renderInlineImage(child, imageRegistry) || "";
+                } else if (childTag === "figcaption") {
+                    captionHtml = this.#extractInlineHtml(child, imageRegistry);
+                }
+            }
+            if (!imgHtml) return null;
+            const caption = captionHtml ? `<figcaption>${captionHtml}</figcaption>` : "";
+            return `<figure>${imgHtml}${caption}</figure>`;
+        }
+        return null;
+    }
+
+    /**
+     * Render a single <img> with an inlined data: URL, keeping only safe
+     * attributes (src, alt, title). Returns empty string when the image
+     * cannot be inlined (so it is dropped rather than left broken).
+     * @param {Element} img
+     * @param {Object|null} imageRegistry
+     * @returns {string}
+     */
+    static #renderInlineImage(img, imageRegistry) {
+        const src = img.getAttribute("src");
+        let dataUrl = "";
+        if (src && /^(data:|blob:)/i.test(src)) {
+            dataUrl = src;
+        } else if (src && imageRegistry && imageRegistry[src]) {
+            dataUrl = imageRegistry[src];
+        }
+        if (!dataUrl) return "";
+        let html = `<img src="${this.#escapeHtml(dataUrl)}"`;
+        const alt = img.getAttribute("alt");
+        if (alt !== null) html += ` alt="${this.#escapeHtml(alt)}"`;
+        const title = img.getAttribute("title");
+        if (title !== null) html += ` title="${this.#escapeHtml(title)}"`;
+        html += ">";
+        return html;
+    }
+
+    /**
+     * Guess an image MIME type from a file path extension.
+     * @param {string} path
+     * @returns {string|null}
+     */
+    static #guessImageMime(path) {
+        const ext = path.split(".").pop()?.toLowerCase() || "";
+        const map = {
+            png: "image/png",
+            jpg: "image/jpeg",
+            jpeg: "image/jpeg",
+            gif: "image/gif",
+            webp: "image/webp",
+            avif: "image/avif",
+            bmp: "image/bmp",
+            svg: "image/svg+xml",
+        };
+        return map[ext] || null;
+    }
+
     static #resolveSpineItem(item, manifest, depth = 0) {
         if (!item) return null;
         if (depth > 10) return null; // Prevent circular fallback loops
@@ -503,7 +621,10 @@ export class EpubConverter {
 
             const xhtml = await file.async("text");
             const t1 = performance.now();
-            const result = this.#processXhtml(xhtml, lineNumber, effectivePath, fragmentToLine);
+            // Pre-resolve image resources referenced by this spine file so the
+            // (synchronous) HTML walker can inline them as data: URLs.
+            const imageRegistry = await this.#buildImageRegistry(zip, manifest, effectivePath, xhtml);
+            const result = this.#processXhtml(xhtml, lineNumber, effectivePath, fragmentToLine, imageRegistry);
             const elapsed = (performance.now() - t1).toFixed(1);
 
             htmlLines.push(...result.elements);
@@ -543,7 +664,7 @@ export class EpubConverter {
      * @param {Object} [fragmentToLine] - Map to populate with file#id → lineNumber
      * @returns {{elements: Array, titles: Array}}
      */
-    static #processXhtml(xhtml, lineOffset, filePath, fragmentToLine) {
+    static #processXhtml(xhtml, lineOffset, filePath, fragmentToLine, imageRegistry = null) {
         const elements = [];
         const titles = [];
 
@@ -571,17 +692,42 @@ export class EpubConverter {
             const tag = node.tagName?.toLowerCase();
             const textContent = node.textContent?.trim();
 
+            // Standalone images: emit an image block even though the
+            // element has no text content (must run before the empty
+            // element guard below).
+            if (tag === "img" || tag === "figure") {
+                const lineNumber = lineOffset + elements.length;
+                const content = this.#extractImageBlock(node, imageRegistry);
+                if (content) {
+                    elements.push({
+                        type: "image",
+                        tag,
+                        content,
+                        // Image block counts as one content line so pagination
+                        // allocates page space to it instead of skipping it.
+                        charCount: 1,
+                        lineNumber,
+                        elementType: "img",
+                        source: "epub",
+                    });
+                    if (fragmentToLine && filePath && node.id) {
+                        fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
+                    }
+                }
+                continue;
+            }
+
             // Skip empty elements
             if (!textContent && tag !== "br" && tag !== "hr") continue;
 
             // Skip non-content elements
-            if (["script", "style", "svg", "img", "figure", "figcaption"].includes(tag)) continue;
+            if (["script", "style", "svg"].includes(tag)) continue;
 
             const lineNumber = lineOffset + elements.length;
 
             // Headings
             if (["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag)) {
-                const content = this.#extractInlineHtml(node);
+                const content = this.#extractInlineHtml(node, imageRegistry);
                 const level = parseInt(tag[1]);
 
                 if (level === 1) {
@@ -617,7 +763,7 @@ export class EpubConverter {
 
             // Tables
             if (tag === "table") {
-                const content = this.#extractTableHtml(node);
+                const content = this.#extractTableHtml(node, imageRegistry);
                 if (content.trim()) {
                     elements.push({
                         type: "table",
@@ -637,7 +783,7 @@ export class EpubConverter {
 
             // Lists
             if (tag === "ul" || tag === "ol") {
-                const content = this.#extractListHtml(node);
+                const content = this.#extractListHtml(node, imageRegistry);
                 if (content.trim()) {
                     elements.push({
                         type: "list",
@@ -657,7 +803,7 @@ export class EpubConverter {
 
             // Blockquotes
             if (tag === "blockquote") {
-                const content = this.#extractInlineHtml(node);
+                const content = this.#extractInlineHtml(node, imageRegistry);
                 if (content.trim()) {
                     elements.push({
                         type: "quote",
@@ -677,7 +823,7 @@ export class EpubConverter {
 
             // Paragraphs and divs
             if (["p", "div", "li", "td", "th", "dt", "dd"].includes(tag)) {
-                const content = this.#extractInlineHtml(node);
+                const content = this.#extractInlineHtml(node, imageRegistry);
                 if (content.trim()) {
                     elements.push({
                         type: "paragraph",
@@ -729,7 +875,7 @@ export class EpubConverter {
 
             // Default: treat as paragraph
             if (textContent.trim()) {
-                const content = this.#extractInlineHtml(node);
+                const content = this.#extractInlineHtml(node, imageRegistry);
                 elements.push({
                     type: "paragraph",
                     tag: "p",
@@ -821,7 +967,7 @@ export class EpubConverter {
      * @param {Node} node
      * @returns {string} HTML string
      */
-    static #extractTableHtml(node) {
+    static #extractTableHtml(node, imageRegistry = null) {
         const serializeRow = (row) => {
             let html = "<tr>";
             for (const cell of row.querySelectorAll(":scope > th, :scope > td")) {
@@ -831,7 +977,7 @@ export class EpubConverter {
                 let attrs = "";
                 if (colspan && /^\d+$/.test(colspan)) attrs += ` colspan="${colspan}"`;
                 if (rowspan && /^\d+$/.test(rowspan)) attrs += ` rowspan="${rowspan}"`;
-                html += `<${cellTag}${attrs}>${this.#extractInlineHtml(cell)}</${cellTag}>`;
+                html += `<${cellTag}${attrs}>${this.#extractInlineHtml(cell, imageRegistry)}</${cellTag}>`;
             }
             html += "</tr>";
             return html;
@@ -858,7 +1004,7 @@ export class EpubConverter {
      * @param {Node} node
      * @returns {string} HTML string
      */
-    static #extractListHtml(node) {
+    static #extractListHtml(node, imageRegistry = null) {
         const tag = node.tagName?.toLowerCase();
         if (tag !== "ul" && tag !== "ol") return "";
 
@@ -871,9 +1017,9 @@ export class EpubConverter {
                 } else if (child.nodeType === Node.ELEMENT_NODE) {
                     const childTag = child.tagName?.toLowerCase();
                     if (childTag === "ul" || childTag === "ol") {
-                        html += this.#extractListHtml(child);
+                        html += this.#extractListHtml(child, imageRegistry);
                     } else {
-                        html += this.#extractInlineHtml(child);
+                        html += this.#extractInlineHtml(child, imageRegistry);
                     }
                 }
             }
@@ -888,8 +1034,8 @@ export class EpubConverter {
      * @param {Node} node
      * @returns {string} HTML string
      */
-    static #extractInlineHtml(node) {
-        const allowedTags = new Set(["em", "strong", "a", "b", "i", "u", "sub", "sup", "small", "mark", "span", "br"]);
+    static #extractInlineHtml(node, imageRegistry = null) {
+        const allowedTags = new Set(["em", "strong", "a", "b", "i", "u", "sub", "sup", "small", "mark", "span", "br", "img"]);
 
         let html = "";
         for (const child of node.childNodes) {
@@ -898,8 +1044,13 @@ export class EpubConverter {
             } else if (child.nodeType === Node.ELEMENT_NODE) {
                 const tag = child.tagName.toLowerCase();
 
-                // Skip images
-                if (tag === "img") continue;
+                // Inline image: substitute with an inlined data: URL when
+                // available, otherwise drop it (no broken-image placeholder).
+                if (tag === "img") {
+                    const imgHtml = this.#renderInlineImage(child, imageRegistry);
+                    if (imgHtml) html += imgHtml;
+                    continue;
+                }
 
                 // Handle <br>
                 if (tag === "br") {
@@ -910,10 +1061,10 @@ export class EpubConverter {
                 if (allowedTags.has(tag)) {
                     // Preserve the tag with safe attributes
                     const attrs = this.#getSafeAttributes(child);
-                    html += `<${tag}${attrs}>${this.#extractInlineHtml(child)}</${tag}>`;
+                    html += `<${tag}${attrs}>${this.#extractInlineHtml(child, imageRegistry)}</${tag}>`;
                 } else {
                     // For non-allowed tags, just extract their text content
-                    html += this.#extractInlineHtml(child);
+                    html += this.#extractInlineHtml(child, imageRegistry);
                 }
             }
         }
