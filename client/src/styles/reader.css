@@ -142,10 +142,31 @@ table[data-source="epub"] th {
 }
 .epub-image-block img {
     max-width: 100%;
+    max-height: 80vh;
+    width: auto;
     height: auto;
+    object-fit: contain;
     display: block;
     margin: 0 auto;
     border-radius: 2px;
+}
+
+.epub-image-missing {
+    display: inline-block;
+    border: 1px dashed var(--fontColor_secondary, #999);
+    padding: 2px 10px;
+    color: var(--fontColor_secondary, #999);
+    font-size: 0.85em;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.epub-image-block .epub-image-missing {
+    display: block;
+    text-align: center;
+    padding: 20px 10px;
+    margin: 0 auto;
+    max-width: 80%;
 }
 .epub-image-block figure {
     margin: 0;

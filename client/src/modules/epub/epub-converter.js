@@ -542,7 +542,14 @@ export class EpubConverter {
         } else if (src && imageRegistry && imageRegistry[src]) {
             dataUrl = imageRegistry[src];
         }
-        if (!dataUrl) return "";
+        if (!dataUrl) {
+            // Image could not be inlined (missing file, unsupported format,
+            // external URL blocked for privacy). Render a placeholder so the
+            // user knows an image was here instead of silently dropping it.
+            const altText = img.getAttribute("alt") || img.getAttribute("title") || "";
+            const label = altText ? `图片缺失：${altText}` : "图片缺失";
+            return `<span class="epub-image-missing">[${this.#escapeHtml(label)}]</span>`;
+        }
         let html = `<img src="${this.#escapeHtml(dataUrl)}"`;
         const alt = img.getAttribute("alt");
         if (alt !== null) html += ` alt="${this.#escapeHtml(alt)}"`;

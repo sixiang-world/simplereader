@@ -780,7 +780,20 @@ export class PaginationCalculator {
                 }
 
                 if (contentCount >= maxLimit) {
-                    const newBreakPoint = j + 1;
+                    let newBreakPoint = j + 1;
+                    // If the element that triggered the break is an image,
+                    // prefer breaking before it so the image starts at the
+                    // top of the next page instead of being squeezed at the
+                    // bottom of the current page (avoids visual overflow).
+                    if (this.#contentChunks[j]?.elementType === "img") {
+                        const candidate = j;
+                        if (
+                            this.#isValidBreakPoint(lastBreakPoint, candidate) &&
+                            !this.#wouldCreateShortNextPage(candidate, end)
+                        ) {
+                            newBreakPoint = candidate;
+                        }
+                    }
                     if (
                         !this.#wouldCreateShortNextPage(newBreakPoint, end) &&
                         this.#isValidBreakPoint(lastBreakPoint, newBreakPoint)
@@ -813,13 +826,26 @@ export class PaginationCalculator {
                     nextPos++;
                 }
 
+                // If the last element of this page is an image, prefer
+                // breaking before it so the image starts at the top of the
+                // next page instead of being squeezed at the page bottom.
+                let finalBreak = bestPos;
+                if (
+                    bestPos > currentPos + 1 &&
+                    this.#contentChunks[bestPos - 1]?.elementType === "img"
+                ) {
+                    const candidate = bestPos - 1;
+                    if (this.#getContentLength(currentPos, candidate) >= minLimit) {
+                        finalBreak = candidate;
+                    }
+                }
                 // If the found position creates a page length greater than minLimit, add a break point
-                const pageLength = this.#getContentLength(currentPos, bestPos);
-                if (pageLength >= minLimit && bestPos < end) {
-                    this.#addBreakPoint(bestPos);
+                const pageLength = this.#getContentLength(currentPos, finalBreak);
+                if (pageLength >= minLimit && finalBreak < end) {
+                    this.#addBreakPoint(finalBreak);
                 }
 
-                currentPos = bestPos;
+                currentPos = finalBreak;
             }
         }
     }
