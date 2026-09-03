@@ -1,6 +1,6 @@
 # EPUB 图片还原开发方案（任务 TODO + 实现细节）
 
-> **文档状态**：Phase 1 已完成并合入 dev；Phase 2/3/4 待启动
+> **文档状态**：Phase 1+2 已完成并合入 dev；Phase 3/4 待启动
 > **创建日期**：2026-09-03
 > **最后更新**：2026-09-04（Phase 1 完成，含两轮独立测试与代码审查）
 > **基线**：`dev` @ `e1b79f9`（v2.2.0）
@@ -79,7 +79,7 @@ EPUB zip → 预构建 imageRegistry (src→dataURL) → 同步 walker 内联 �
 |------|------|
 | 独立图片块 | charCount=25（等效一行），行计数模式 `charCount>0` 自然计 1 行 |
 | 行内小图 | 段落 charCount 追加 `imgCount × 25` |
-| 断页 | 暂未做"图片前优先断页"优化（T6，Phase 2） |
+| 断页 | ✅ 图片触发断页时断点前移到图片前（T6，Phase 2 已实现） |
 
 ---
 
@@ -117,22 +117,24 @@ EPUB zip → 预构建 imageRegistry (src→dataURL) → 同步 walker 内联 �
   - `EPUB_CONVERTER_VERSION: 1 → 2`
   - bookshelf.js 版本比对逻辑已验证，旧缓存自动触发重转
 
-### Phase 2：分页精确 + 健壮性（P1）⏳ 待启动
+### Phase 2：分页精确 + 健壮性（P1）✅ 已完成（commit 593c8f4）
 
-- [ ] **T6. 图片分页精确化**
-  - 图片块不拦腰截断：断页算法识别 elementType="img"，把断点移到图片前
-  - 超大图处理：CSS 已强制 max-width:100%，需验证实际渲染
-  - 流式阅读（flow-reader）与分页模式（reader）双路径验证
+- [x] **T6. 图片分页精确化**
+  - ✅ 图片块不拦腰截断：线性搜索 + jump 搜索两分支均在图片触发断页时将断点前移到图片之前（pagination-calculator.js）
+  - ✅ 超大图处理：CSS 增加 max-height:80vh + object-fit:contain + width:auto
+  - ✅ 单元测试验证断点精确落在图片索引处
 
-- [ ] **T7. 资源缺失容错**
-  - 当前行为：图片缺失/无法内联时静默丢弃（无占位）
-  - 优化：降级为 alt 文字 + 虚线框占位，不报错不崩版
-  - 超大图片（>2MB base64）：评估阈值与 blob URL 方案
+- [x] **T7. 资源缺失容错**
+  - ✅ 缺失图片降级为 `<span class="epub-image-missing">[图片缺失：alt]</span>` 虚线框占位（epub-converter.js #renderInlineImage）
+  - ✅ 覆盖独立图、段落内嵌图、figure 图三种场景
+  - ✅ sanitize 白名单增加 epub-image-missing class
+  - ⏳ 超大图片（>2MB base64）blob URL 方案：后续迭代评估（当前 globalCache 去重已缓解体积膨胀）
 
-- [ ] **T8. 测试补充（部分已完成）**
-  - ✅ `test/test-epub-images.mjs`：19 个用例（转换内联 3 + sanitize 安全 5 + 回归 6 + 审查回归 5）
-  - ⏳ 分页图片不截断用例（待 T6 实现后补充）
-  - ⏳ 真实浏览器端到端验证（SVG 沙箱、超大图内存、IndexedDB 上限）
+- [x] **T8. 测试补充**
+  - ✅ `test/test-epub-images.mjs`：25 个用例（Phase1 19 + Phase2 6）
+  - ✅ 分页图片不截断用例（断点精确 = 图片索引）
+  - ✅ 缺失图片占位 3 场景 + sanitize class + 正常图无回归
+  - ✅ 真实浏览器端到端验证（缺失占位虚线框渲染、控制台 0 错误）
 
 ### Phase 3：样式保真 + 脚注还原（P2）⏳ 待启动
 
@@ -238,7 +240,7 @@ if (tag === "img") {
 | T2S 不转换 figcaption/alt 繁体字 | image 块被整体跳过，避免 base64 处理浪费；繁体字保留 | 低（可后续仅提取文本转换） |
 | 搜索不匹配 alt/figcaption 文本 | image 块被整体跳过，避免 base64 误报 | 低（可后续建非 base64 文本索引） |
 | 图片前不断页优化 | 图片可能跨页截断 | P1（T6） |
-| 缺失图片无占位 | 静默丢弃 | P1（T7） |
+| 缺失图片无占位 | 虚线框 + alt 占位（T7） | ✅ 已实现 |
 | 内联 SVG 元素不支持 | 仅支持 `<img src="*.svg">` 文件引用 | P3（T12） |
 | CSS background-image 不支持 | 仅 `<img>` 标签图片 | 低（设计范围外） |
 
@@ -250,7 +252,7 @@ if (tag === "img") {
 |------|------|------|
 | 大图 EPUB 内存/体积膨胀 | data: 内联（Phase1）→ 超限转 blob（Phase 2/3） | 已缓解（globalCache 去重） |
 | SVG 携带脚本的 XSS | `<img>` 中 SVG 浏览器强制沙箱；sanitize 正则严格 | 已解决 |
-| 图片跨页截断 | 分页断点优先图片前（T6） | 待实现 |
+| 图片跨页截断 | 分页断点优先图片前（T6） | ✅ 已实现 |
 | 分页计算器回归 | 补测试；全量 25 测试文件通过 | 已验证 |
 | 书架缓存读到旧格式 | EPUB_CONVERTER_VERSION bump 自动失效 | 已解决 |
 | 扩展环境 localStorage 限制 | 图片 data URL 存在 chunks（IndexedDB），无冲突 | 已验证 |
@@ -268,7 +270,7 @@ if (tag === "img") {
 - [x] 列表项/段落/figure/嵌套 figure/picture 中图片均不丢失
 - [x] T2S 不破坏图片块 base64
 - [x] 搜索不误命中 base64
-- [ ] 图片不跨页截断（T6，待实现）
-- [ ] 缺失图片有占位提示（T7，待实现）
+- [x] 图片不跨页截断（T6，已实现）
+- [x] 缺失图片有占位提示（T7，已实现）
 - [ ] 中英文界面验证
 - [ ] 真实浏览器端到端验证（大图内存、IndexedDB 上限）
