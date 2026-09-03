@@ -347,6 +347,7 @@ export class TextProcessorDOM {
                 // classes cannot hijack reader CSS (e.g. "dropCap", "author").
                 const SAFE_CLASSES = new Set([
                     "dropCap", "first", "noIndent", "author", "end-page", "synthetic-page", "title",
+                    "epub-image-missing",
                 ]);
                 const filtered = cls.split(/\s+/).filter((c) => SAFE_CLASSES.has(c)).join(" ");
                 if (filtered) el.setAttribute("class", filtered);

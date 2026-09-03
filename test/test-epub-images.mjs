@@ -47,6 +47,7 @@ globalThis.getComputedStyle = () => ({ getPropertyValue: () => "", setProperty: 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EpubConverter = (await import("../client/src/modules/epub/epub-converter.js")).EpubConverter;
 const TextProcessorDOM = (await import("../client/src/modules/text/text-processor-dom.js")).TextProcessorDOM;
+const PaginationCalculator = (await import("../shared/core/text/pagination-calculator.js")).PaginationCalculator;
 
 let passed = 0;
 let failed = 0;
@@ -373,6 +374,71 @@ await test("Review-Issue6: image block charCount equals equivalent line weight",
     assert.equal(imgBlock.charCount, 25, `image block charCount should be 25 (equivalent line weight), got ${imgBlock.charCount}`);
     assert.ok(imgBlock.charCount > 1, "charCount must not be the old placeholder value 1");
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 2: Pagination precision + missing image fallback
+// ═══════════════════════════════════════════════════════════════
+
+await test("Phase2: image triggering page break is shifted to next page", async () => {
+    const chunks = [{ type: "title", content: "Ch1", charCount: 0, lineNumber: 0, elementType: "h1" }];
+    for (let i = 1; i <= 104; i++) {
+        chunks.push({ type: "paragraph", content: "x".repeat(24), charCount: 24, lineNumber: i, elementType: "p" });
+    }
+    chunks.push({ type: "image", content: "<img>", charCount: 25, lineNumber: 105, elementType: "img" });
+    for (let i = 0; i < 30; i++) {
+        chunks.push({ type: "paragraph", content: "y".repeat(24), charCount: 24, lineNumber: 106 + i, elementType: "p" });
+    }
+    const config = { IS_EASTERN_LAN: true, BOOK_AND_AUTHOR: "", PAGE_BREAK_ON_TITLE: true, COMPLETE_BOOK: true, MIN_LINES: 15, MAX_LINES: 100, MIN_CHARS: 500, MAX_CHARS: 2500 };
+    const calc = new PaginationCalculator(chunks, [["Ch1", 0]], config);
+    const breaks = Array.from(calc.calculate());
+    const contentBreaks = breaks.filter(b => b > 0);
+    assert.ok(contentBreaks.length >= 1, "should have a content break");
+    assert.equal(contentBreaks[0], 105, `break must be BEFORE image at 105, got ${contentBreaks[0]}`);
+});
+
+await test("Phase2: missing standalone image renders placeholder", async () => {
+    const epubPath = await buildEpubWithBody('<img src="Images/nope.png" alt="缺失图"/>');
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const imgBlock = result.htmlLines.find((l) => l.type === "image");
+    assert.ok(imgBlock, "image block should exist with placeholder");
+    assert.ok(imgBlock.content.includes("epub-image-missing"), "placeholder class present");
+    assert.ok(imgBlock.content.includes("缺失图"), "alt text in placeholder");
+});
+
+await test("Phase2: missing inline image in paragraph renders placeholder", async () => {
+    const epubPath = await buildEpubWithBody('<p>Before <img src="Images/nope.png" alt="内嵌缺"/> after.</p>');
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const para = result.htmlLines.find((l) => l.type === "paragraph" && l.content.includes("Before"));
+    assert.ok(para, "paragraph found");
+    assert.ok(para.content.includes("epub-image-missing"), "inline placeholder present");
+    assert.ok(para.content.includes("Before") && para.content.includes("after"), "text preserved");
+});
+
+await test("Phase2: missing figure image keeps placeholder + figcaption", async () => {
+    const epubPath = await buildEpubWithBody('<figure><img src="Images/nope.png"/><figcaption>caption文字</figcaption></figure>');
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const imgBlock = result.htmlLines.find((l) => l.type === "image");
+    assert.ok(imgBlock, "figure image block exists");
+    assert.ok(imgBlock.content.includes("epub-image-missing"), "placeholder present");
+    assert.ok(imgBlock.content.includes("caption文字"), "figcaption preserved");
+});
+
+await test("Phase2: sanitize allows epub-image-missing class", async () => {
+    const html = '<p>A <span class="epub-image-missing">[图片缺失]</span> B</p>';
+    const res = TextProcessorDOM.createFromStructure({ type: "paragraph", content: html, lineNumber: 1, source: "epub" });
+    const el = res[0] || res;
+    const span = el.querySelector && el.querySelector(".epub-image-missing");
+    assert.ok(span, "placeholder span survives sanitize");
+});
+
+await test("Phase2: valid image still inlines correctly (no regression)", async () => {
+    const epubPath = await buildEpubWithBody('<img src="Images/pic1.png" alt="ok"/>');
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const imgBlock = result.htmlLines.find((l) => l.type === "image");
+    assert.ok(imgBlock && imgBlock.content.includes("data:image/png;base64,"), "valid image inlined");
+    assert.ok(!imgBlock.content.includes("epub-image-missing"), "valid image no placeholder");
+});
+
 try {
     fs.rmSync(tmpDir, { recursive: true, force: true });
 } catch (_e) {
