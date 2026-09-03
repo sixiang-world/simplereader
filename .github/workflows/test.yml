@@ -25,20 +25,25 @@ jobs:
         with:
           node-version: "22"
 
-      # (v2 refactor) The project now ships a package.json with a `test`
-      # script that runs ALL test suites in sequence (22 test files under
-      # test/, covering T2S, presets, pre-pagination, hooks, config sync,
-      # worker resolution, CSS/i18n completeness, build integration, etc.).
+      # The project ships a package.json with a `test` script that runs ALL
+      # test suites in sequence (25 test files under test/, covering T2S,
+      # presets, pre-pagination, hooks, config sync, worker resolution,
+      # CSS/i18n completeness, EPUB image inlining, build integration, etc.).
       # The `build` step below is REQUIRED: test-build-integration.mjs
       # asserts that dist/ exists and contains the production artifacts.
       - name: Setup pnpm via corepack
         run: corepack enable
 
+      # Install MUST come before lint/typecheck/build/test — none of those
+      # tools exist in node_modules until dependencies are installed.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Lint
         run: pnpm run lint
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm run typecheck
 
       - name: Build production bundle
         run: pnpm run build
