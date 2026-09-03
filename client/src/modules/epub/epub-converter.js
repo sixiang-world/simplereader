@@ -438,13 +438,6 @@ export class EpubConverter {
      * @returns {Promise<{htmlLines: Array, titles: Array, spineBreaks: Array, fileToLine: Object}>}
      */
     /**
-     * Resolve a spine manifest item to a processable HTML/XML item using OPF fallback chain.
-     * @param {Object} item - Spine manifest item
-     * @param {Object} manifest - Full manifest
-     * @param {number} depth - Recursion guard
-     * @returns {Object|null} Processable item or null
-     */
-    /**
      * Scan an XHTML file for <img> elements and extract referenced images
      * from the zip as data: URLs. Returns a map of raw src → data URL.
      * External (http/https) and already-inline images are skipped.
@@ -454,7 +447,7 @@ export class EpubConverter {
      * @param {string} xhtml - The XHTML source
      * @returns {Promise<Object<string,string>>}
      */
-    static async #buildImageRegistry(zip, manifest, filePath, xhtml) {
+    static async #buildImageRegistry(zip, manifest, opfPath, filePath, xhtml, globalCache = null) {
         const registry = {};
         try {
             const doc = new DOMParser().parseFromString(xhtml, "application/xhtml+xml");
@@ -468,16 +461,24 @@ export class EpubConverter {
                 if (/^(https?:|\/\/)/i.test(src)) continue;
                 const abs = this.#resolveHref(src, filePath);
                 if (!abs || registry[src]) continue;
+                // Cross-spine cache: avoid re-encoding the same image
+                // (base64 is expensive and bloats storage when duplicated).
+                if (globalCache && globalCache[abs]) {
+                    registry[src] = globalCache[abs];
+                    continue;
+                }
                 const file = zip.file(abs);
                 if (!file) continue;
                 // Prefer the media-type declared in the OPF manifest
                 // (handles extension-less images); fall back to extension.
-                let mime = this.#lookupManifestMediaType(manifest, abs);
+                let mime = this.#lookupManifestMediaType(manifest, opfPath, abs);
                 if (!mime) mime = this.#guessImageMime(abs);
                 if (!mime || !mime.startsWith("image/")) continue;
                 try {
                     const b64 = await file.async("base64");
-                    registry[src] = `data:${mime};base64,${b64}`;
+                    const dataUrl = `data:${mime};base64,${b64}`;
+                    registry[src] = dataUrl;
+                    if (globalCache) globalCache[abs] = dataUrl;
                 } catch (e) {
                     this.#logger.warn(`[epub] Failed to extract image: ${abs}`);
                 }
@@ -503,12 +504,14 @@ export class EpubConverter {
         if (tag === "figure") {
             let imgHtml = "";
             let captionHtml = "";
+            // Use querySelectorAll to capture imgs at any nesting depth
+            // (e.g. <figure><figure><img/></figure></figure>).
+            for (const img of node.querySelectorAll("img")) {
+                imgHtml += this.#renderInlineImage(img, imageRegistry) || "";
+            }
             for (const child of node.childNodes) {
                 if (child.nodeType !== Node.ELEMENT_NODE) continue;
-                const childTag = child.tagName?.toLowerCase();
-                if (childTag === "img") {
-                    imgHtml += this.#renderInlineImage(child, imageRegistry) || "";
-                } else if (childTag === "figcaption") {
+                if (child.tagName?.toLowerCase() === "figcaption") {
                     captionHtml = this.#extractInlineHtml(child, imageRegistry);
                 }
             }
@@ -557,12 +560,15 @@ export class EpubConverter {
      * @param {string} absPath - Zip-absolute path of the image
      * @returns {string|null}
      */
-    static #lookupManifestMediaType(manifest, absPath) {
+    static #lookupManifestMediaType(manifest, opfPath, absPath) {
         if (!manifest || !absPath) return null;
-        const base = absPath.split("/").pop();
+        // Resolve each manifest item's href to a zip-absolute path and
+        // match exactly — basename-only matching misassigns MIME types
+        // when the same filename exists in different directories.
         for (const item of Object.values(manifest)) {
             if (!item || !item.href || !item.mediaType) continue;
-            if (item.href.split("/").pop() === base) {
+            const resolved = this.#resolveHref(item.href, opfPath);
+            if (resolved === absPath) {
                 return item.mediaType;
             }
         }
@@ -589,6 +595,13 @@ export class EpubConverter {
         return map[ext] || null;
     }
 
+    /**
+     * Resolve a spine manifest item to a processable HTML/XML item using OPF fallback chain.
+     * @param {Object} item - Spine manifest item
+     * @param {Object} manifest - Full manifest
+     * @param {number} depth - Recursion guard
+     * @returns {Object|null} Processable item or null
+     */
     static #resolveSpineItem(item, manifest, depth = 0) {
         if (!item) return null;
         if (depth > 10) return null; // Prevent circular fallback loops
@@ -605,6 +618,9 @@ export class EpubConverter {
     static async #processSpine(zip, spine, manifest, opfPath, onItemProgress) {
         const htmlLines = [];
         const titles = [];
+        // Cross-spine image cache: absPath → data URL. Prevents repeated
+        // base64 encoding of the same image referenced by multiple chapters.
+        const globalImageCache = {};
         const spineBreaks = [0]; // First page always starts at 0
         const fileToLine = {};   // {filePath: startLineNumber}
         const fragmentToLine = {}; // {filePath#id: lineNumber}
@@ -651,7 +667,9 @@ export class EpubConverter {
             const t1 = performance.now();
             // Pre-resolve image resources referenced by this spine file so the
             // (synchronous) HTML walker can inline them as data: URLs.
-            const imageRegistry = await this.#buildImageRegistry(zip, manifest, effectivePath, xhtml);
+            // globalImageCache is shared across spine items so the same image
+            // referenced by multiple chapters is base64-encoded only once.
+            const imageRegistry = await this.#buildImageRegistry(zip, manifest, opfPath, effectivePath, xhtml, globalImageCache);
             const result = this.#processXhtml(xhtml, lineNumber, effectivePath, fragmentToLine, imageRegistry);
             const elapsed = (performance.now() - t1).toFixed(1);
 
@@ -731,9 +749,11 @@ export class EpubConverter {
                         type: "image",
                         tag,
                         content,
-                        // Image block counts as one content line so pagination
-                        // allocates page space to it instead of skipping it.
-                        charCount: 1,
+                        // Image block consumes page space roughly equal to a
+                        // full text line. Storing the equivalent charCount here
+                        // keeps the data model self-consistent (pagination no
+                        // longer needs an elementType-specific override).
+                        charCount: Math.max(1, Math.round(CONST_PAGINATION.MAX_CHARS / CONST_PAGINATION.MAX_LINES)),
                         lineNumber,
                         elementType: "img",
                         source: "epub",
@@ -923,10 +943,13 @@ export class EpubConverter {
         // Inline images inside paragraphs don't contribute to textContent,
         // so pagination would under-count their visual space. Add an
         // equivalent char count per inline image (≈ one line of text).
+        // Regex scanning is safe here: text content was HTML-escaped by
+        // #extractInlineHtml (< → &lt;), so literal '<img' only comes from
+        // actual inlined image tags, never from user text.
         const inlineImgWeight = Math.max(1, Math.round(CONST_PAGINATION.MAX_CHARS / CONST_PAGINATION.MAX_LINES));
         for (const el of elements) {
             if (el.type === "paragraph" && el.content && el.content.includes("<img")) {
-                const imgCount = (el.content.match(/<img\b/g) || []).length;
+                const imgCount = (el.content.match(/<img\s[^>]*>/g) || []).length;
                 el.charCount += imgCount * inlineImgWeight;
             }
         }
@@ -986,7 +1009,7 @@ export class EpubConverter {
             // inner block structure instead of being flattened to one paragraph.
             // If recursion yields nothing (e.g. div with only inline text), fall
             // back to pushing the div itself so its content is still rendered.
-            if (["section", "article", "header", "footer", "nav", "aside", "div"].includes(tag)) {
+            if (["section", "article", "header", "footer", "nav", "aside", "div", "picture"].includes(tag)) {
                 const subItems = this.#createBlockWalker(child);
                 if (subItems.length > 0) {
                     result.push(...subItems);
@@ -1082,7 +1105,7 @@ export class EpubConverter {
         if (node.nodeType === Node.ELEMENT_NODE && node.tagName?.toLowerCase() === "img") {
             return this.#renderInlineImage(node, imageRegistry);
         }
-        const allowedTags = new Set(["em", "strong", "a", "b", "i", "u", "sub", "sup", "small", "mark", "span", "br", "img"]);
+        const allowedTags = new Set(["em", "strong", "a", "b", "i", "u", "sub", "sup", "small", "mark", "span", "br"]);
 
         let html = "";
         for (const child of node.childNodes) {

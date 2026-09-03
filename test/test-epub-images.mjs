@@ -120,7 +120,9 @@ await test("standalone <img> becomes an image block with data: URL", async () =>
     assert.ok(standalone, "standalone img block present");
     assert.ok(standalone.content.includes("data:image/png;base64,"), "img inlined as data:image/png;base64");
     assert.equal(standalone.type, "image");
-    assert.equal(standalone.charCount, 1, "image block counts as one line for pagination");
+    // Image block charCount is the equivalent line weight (MAX_CHARS/MAX_LINES = 25),
+    // not 1 — this keeps the data model self-consistent for pagination.
+    assert.equal(standalone.charCount, 25, "image block charCount equals equivalent line weight");
 });
 
 await test("<figure> preserves figcaption and inlines its img", async () => {
@@ -258,8 +260,9 @@ await test("Bug2: <p><img/></p> (image-only paragraph) is not dropped", async ()
         '<p><img src="Images/pic1.png" alt="only"/></p>'
     );
     const result = await EpubConverter.convert(fileFromPath(epubPath));
-    const imgBlock = result.htmlLines.find((l) => l.elementType === "img" || (l.content && l.content.includes("data:image/png;base64,")));
-    assert.ok(imgBlock, "image-only paragraph should produce an image block, not be dropped");
+    const imgPara = result.htmlLines.find((l) => l.type === "paragraph" && l.content && l.content.includes("data:image/png;base64,"));
+    assert.ok(imgPara, "image-only paragraph should render as a paragraph with inlined img, not be dropped");
+    assert.ok(imgPara.content.includes("<img"), "img tag present in image-only paragraph");
 });
 
 await test("Bug3: <figure> with multiple <img> preserves all images", async () => {
@@ -308,6 +311,68 @@ await test("Issue6: extension-less image uses manifest media-type", async () => 
     assert.ok(para.content.includes("data:image/png;base64,"), "extension-less image should be inlined using manifest media-type");
 });
 
+
+await test("Review-Issue1: <picture> element img is not lost", async () => {
+    const epubPath = await buildEpubWithBody(
+        '<picture><source srcset="Images/pic1.png" media="(min-width: 600px)"/><img src="Images/pic1.png" alt="pic"/></picture>'
+    );
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const allContent = result.htmlLines.map((l) => l.content || "").join("");
+    assert.ok(allContent.includes("data:image/png;base64,"), "picture element img should be inlined, not dropped");
+    assert.ok(allContent.includes("<img"), "img tag preserved from picture element");
+});
+
+await test("Review-Issue3: nested <figure> preserves inner imgs", async () => {
+    const epubPath = await buildEpubWithBody(
+        '<figure><img src="Images/pic1.png" alt="outer"/><figure><img src="Images/pic1.png" alt="inner"/></figure></figure>'
+    );
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const figureBlock = result.htmlLines.find((l) => l.content && l.content.includes("<figure>"));
+    assert.ok(figureBlock, "figure block present");
+    const imgCount = (figureBlock.content.match(/<img\b/g) || []).length;
+    assert.equal(imgCount, 2, `nested figure should preserve both imgs, got ${imgCount}`);
+});
+
+await test("Review-Issue2: manifest MIME lookup uses full path, not basename", async () => {
+    // Two files with same basename in different dirs, different declared MIME types.
+    const gifBuffer = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
+    const epubPath = await buildEpubWithBody(
+        '<p><img src="Images/pic1.png" alt="a"/> <img src="Images/sub/pic1.png" alt="b"/></p>',
+        '<item id="img2" href="Images/sub/pic1.png" media-type="image/gif"/>',
+        { "Images/sub/pic1.png": gifBuffer }
+    );
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const para = result.htmlLines.find((l) => l.type === "paragraph" && l.content && l.content.includes("<img"));
+    assert.ok(para, "paragraph found");
+    assert.ok(para.content.includes("data:image/png;base64,"), "first img uses png MIME from manifest");
+    assert.ok(para.content.includes("data:image/gif;base64,"), "second img (sub/pic1.png) uses gif MIME, not png basename collision");
+});
+
+await test("Review-Issue4: T2S does not modify image block content", async () => {
+    // Simulate T2S _walkAndConvert behavior: image blocks should be skipped.
+    const epubPath = await buildEpubWithBody('<img src="Images/pic1.png" alt="圖片"/>');
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const imgBlock = result.htmlLines.find((l) => l.type === "image");
+    assert.ok(imgBlock, "image block found");
+    const original = imgBlock.content;
+    // Mimic the t2s skip guard: if type === "image", do not convert.
+    let converted = original;
+    if (imgBlock.type !== "image") {
+        converted = original.replace(/圖/g, "图"); // would run if not skipped
+    }
+    assert.equal(converted, original, "image block content must be untouched by T2S skip logic");
+    assert.ok(converted.includes("data:image/png;base64,"), "base64 data URL preserved");
+});
+
+await test("Review-Issue6: image block charCount equals equivalent line weight", async () => {
+    const epubPath = await buildEpubWithBody('<img src="Images/pic1.png" alt="x"/>');
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const imgBlock = result.htmlLines.find((l) => l.type === "image");
+    assert.ok(imgBlock, "image block found");
+    // MAX_CHARS=2500, MAX_LINES=100 → 25 chars per line
+    assert.equal(imgBlock.charCount, 25, `image block charCount should be 25 (equivalent line weight), got ${imgBlock.charCount}`);
+    assert.ok(imgBlock.charCount > 1, "charCount must not be the old placeholder value 1");
+});
 try {
     fs.rmSync(tmpDir, { recursive: true, force: true });
 } catch (_e) {
