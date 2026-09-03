@@ -209,6 +209,10 @@ async function _walkAndConvert(bookData, convertFn) {
             if (typeof line === "string") {
                 bookData.processedLines[i] = await convertFn(line);
             } else if (line && typeof line === "object") {
+                // Image blocks contain base64 data URLs and HTML structure;
+                // converting them is unnecessary (ASCII base64 is unaffected)
+                // and wastes CPU. Skip entirely.
+                if (line.type === "image") continue;
                 if (typeof line.content === "string") {
                     line.content = await convertFn(line.content);
                 }

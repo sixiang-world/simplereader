@@ -153,6 +153,9 @@ function doSearch(down = true) {
         // Forward search from searchStartLine
         for (let j = searchStartLine + 1; j < totalLines; j++) {
             const chunk = chunks[j];
+            // Skip image blocks: their content is base64 data URLs,
+            // which would produce false-positive search matches.
+            if (chunk && typeof chunk === "object" && chunk.type === "image") continue;
             const text = typeof chunk === "object" ? chunk.content : chunk;
             if (text && regex.test(text)) {
                 regex.lastIndex = 0; // Reset regex state
@@ -167,7 +170,10 @@ function doSearch(down = true) {
         if (!found) {
             for (let j = 0; j <= searchStartLine; j++) {
                 const chunk = chunks[j];
-                const text = typeof chunk === "object" ? chunk.content : chunk;
+                // Skip image blocks: their content is base64 data URLs,
+            // which would produce false-positive search matches.
+            if (chunk && typeof chunk === "object" && chunk.type === "image") continue;
+            const text = typeof chunk === "object" ? chunk.content : chunk;
                 if (text && regex.test(text)) {
                     regex.lastIndex = 0;
                     navigateToLine(j);
@@ -182,6 +188,9 @@ function doSearch(down = true) {
         // Backward search from searchStartLine
         for (let j = searchStartLine - 1; j >= 0; j--) {
             const chunk = chunks[j];
+            // Skip image blocks: their content is base64 data URLs,
+            // which would produce false-positive search matches.
+            if (chunk && typeof chunk === "object" && chunk.type === "image") continue;
             const text = typeof chunk === "object" ? chunk.content : chunk;
             if (text && regex.test(text)) {
                 regex.lastIndex = 0;
@@ -196,7 +205,10 @@ function doSearch(down = true) {
         if (!found) {
             for (let j = totalLines - 1; j >= searchStartLine; j--) {
                 const chunk = chunks[j];
-                const text = typeof chunk === "object" ? chunk.content : chunk;
+                // Skip image blocks: their content is base64 data URLs,
+            // which would produce false-positive search matches.
+            if (chunk && typeof chunk === "object" && chunk.type === "image") continue;
+            const text = typeof chunk === "object" ? chunk.content : chunk;
                 if (text && regex.test(text)) {
                     regex.lastIndex = 0;
                     navigateToLine(j);
