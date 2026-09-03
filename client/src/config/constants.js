@@ -143,7 +143,10 @@ export const CONST_FILE = Object.freeze({
     // Bump when EpubConverter output format changes in a way that invalidates
     // cached conversions. Bookshelf entries saved with an older version are
     // re-converted on open instead of reusing the stale cache.
-    EPUB_CONVERTER_VERSION: 1,
+    // v1 -> v2: images now inlined as data: URLs in htmlLines (EPUB image
+    // rendering, Phase 1). Old cached conversions lack images and must be
+    // re-converted.
+    EPUB_CONVERTER_VERSION: 2,
     SUPPORTED_FILE_EXT,
     EXT_REGEX: new RegExp(`(${SUPPORTED_FILE_EXT}|${SUPPORTED_EPUB_EXT}|${SUPPORTED_FONT_EXT.join("|")})$`, "i"),
     SUPPORTED_FILE_TYPE: "text/plain",

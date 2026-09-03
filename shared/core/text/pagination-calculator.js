@@ -591,7 +591,14 @@ export class PaginationCalculator {
                 continue;
             }
 
-            const charCount = this.#contentChunks[i].charCount;
+            const chunk = this.#contentChunks[i];
+            // Image blocks occupy page space roughly equal to a full text
+            // line, so in char-count mode charge them an equivalent amount.
+            if (chunk?.elementType === "img") {
+                count += Math.max(1, Math.round(this.#config.MAX_CHARS / this.#config.MAX_LINES));
+                continue;
+            }
+            const charCount = chunk.charCount;
             if (charCount && charCount > 0) {
                 count += charCount;
             }
