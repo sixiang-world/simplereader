@@ -1,10 +1,12 @@
 # EPUB 图片还原开发方案（任务 TODO + 实现细节）
 
-> **文档状态**：Phase 1+2 已完成并合入 dev；Phase 3/4 待启动
+> **文档状态**：Phase 1+2+3 已完成并合入 dev；Phase 4 待启动
 > **创建日期**：2026-09-03
-> **最后更新**：2026-09-04（Phase 1 完成，含两轮独立测试与代码审查）
+> **最后更新**：2026-09-04（Phase 3 完成，含独立测试与代码审查）
 > **基线**：`dev` @ `e1b79f9`（v2.2.0）
 > **Phase 1 提交**：`74380b8`（功能）→ `a6901ee`（第一轮 Bug 修复）→ `814251d`（第二轮审查修复）→ `2995227`（CI 修复）
+> **Phase 2 提交**：`593c8f4`（分页+缺失容错）→ `d660981`（审查修复）→ `6d0863d`（正则精确化）
+> **Phase 3 提交**：`537a009`（converter+sanitize 层）→ `4d300b1`（reader 层）
 > **目标**：还原 EPUB 阅读体验——以**图片还原**为核心（当前最大缺口），辅以样式保真与脚注还原
 
 ---
@@ -136,20 +138,24 @@ EPUB zip → 预构建 imageRegistry (src→dataURL) → 同步 walker 内联 �
   - ✅ 缺失图片占位 3 场景 + sanitize class + 正常图无回归
   - ✅ 真实浏览器端到端验证（缺失占位虚线框渲染、控制台 0 错误）
 
-### Phase 3：样式保真 + 脚注还原（P2）⏳ 待启动
+### Phase 3：样式保真 + 脚注还原 + 跨章节链接（P2）✅ 已完成
 
-- [ ] **T9. 样式保真（有限子集）**
-  - `#sanitizeHtml`：允许受控的 `style` 属性白名单（text-align/margin/font-style/font-weight 值级校验）
-  - 扩展 `SAFE_CLASSES`：补充 EPUB 常见排版类（indent/center/caption）
-  - `style` 标签内容：评估是否解析关键规则为内联样式
+- [x] **T9. 样式保真（有限子集）**
+  - `#sanitizeHtml`：允许受控的 `style` 属性白名单（text-align/text-indent/font-style/font-weight/margin-left/margin-right，各带值级正则校验，拒绝 url()/expression()/javascript: 注入）
+  - ~~扩展 `SAFE_CLASSES`：补充 EPUB 常见排版类~~（当前 8 个类已覆盖主要场景，后续按需补充）
+  - ~~`style` 标签内容~~（Phase 4 评估）
 
-- [ ] **T10. 脚注还原**
-  - 识别 `epub:type="footnote"`、`<aside>`、noteref 链接
-  - 映射到现有 `FOOTNOTES`/`FOOTNOTE_PROCESSED_COUNTER` 机制
-  - 注文与注脚链接双向可达
+- [x] **T10. 脚注还原**
+  - converter 识别 `epub:type="footnote"` 的 `<aside>`，提取内容存入 `footnoteMap`（跳过正文输出）
+  - noteref 链接（`<a epub:type="noteref">`）标记 `rel="footnote"`，sanitize 保留该属性
+  - `footnotes.js` 增加 EPUB `footnoteMap` lookup（按 href#id 查找），优先于 TXT 风格 lookup 和 DOM fallback
+  - `file-handler.js` EPUB 路径设置 `CONFIG.VARS.FOOTNOTE_MAP` + 调用 `getFootnotes().setup()` 绑定悬停事件
 
-- [ ] **T11. 跨章节链接跳转**
-  - 行内 `<a href="chapter2.xhtml#sec1">` → 利用 `fragmentToLine`/`fileToLine` 映射实现跳转
+- [x] **T11. 跨章节链接跳转**
+  - converter 输出 `fragmentToLine` 映射（`filePath#id` → lineNumber）到转换结果
+  - `reader.initInternalLinks()` 在 CONTENT_CONTAINER 上安装点击事件委托
+  - 拦截 `#fragment` 和 `relative/path#fragment` 内部链接，利用 `CONFIG.VARS.FRAGMENT_TO_LINE` 解析目标行，调用 `reader.gotoLine()` 跳转
+  - 外部链接（http/https/mailto）和脚注链接（rel=footnote）明确排除，不拦截
 
 ### Phase 4：收尾（P3）⏳ 待启动
 
