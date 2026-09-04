@@ -452,7 +452,7 @@ export class EpubConverter {
                 // entirely (privacy / anti-tracking) and skip data:/blob:.
                 if (/^(data:|blob:)/i.test(src)) continue;
                 if (/^(https?:|\/\/)/i.test(src)) continue;
-                const abs = this.#resolveHref(src, filePath);
+                let abs = this.#resolveHref(src, filePath);
                 if (!abs || registry[src]) continue;
                 // Cross-spine cache: avoid re-encoding the same image
                 // (base64 is expensive and bloats storage when duplicated).
@@ -460,7 +460,17 @@ export class EpubConverter {
                     registry[src] = globalCache[abs];
                     continue;
                 }
-                const file = zip.file(abs);
+                let file = zip.file(abs);
+                // Fallback: some EPUBs (notably cover pages) reference images
+                // relative to the OPF file rather than the XHTML file. If the
+                // XHTML-relative path doesn't exist, try the OPF-relative path.
+                if (!file && opfPath) {
+                    const opfAbs = this.#resolveHref(src, opfPath);
+                    if (opfAbs && opfAbs !== abs) {
+                        file = zip.file(opfAbs);
+                        if (file) abs = opfAbs;
+                    }
+                }
                 if (!file) continue;
                 // Prefer the media-type declared in the OPF manifest
                 // (handles extension-less images); fall back to extension.
