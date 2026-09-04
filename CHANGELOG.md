@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.3.0] — 2026-09-04
+
+### 新增
+- **EPUB 图片还原** — EPUB 内图片以 base64 data URL 内联渲染（PNG/JPEG/GIF/SVG/WebP/AVIF/BMP），支持独立图、figure+figcaption、段落内嵌图；外部图片 URL 因隐私保护不加载（`74380b8`）
+- **EPUB 图片分页精确化** — 图片触发断页时断点前移到图片之前，避免图片被拦腰截断；超大图 max-height:80vh 按比例缩放（`593c8f4`）
+- **EPUB 缺失图片容错** — 无法内联的图片显示虚线框占位符（含 alt 文本），不再静默丢失（`593c8f4`）
+- **EPUB 样式保真** — 保留受控内联样式（text-align/text-indent/font-style/font-weight/margin），值级正则校验防 CSS 注入（`537a009`）
+- **EPUB 脚注还原** — 识别 epub:type="footnote" 脚注与 noteref 引用链接，悬停显示脚注弹窗（`537a009`、`4d300b1`）
+- **EPUB 跨章节链接** — 行内内部链接（#fragment / chapter.xhtml#sec）可点击跳转到对应章节位置（`4d300b1`）
+- **EPUB 内联 SVG** — 内联 <svg> 序列化为沙箱 data URL 渲染（浏览器强制禁用脚本），超大 SVG 降级占位（`280dd11`）
+
+### 修复
+- 列表项 `<li>` 中图片被静默丢弃（`a6901ee`）
+- 纯图片段落 `<p><img/></p>` 图片丢失（`a6901ee`）
+- figure 中多个 img 只保留最后一个（`a6901ee`）
+- `<picture>` 元素中图片完全丢失（`814251d`）
+- manifest MIME 按 basename 匹配导致同名不同目录图片类型错误（`814251d`）
+- T2S 对图片块 base64 全量转换（`814251d`）
+- 搜索功能误匹配 base64 data URL 内容（`814251d`）
+- 线性搜索前移断点后图片 charCount 欠计数（`d660981`）
+- jump search 缺少短末页校验（`d660981`）
+- CI workflow 步骤顺序错误导致 8 秒失败（`2995227`）
+
+### 工程
+- 新增 25 项 EPUB 图片单元测试（`test-epub-images.mjs`）
+- EPUB_CONVERTER_VERSION 1→2→3（缓存失效）
+- 多轮独立代码审查与 Bug 修复闭环
+
 ## [2.2.0] — 2026-09-02
 
 ### 新增

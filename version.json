@@ -1,5 +1,5 @@
 {
-    "version": "2.2.0",
+    "version": "2.3.0",
     "changelog": {
         "2.2.0": {
             "date": "2026-09-02",
@@ -482,6 +482,31 @@
                     "Added **Finishing up** reading progress indicator",
                     "Optimized book cover generation",
                     "Smoother UI language switching"
+                ]
+            }
+        },
+        "2.3.0": {
+            "date": "2026-09-04",
+            "changes": {
+                "zh": [
+                    "**EPUB 图片还原** — EPUB 内图片以 base64 data URL 内联渲染（PNG/JPEG/GIF/SVG/WebP/AVIF/BMP），支持独立图、figure+figcaption、段落内嵌图；外部图片 URL 因隐私保护不加载",
+                    "**EPUB 图片分页精确化** — 图片触发断页时断点前移到图片之前，避免图片被拦腰截断；超大图 max-height:80vh 按比例缩放",
+                    "**EPUB 缺失图片容错** — 无法内联的图片显示虚线框占位符（含 alt 文本），不再静默丢失",
+                    "**EPUB 样式保真** — 保留受控内联样式（text-align/text-indent/font-style/font-weight/margin），值级正则校验防 CSS 注入",
+                    "**EPUB 脚注还原** — 识别 epub:type=\"footnote\" 脚注与 noteref 引用链接，悬停显示脚注弹窗",
+                    "**EPUB 跨章节链接** — 行内内部链接（#fragment / chapter.xhtml#sec）可点击跳转到对应章节位置",
+                    "**EPUB 内联 SVG** — 内联 <svg> 序列化为沙箱 data URL 渲染（浏览器强制禁用脚本），超大 SVG 降级占位",
+                    "**工程与测试** — 新增 25 项 EPUB 图片单元测试；修复 CI workflow 步骤顺序；多轮独立代码审查与 Bug 修复"
+                ],
+                "en": [
+                    "**EPUB image rendering** — EPUB images are inlined as base64 data URLs (PNG/JPEG/GIF/SVG/WebP/AVIF/BMP), supporting standalone images, figure+figcaption, and inline images in paragraphs; external image URLs are blocked for privacy",
+                    "**EPUB image pagination precision** — page breaks shift before images to prevent splitting, oversized images scaled with max-height:80vh",
+                    "**EPUB missing image fallback** — un-inlineable images show a dashed placeholder (with alt text) instead of being silently dropped",
+                    "**EPUB style fidelity** — controlled inline styles preserved (text-align/text-indent/font-style/font-weight/margin) with value-level regex validation against CSS injection",
+                    "**EPUB footnote restoration** — epub:type=\"footnote\" asides and noteref links are recognized, with hover popup display",
+                    "**EPUB cross-chapter links** — internal links (#fragment / chapter.xhtml#sec) are clickable and jump to the target chapter position",
+                    "**EPUB inline SVG** — inline <svg> serialized as sandboxed data URL (browser-enforced script disable), oversized SVG degrades to placeholder",
+                    "**Engineering & tests** — 25 new EPUB image unit tests; fixed CI workflow step ordering; multiple rounds of independent code review and bug fixes"
                 ]
             }
         }
