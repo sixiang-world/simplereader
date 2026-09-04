@@ -524,8 +524,9 @@ export class EpubConverter {
 
     /**
      * Render a single <img> with an inlined data: URL, keeping only safe
-     * attributes (src, alt, title). Returns empty string when the image
-     * cannot be inlined (so it is dropped rather than left broken).
+     * attributes (src, alt, title). Returns a dashed placeholder span
+     * (`<span class="epub-image-missing">`) when the image cannot be
+     * inlined (missing file, unsupported format, external URL blocked).
      * @param {Element} img
      * @param {Object|null} imageRegistry
      * @returns {string}
@@ -955,9 +956,10 @@ export class EpubConverter {
         // actual inlined image tags, never from user text.
         const inlineImgWeight = Math.max(1, Math.round(CONST_PAGINATION.MAX_CHARS / CONST_PAGINATION.MAX_LINES));
         for (const el of elements) {
-            if (el.type === "paragraph" && el.content && el.content.includes("<img")) {
+            if (el.type === "paragraph" && el.content && (el.content.includes("<img") || el.content.includes("epub-image-missing"))) {
                 const imgCount = (el.content.match(/<img\s[^>]*>/g) || []).length;
-                el.charCount += imgCount * inlineImgWeight;
+                const placeholderCount = (el.content.match(/epub-image-missing/g) || []).length;
+                el.charCount += (imgCount + placeholderCount) * inlineImgWeight;
             }
         }
 
