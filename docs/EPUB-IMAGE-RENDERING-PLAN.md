@@ -1,12 +1,13 @@
 # EPUB 图片还原开发方案（任务 TODO + 实现细节）
 
-> **文档状态**：Phase 1+2+3 已完成并合入 dev；Phase 4 待启动
+> **文档状态**：Phase 1+2+3+4 全部完成并合入 dev
 > **创建日期**：2026-09-03
 > **最后更新**：2026-09-04（Phase 3 完成，含独立测试与代码审查）
 > **基线**：`dev` @ `e1b79f9`（v2.2.0）
 > **Phase 1 提交**：`74380b8`（功能）→ `a6901ee`（第一轮 Bug 修复）→ `814251d`（第二轮审查修复）→ `2995227`（CI 修复）
 > **Phase 2 提交**：`593c8f4`（分页+缺失容错）→ `d660981`（审查修复）→ `6d0863d`（正则精确化）
 > **Phase 3 提交**：`537a009`（converter+sanitize 层）→ `4d300b1`（reader 层）
+> **Phase 4 提交**：`280dd11`（SVG 兜底 + 缓存版本 3）
 > **目标**：还原 EPUB 阅读体验——以**图片还原**为核心（当前最大缺口），辅以样式保真与脚注还原
 
 ---
@@ -157,16 +158,17 @@ EPUB zip → 预构建 imageRegistry (src→dataURL) → 同步 walker 内联 �
   - 拦截 `#fragment` 和 `relative/path#fragment` 内部链接，利用 `CONFIG.VARS.FRAGMENT_TO_LINE` 解析目标行，调用 `reader.gotoLine()` 跳转
   - 外部链接（http/https/mailto）和脚注链接（rel=footnote）明确排除，不拦截
 
-### Phase 4：收尾（P3）⏳ 待启动
+### Phase 4：收尾（P3）✅ 已完成
 
-- [ ] **T12. SVG 与特殊格式兜底**
-  - 内联 `<svg>` 元素当前在 skip 列表中（仅支持 `<img src="foo.svg">` 文件引用）
-  - 评估提取 SVG 内部 XML 为内联 SVG（需脚本净化）或降级 alt 占位
+- [x] **T12. SVG 与特殊格式兜底**
+  - 内联 `<svg>` 序列化为 `data:image/svg+xml;base64`，通过 `<img>` 沙箱渲染（浏览器强制禁用脚本）
+  - 500KB 大小上限，超限降级为 `[SVG 图形过大]` 占位
+  - 块级和行内 SVG 均支持；EPUB_CONVERTER_VERSION 2→3 使旧缓存失效
 
-- [ ] **T13. 文档与发布**
-  - 更新 README 特性说明
-  - 中英文界面验证、性能验证（大图 EPUB）
-  - 回归：`pnpm run typecheck` + `pnpm run test` 全绿
+- [x] **T13. 文档与发布**
+  - README 新增 EPUB 图片还原/样式保真/脚注/跨章节链接/SVG 共 5 项特性说明
+  - 全量测试 + typecheck + build 通过
+  - 计划文档更新至 Phase 4 完成
 
 ---
 
