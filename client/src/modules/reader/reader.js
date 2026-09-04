@@ -85,6 +85,78 @@ export const reader = {
     },
 
     /**
+     * Initializes internal link click interception for EPUB cross-chapter
+     * navigation. Uses event delegation on the content container so it
+     * survives re-renders without rebinding.
+     * @public
+     */
+    initInternalLinks() {
+        if (this._handleInternalLinkClickBound) {
+            CONFIG.DOM_ELEMENT.CONTENT_CONTAINER.removeEventListener("click", this._handleInternalLinkClickBound);
+        }
+        this._handleInternalLinkClickBound = this._handleInternalLinkClick.bind(this);
+        CONFIG.DOM_ELEMENT.CONTENT_CONTAINER.addEventListener("click", this._handleInternalLinkClickBound);
+    },
+
+    /**
+     * Handles clicks on internal EPUB links (#fragment or relative path#fragment).
+     * Resolves the target via CONFIG.VARS.FRAGMENT_TO_LINE and jumps to it.
+     * @param {Event} e - The click event
+     * @private
+     */
+    _handleInternalLinkClick(e) {
+        const link = e.target.closest("a");
+        if (!link) return;
+        const href = link.getAttribute("href") || "";
+        // Only intercept internal links: #fragment or relative paths (no protocol).
+        // External links (http/https/mailto) are handled by sanitize with target=_blank.
+        if (!href || href.startsWith("http:") || href.startsWith("https:") || href.startsWith("mailto:")) {
+            return;
+        }
+        // Footnote links (rel="footnote") are handled by the footnotes module
+        // (mouseover popup); don't hijack their click.
+        if (link.getAttribute("rel") === "footnote") return;
+
+        e.preventDefault();
+        const fragmentToLine = CONFIG.VARS?.FRAGMENT_TO_LINE || {};
+
+        // Case 1: pure fragment link (#sec1) — resolve against current file.
+        // We don't track the current spine file at runtime, so try the fragment
+        // as-is first; EPUB converters usually use unique IDs across the book.
+        if (href.startsWith("#")) {
+            const frag = href.slice(1);
+            // Search all keys ending with #frag (matches any filePath).
+            for (const [key, lineNum] of Object.entries(fragmentToLine)) {
+                if (key.endsWith("#" + frag)) {
+                    this.gotoLine(lineNum, false);
+                    return;
+                }
+            }
+            return;
+        }
+
+        // Case 2: relative path with fragment (chapter2.xhtml#sec1)
+        if (href.includes("#")) {
+            const [filePath, frag] = href.split("#");
+            const key = `${filePath}#${frag}`;
+            if (fragmentToLine[key] !== undefined) {
+                this.gotoLine(fragmentToLine[key], false);
+                return;
+            }
+            // Fallback: file-only (start of that chapter)
+            if (fragmentToLine[filePath] !== undefined) {
+                this.gotoLine(fragmentToLine[filePath], false);
+                return;
+            }
+        }
+
+        // Case 3: relative path without fragment (chapter2.xhtml)
+        if (fragmentToLine[href] !== undefined) {
+            this.gotoLine(fragmentToLine[href], false);
+        }
+    },
+
+    /**
      * Handles TOC (Table of Contents) click events
      * Navigates to the clicked line and scrolls to its position
      * One handler for the entire TOC
