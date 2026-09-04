@@ -152,13 +152,27 @@ class Footnotes {
 
         // Get and clean the footnote content
         let footnoteContent = "";
-        // Use JS object lookup if available
+        // Use JS object lookup if available (TXT file footnotes)
         if (anchorEl && this._lookupFootnote) {
             const markerCode = anchorEl.getAttribute("data-marker-code");
             const index = anchorEl.getAttribute("data-index");
             footnoteContent = this._lookupFootnote(markerCode, index) || CONFIG.CONST_FOOTNOTE.NOTFOUND;
-        } else {
-            // fallback to old DOM method if needed
+        }
+        // EPUB footnotes: look up by href#id in the converter-built map.
+        // This takes priority over the DOM fallback because EPUB footnote
+        // <aside> elements are extracted from the body during conversion.
+        if ((!footnoteContent || footnoteContent === CONFIG.CONST_FOOTNOTE.NOTFOUND) && anchorEl) {
+            const href = anchorEl.getAttribute("href") || "";
+            if (href.startsWith("#")) {
+                const fnId = href.slice(1);
+                const epubMap = CONFIG.VARS?.FOOTNOTE_MAP;
+                if (epubMap && epubMap[fnId]) {
+                    footnoteContent = epubMap[fnId];
+                }
+            }
+        }
+        // Fallback to old DOM method if needed
+        if (!footnoteContent || footnoteContent === CONFIG.CONST_FOOTNOTE.NOTFOUND) {
             footnoteContent =
                 jQuery(`#${id}`)
                     .html()

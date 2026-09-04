@@ -639,6 +639,11 @@ export class FileHandler {
             reader.initTOC();
             reader.processTOC();
 
+            // Phase 3: set up EPUB internal link interception and footnote
+            // popup event listeners (a[rel='footnote']).
+            reader.initInternalLinks();
+            getFootnotes().setup();
+
             // Show initial content
             CONFIG.VARS.INIT = false;
             reader.showCurrentPageContent();
@@ -977,6 +982,11 @@ export class FileHandler {
             FileHandler.#verifyTitleAndIndexCount("[handleEpubFile]");
             CONFIG.VARS.FOOTNOTES = [];
             CONFIG.VARS.FOOTNOTE_PROCESSED_COUNTER = 0;
+            // Phase 3: EPUB footnote map and cross-chapter link index.
+            // footnoteMap: {footnoteId: htmlContent} for noteref popups.
+            // fragmentToLine: {"filePath#id": lineNumber} for internal link jumps.
+            CONFIG.VARS.FOOTNOTE_MAP = convertResult.footnoteMap || {};
+            CONFIG.VARS.FRAGMENT_TO_LINE = convertResult.fragmentToLine || {};
 
             // Set pagination using the shared PaginationCalculator
             const paginationConfig = {
