@@ -431,15 +431,6 @@ export class EpubConverter {
     // ──────────────────────────────────────────────
 
     /**
-     * Process all spine items in order, producing htmlLines and titles.
-     * Also builds a filePath → startLine mapping for NCX/TOC cross-referencing.
-     * @param {JSZip} zip
-     * @param {Array} spine
-     * @param {Object} manifest
-     * @param {string} opfPath
-     * @returns {Promise<{htmlLines: Array, titles: Array, spineBreaks: Array, fileToLine: Object, fragmentToLine: Object, footnoteMap: Object}>}
-     */
-    /**
      * Scan an XHTML file for <img> elements and extract referenced images
      * from the zip as data: URLs. Returns a map of raw src → data URL.
      * External (http/https) and already-inline images are skipped.
@@ -492,6 +483,34 @@ export class EpubConverter {
     }
 
     /**
+     * Serialize an inline <svg> element into a safe data: URL.
+     * Rendered via <img src="data:image/svg+xml;base64,...">, which
+     * browsers force-sandbox (no script execution, no external loads).
+     * @param {Element} svgNode
+     * @param {number} [maxBytes=500000]
+     * @returns {string|null}
+     */
+    static #serializeSvgToDataUrl(svgNode, maxBytes = 500000) {
+        try {
+            if (!svgNode.getAttribute("xmlns")) {
+                svgNode.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+            }
+            const serializer = new XMLSerializer();
+            let svgString = serializer.serializeToString(svgNode);
+            svgString = svgString.replace(/^<\?xml[^>]*\?>\s*/, "");
+            const bytes = new TextEncoder().encode(svgString);
+            if (bytes.length > maxBytes) return null;
+            let binary = "";
+            for (let i = 0; i < bytes.length; i += 0x8000) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+            }
+            return `data:image/svg+xml;base64,${btoa(binary)}`;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
      * Render a standalone <img> or <figure> as a block element with an
      * inlined data: URL. Returns null when the image cannot be inlined.
      * @param {Element} node - The <img> or <figure> element
@@ -520,6 +539,11 @@ export class EpubConverter {
             if (!imgHtml) return null;
             const caption = captionHtml ? `<figcaption>${captionHtml}</figcaption>` : "";
             return `<figure>${imgHtml}${caption}</figure>`;
+        }
+        if (tag === "svg") {
+            const dataUrl = this.#serializeSvgToDataUrl(node);
+            if (dataUrl) return `<img src="${dataUrl}" alt="SVG graphic">`;
+            return `<span class="epub-image-missing">[SVG 图形过大]</span>`;
         }
         return null;
     }
@@ -624,6 +648,17 @@ export class EpubConverter {
         }
         return null;
     }
+
+
+    /**
+     * Process all spine items in order, producing htmlLines and titles.
+     * Also builds a filePath → startLine mapping for NCX/TOC cross-referencing.
+     * @param {JSZip} zip
+     * @param {Array} spine
+     * @param {Object} manifest
+     * @param {string} opfPath
+     * @returns {Promise<{htmlLines: Array, titles: Array, spineBreaks: Array, fileToLine: Object, fragmentToLine: Object, footnoteMap: Object}>}
+     */
 
     static async #processSpine(zip, spine, manifest, opfPath, onItemProgress) {
         const htmlLines = [];
@@ -753,7 +788,7 @@ export class EpubConverter {
             // Standalone images: emit an image block even though the
             // element has no text content (must run before the empty
             // element guard below).
-            if (tag === "img" || tag === "figure") {
+            if (tag === "img" || tag === "figure" || tag === "svg") {
                 const lineNumber = lineOffset + elements.length;
                 const content = this.#extractImageBlock(node, imageRegistry);
                 if (content) {
@@ -790,7 +825,7 @@ export class EpubConverter {
             if (!textContent && tag !== "br" && tag !== "hr" && !node.querySelector("img")) continue;
 
             // Skip non-content elements
-            if (["script", "style", "svg"].includes(tag)) continue;
+            if (["script", "style"].includes(tag)) continue;
 
             const lineNumber = lineOffset + elements.length;
 
@@ -1001,7 +1036,7 @@ export class EpubConverter {
             const tag = child.tagName?.toLowerCase();
 
             // Skip non-content containers
-            if (["script", "style", "svg"].includes(tag)) continue;
+            if (["script", "style"].includes(tag)) continue;
 
             // Keep lists as whole blocks (processed as a "list" line type)
             if (tag === "ul" || tag === "ol") {
@@ -1142,6 +1177,12 @@ export class EpubConverter {
                 if (tag === "img") {
                     const imgHtml = this.#renderInlineImage(child, imageRegistry);
                     if (imgHtml) html += imgHtml;
+                    continue;
+                }
+                if (tag === "svg") {
+                    const svgUrl = this.#serializeSvgToDataUrl(child);
+                    if (svgUrl) html += `<img src="${svgUrl}" alt="SVG graphic">`;
+                    else html += `<span class="epub-image-missing">[SVG]</span>`;
                     continue;
                 }
 

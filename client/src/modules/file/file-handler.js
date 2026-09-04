@@ -437,15 +437,6 @@ export class FileHandler {
             timings: {},
         };
 
-        /**
-         * Logs the timing for a specific label
-         * @private
-         * @param {string} label - Label for the timing
-         * @param {number} startTime - Start time of the timing
-         */
-        function logTiming(label, startTime) {
-            metrics.timings[label] = performance.now() - startTime;
-        }
 
         /**
          * Finalizes and displays the metrics
