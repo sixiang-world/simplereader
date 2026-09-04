@@ -802,6 +802,13 @@ export class PaginationCalculator {
                         if (this.#addBreakPoint(newBreakPoint)) {
                             lastBreakPoint = newBreakPoint;
                             contentCount = 0;
+                            // When the break was shifted before the image
+                            // (newBreakPoint === j), the image belongs to the
+                            // next page — pre-count its charCount so the next
+                            // page starts with the correct accumulated length.
+                            if (newBreakPoint === j) {
+                                contentCount = this.#getContentLength(j, j + 1);
+                            }
                         }
                     }
                 }
@@ -835,7 +842,10 @@ export class PaginationCalculator {
                     this.#contentChunks[bestPos - 1]?.elementType === "img"
                 ) {
                     const candidate = bestPos - 1;
-                    if (this.#getContentLength(currentPos, candidate) >= minLimit) {
+                    if (
+                        this.#getContentLength(currentPos, candidate) >= minLimit &&
+                        !this.#wouldCreateShortNextPage(candidate, end)
+                    ) {
                         finalBreak = candidate;
                     }
                 }

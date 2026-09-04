@@ -145,7 +145,6 @@ table[data-source="epub"] th {
     max-height: 80vh;
     width: auto;
     height: auto;
-    object-fit: contain;
     display: block;
     margin: 0 auto;
     border-radius: 2px;
