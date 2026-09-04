@@ -958,7 +958,9 @@ export class EpubConverter {
         for (const el of elements) {
             if (el.type === "paragraph" && el.content && (el.content.includes("<img") || el.content.includes("epub-image-missing"))) {
                 const imgCount = (el.content.match(/<img\s[^>]*>/g) || []).length;
-                const placeholderCount = (el.content.match(/epub-image-missing/g) || []).length;
+                // Match only actual <span class="...epub-image-missing..."> elements,
+                // not the literal string "epub-image-missing" appearing in body text.
+                const placeholderCount = (el.content.match(/<span[^>]*class="[^"]*epub-image-missing[^"]*"[^>]*>/g) || []).length;
                 el.charCount += (imgCount + placeholderCount) * inlineImgWeight;
             }
         }
