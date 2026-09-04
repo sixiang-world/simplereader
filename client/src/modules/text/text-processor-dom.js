@@ -298,6 +298,15 @@ export class TextProcessorDOM {
                         if (lower.startsWith("http:") || lower.startsWith("https:") || lower.startsWith("mailto:")) {
                             el.setAttribute("target", "_blank");
                             el.setAttribute("rel", "noopener noreferrer");
+                        } else {
+                            // Internal links (#fragment or relative path):
+                            // preserve rel="footnote" for EPUB noteref links
+                            // so the reader's footnote popup system can pick
+                            // them up (a[rel='footnote'] selector).
+                            const rel = node.getAttribute("rel");
+                            if (rel === "footnote") {
+                                el.setAttribute("rel", "footnote");
+                            }
                         }
                     }
                 }
@@ -351,6 +360,35 @@ export class TextProcessorDOM {
                 ]);
                 const filtered = cls.split(/\s+/).filter((c) => SAFE_CLASSES.has(c)).join(" ");
                 if (filtered) el.setAttribute("class", filtered);
+            }
+            // Allow a controlled subset of inline style properties for EPUB
+            // typography fidelity. Each property is value-validated with a
+            // strict regex so CSS injection (url(), expression(), javascript:)
+            // is impossible.
+            const styleAttr = node.getAttribute("style");
+            if (styleAttr) {
+                const SAFE_STYLE_PROPS = {
+                    "text-align": /^(left|center|right|justify)$/,
+                    "text-indent": /^-?\d+(\.\d+)?(px|em|rem|%)$/,
+                    "font-style": /^(italic|normal|oblique)$/,
+                    "font-weight": /^(normal|bold|[1-9]00)$/,
+                    "margin-left": /^-?\d+(\.\d+)?(px|em|rem|%)$/,
+                    "margin-right": /^-?\d+(\.\d+)?(px|em|rem|%)$/,
+                };
+                const safeDecls = [];
+                for (const decl of styleAttr.split(";")) {
+                    const colonIdx = decl.indexOf(":");
+                    if (colonIdx < 0) continue;
+                    const prop = decl.slice(0, colonIdx).trim().toLowerCase();
+                    const val = decl.slice(colonIdx + 1).trim();
+                    const validator = SAFE_STYLE_PROPS[prop];
+                    if (validator && validator.test(val)) {
+                        safeDecls.push(prop + ":" + val);
+                    }
+                }
+                if (safeDecls.length > 0) {
+                    el.setAttribute("style", safeDecls.join(";"));
+                }
             }
             for (const child of node.childNodes) {
                 const cleaned = cleanNode(child);
