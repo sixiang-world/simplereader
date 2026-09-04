@@ -5,7 +5,7 @@
  * Modified by Matt Gemmell (http://mattgemmell.com/)
  * Modernized refactored version
  *
- * @module client/src/modules/features/footnotes
+ * @module client/src/modules/reader/footnotes
  * @requires client/src/config/index.js
  * @requires shared/core/callback/callback-registry.js
  */
@@ -31,9 +31,6 @@ class Footnotes {
         if (Footnotes.#instance) {
             throw new Error("Use getFootnotes()");
         }
-
-        // Footnote image class name
-        this.FOOTNOTE_IMG_CLASS = ".footnote_img";
 
         // Footnote div id
         this.FOOTNOTE_DIV_ID = "#footnotediv";
@@ -128,7 +125,9 @@ class Footnotes {
 
         // Get the footnote link
         const $link = jQuery(e.currentTarget);
-        const id = $link.attr("href").slice(1); // Get the target footnote ID
+        const href = $link.attr("href") || "";
+        if (!href.startsWith("#")) return; // Malformed footnote link: ignore
+        const id = href.slice(1); // Get the target footnote ID
 
         // Create the footnote div and position it
         const div = this.#createFootnoteDiv(id, $link[0]);
