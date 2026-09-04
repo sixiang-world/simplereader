@@ -70,7 +70,7 @@ export class EpubConverter {
         // 5. Process spine items in order
         this.#logger.log("Processing spine...");
         reportProgress("spine", `${spine.length} items`);
-        const { htmlLines, titles: spineTitles, spineBreaks, fileToLine, fragmentToLine, missingFiles } = await this.#processSpine(
+        const { htmlLines, titles: spineTitles, spineBreaks, fileToLine, fragmentToLine, footnoteMap, missingFiles } = await this.#processSpine(
             zip,
             spine,
             manifest,
@@ -183,6 +183,8 @@ export class EpubConverter {
             titlesInd,
             metadata,
             spineBreaks,
+            fragmentToLine,
+            footnoteMap,
             missingFiles,
         };
     }
@@ -435,7 +437,7 @@ export class EpubConverter {
      * @param {Array} spine
      * @param {Object} manifest
      * @param {string} opfPath
-     * @returns {Promise<{htmlLines: Array, titles: Array, spineBreaks: Array, fileToLine: Object}>}
+     * @returns {Promise<{htmlLines: Array, titles: Array, spineBreaks: Array, fileToLine: Object, fragmentToLine: Object, footnoteMap: Object}>}
      */
     /**
      * Scan an XHTML file for <img> elements and extract referenced images
@@ -632,6 +634,7 @@ export class EpubConverter {
         const spineBreaks = [0]; // First page always starts at 0
         const fileToLine = {};   // {filePath: startLineNumber}
         const fragmentToLine = {}; // {filePath#id: lineNumber}
+        const footnoteMap = {};   // {footnoteId: htmlContent}
         const missingFiles = [];
         let lineNumber = 0;
         this.#logger.log(`Processing ${spine.length} spine items...`);
@@ -678,7 +681,7 @@ export class EpubConverter {
             // globalImageCache is shared across spine items so the same image
             // referenced by multiple chapters is base64-encoded only once.
             const imageRegistry = await this.#buildImageRegistry(zip, manifest, opfPath, effectivePath, xhtml, globalImageCache);
-            const result = this.#processXhtml(xhtml, lineNumber, effectivePath, fragmentToLine, imageRegistry);
+            const result = this.#processXhtml(xhtml, lineNumber, effectivePath, fragmentToLine, imageRegistry, footnoteMap);
             const elapsed = (performance.now() - t1).toFixed(1);
 
             htmlLines.push(...result.elements);
@@ -707,7 +710,7 @@ export class EpubConverter {
             this.#logger.warn(`EPUB missing spine file(s): ${missingFiles.join(", ")}`);
         }
 
-        return { htmlLines, titles, spineBreaks, fileToLine, fragmentToLine, missingFiles };
+        return { htmlLines, titles, spineBreaks, fileToLine, fragmentToLine, footnoteMap, missingFiles };
     }
 
     /**
@@ -716,9 +719,10 @@ export class EpubConverter {
      * @param {number} lineOffset - Starting line number
      * @param {string} [filePath] - Path of the XHTML file within the EPUB
      * @param {Object} [fragmentToLine] - Map to populate with file#id → lineNumber
+     * @param {Object} [footnoteMap] - Map to populate with footnoteId → htmlContent
      * @returns {{elements: Array, titles: Array}}
      */
-    static #processXhtml(xhtml, lineOffset, filePath, fragmentToLine, imageRegistry = null) {
+    static #processXhtml(xhtml, lineOffset, filePath, fragmentToLine, imageRegistry = null, footnoteMap = null) {
         const elements = [];
         const titles = [];
 
@@ -770,6 +774,14 @@ export class EpubConverter {
                         fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
                     }
                 }
+                continue;
+            }
+
+            // EPUB footnotes: extract <aside epub:type="footnote"> content
+            // into footnoteMap (keyed by id) and skip from body output.
+            const epubType = node.getAttribute("epub:type") || node.getAttribute("type") || "";
+            if (epubType === "footnote" && footnoteMap && node.id) {
+                footnoteMap[node.id] = this.#extractInlineHtml(node, imageRegistry);
                 continue;
             }
 
@@ -1185,6 +1197,12 @@ export class EpubConverter {
         const href = el.getAttribute("href");
         if (href !== null && tag === "a" && this.#isAllowedHref(href)) {
             attrs += ` href="${this.#escapeHtml(href)}"`;
+            // EPUB noteref links: mark as footnote so the reader's footnote
+            // popup system (a[rel='footnote']) can pick them up.
+            const linkType = el.getAttribute("epub:type") || el.getAttribute("type") || "";
+            if (linkType === "noteref") {
+                attrs += ' rel="footnote"';
+            }
         }
 
         // id is allowed only as a fragment anchor (e.g., <a id="note">)
