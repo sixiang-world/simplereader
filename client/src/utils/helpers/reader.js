@@ -256,6 +256,11 @@ function calculateReadingProgress(curLineNumber) {
         totalPercentage = 0;
     }
 
+    // Guard against NaN / Infinity (e.g. empty page, non-content DOM nodes)
+    if (!Number.isFinite(totalPercentage)) {
+        totalPercentage = 0;
+    }
+
     return totalPercentage;
 }
 
@@ -510,7 +515,8 @@ export function getTopLineNumber() {
         }
 
         if (rect.bottom >= 0 && rect.top <= viewportHeight) {
-            return parseInt(child.id.replace("line", ""));
+            const num = parseInt(child.id.replace("line", ""));
+            if (!Number.isNaN(num)) return num;
         }
     }
     return 0; // Default to 0 if no line is in the viewport
@@ -535,7 +541,8 @@ export function getBottomLineNumber() {
         }
 
         if (rect.bottom >= 0 && rect.top <= viewportHeight) {
-            return parseInt(child.id.replace("line", ""));
+            const num = parseInt(child.id.replace("line", ""));
+            if (!Number.isNaN(num)) return num;
         }
     }
     return 0; // Default to 0 if no line is in the viewport
