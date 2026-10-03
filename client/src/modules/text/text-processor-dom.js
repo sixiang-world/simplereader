@@ -21,7 +21,15 @@ export class TextProcessorDOM {
      * @public
      */
     static createFromStructure(structure) {
-        const { type, tag, content, lineNumber, elementType, dropCap, className, source, synthetic } = structure;
+        const { tag, content, lineNumber, elementType, dropCap, className, source, synthetic } = structure;
+        let { type } = structure;
+
+        // Legacy stored books (pre-seal-type) classified the seal decoration
+        // as a generic "span" structure; route it to the seal renderer so the
+        // markup is rebuilt instead of shown as escaped plain text.
+        if (type === "span" && typeof content === "string" && /seal_front|seal_end/.test(content)) {
+            type = "seal";
+        }
 
         // Helper to set data-line-num on an element
         const setLineNum = (el) => {
@@ -179,6 +187,20 @@ export class TextProcessorDOM {
                 tempTable.setAttribute("data-source", "epub");
                 tempTable.innerHTML = this.#sanitizeHtml(content);
                 return [setLineNum(tempTable), elementType];
+            }
+
+            case "seal": {
+                // Seal decoration on the generated title/end pages. The markup
+                // is produced by FileProcessorCore (never from book text), so
+                // rebuild the fixed structure explicitly instead of trusting
+                // the serialized HTML string.
+                const tempImg = document.createElement("img");
+                tempImg.id = typeof content === "string" && content.includes("seal_end") ? "seal_end" : "seal_front";
+                const tempDiv = document.createElement("div");
+                tempDiv.id = `line${lineNumber}`;
+                tempDiv.classList.add("prevent-select", "seal");
+                tempDiv.appendChild(tempImg);
+                return [setLineNum(tempDiv), elementType];
             }
 
             case "empty":
