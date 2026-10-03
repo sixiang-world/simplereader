@@ -113,6 +113,21 @@ export class TextProcessorCore {
                     lineNumber,
                     elementType: "t",
                 };
+            } else if (current.slice(1, 4) === "div") {
+                // Seal decoration on generated title/end pages
+                // (FileProcessorCore.generateTitlePage / generateEndPage).
+                // Given an explicit type so the DOM layer rebuilds the fixed
+                // markup instead of falling back to escaped plain text.
+                this.#shouldDropCap = false;
+                const content = this.#removeHtmlTags(current);
+                return {
+                    type: "seal",
+                    tag: "div",
+                    content: current,
+                    charCount: content.length,
+                    lineNumber,
+                    elementType: "e",
+                };
             } else {
                 this.#shouldDropCap = false;
                 const content = this.#removeHtmlTags(current);
