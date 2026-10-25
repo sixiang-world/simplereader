@@ -28,6 +28,23 @@ export default [
         ...globals.browser,
         ...globals.node,
         ...globals.worker,
+        // Classic-script vendor globals (client/lib) — see AGENTS.md §4.1.
+        // Declaring them here removes 193 false no-undef warnings so that any
+        // FUTURE no-undef report is a genuine undefined identifier.
+        $: "readonly",
+        jQuery: "readonly",
+        Swal: "readonly",
+        tippy: "readonly",
+        position: "readonly",
+        IPadCursor: "readonly",
+        HyperList: "readonly",
+        JSZip: "readonly",
+        jschardet: "readonly",
+        ColorPicker: "readonly",
+        // Browser-extension API globals (guarded at runtime by feature checks).
+        chrome: "readonly",
+        browser: "readonly",
+        safari: "readonly",
       },
     },
     rules: {

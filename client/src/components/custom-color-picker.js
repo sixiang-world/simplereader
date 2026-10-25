@@ -7,7 +7,7 @@
  */
 
 // Since "@yaireo/position" is used as a script file rather than a Node module (ES export)
-position = position.default;
+const position = globalThis.position.default;
 
 // Get the ColorPicker & some helper functions for color format transformations
 const { default: ColorPicker, any_to_hex, changeColorFormat } = window.ColorPicker;

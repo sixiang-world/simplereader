@@ -81,7 +81,7 @@ export function randomFloatFromInterval(min, max) {
  * @returns {boolean} True if variable is defined and valid
  */
 export function isVariableDefined(v) {
-    return v !== "undefined" && v !== "" && v !== null && v !== undefined && v !== NaN;
+    return v !== "undefined" && v !== "" && v !== null && v !== undefined && !Number.isNaN(v);
 }
 
 

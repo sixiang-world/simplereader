@@ -312,7 +312,10 @@ const SETTINGS_SCHEMA = [
         persist: true,
         getValue: function ($input) {
             const selected = $input.closest(".select").children(".select-options").children(".is-selected").attr("rel");
-            return `${selected}, ${CONFIG.RUNTIME_VARS.STYLE.fontFamily_ui}` || this.defaults.title_font;
+            // The old `` `${selected}, …` || fallback `` never fell back: a
+            // template literal is always truthy. Restore the intended path.
+            if (!selected) return this.defaults.title_font;
+            return `${selected}, ${CONFIG.RUNTIME_VARS.STYLE.fontFamily_ui}`;
         },
     },
     {
@@ -330,7 +333,8 @@ const SETTINGS_SCHEMA = [
         persist: true,
         getValue: function ($input) {
             const selected = $input.closest(".select").children(".select-options").children(".is-selected").attr("rel");
-            return `${selected}, ${CONFIG.RUNTIME_VARS.STYLE.fontFamily_ui}` || this.defaults.body_font;
+            if (!selected) return this.defaults.body_font;
+            return `${selected}, ${CONFIG.RUNTIME_VARS.STYLE.fontFamily_ui}`;
         },
     },
     {

@@ -763,19 +763,21 @@ export const reader = {
      */
     async gotoChapterTitleLine(lineNum) {
         if (!isNaN(lineNum)) {
-            await new Promise(async (resolve) => {
-                await this.gotoLine(lineNum);
-
-                // Wait for next frame to ensure DOM is updated
-                requestAnimationFrame(() => {
-                    const line = CONFIG.DOM_ELEMENT.GET_LINE(lineNum);
-                    const top = line.offsetTop;
-                    const style = line.currentStyle || window.getComputedStyle(line);
-                    const top_margin = parseFloat(style.marginTop);
-                    // console.log("top: ", top, "top_margin: ", top_margin);
-                    window.scrollTo(0, top - top_margin, { behavior: "instant" });
-                    resolve();
-                });
+            // Plain (non-async) executor: a gotoLine rejection now rejects
+            // this promise instead of being silently swallowed.
+            await new Promise((resolve, reject) => {
+                this.gotoLine(lineNum).then(() => {
+                    // Wait for next frame to ensure DOM is updated
+                    requestAnimationFrame(() => {
+                        const line = CONFIG.DOM_ELEMENT.GET_LINE(lineNum);
+                        const top = line.offsetTop;
+                        const style = line.currentStyle || window.getComputedStyle(line);
+                        const top_margin = parseFloat(style.marginTop);
+                        // console.log("top: ", top, "top_margin: ", top_margin);
+                        window.scrollTo(0, top - top_margin, { behavior: "instant" });
+                        resolve();
+                    });
+                }, reject);
             });
         }
     },
