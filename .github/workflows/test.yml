@@ -6,6 +6,7 @@ on:
       - main
       - dev
       - feature/**
+      - feat/**
       - refactor/**
   pull_request:
     branches:
@@ -39,15 +40,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm run lint
+      - name: Install Chromium for browser regression tests
+        run: pnpm exec playwright-core install --with-deps chromium
 
-      - name: Typecheck
-        run: pnpm run typecheck
-
-      - name: Build production bundle
-        run: pnpm run build
-
-      - name: Run all tests
-        run: pnpm run test
-        working-directory: ${{ github.workspace }}
+      - name: Validate production workflow
+        run: sh build-tools/validate.sh

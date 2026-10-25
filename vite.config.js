@@ -43,13 +43,11 @@ import { dirname } from "node:path";
 function preprocessBooksPlugin() {
     return {
         name: "preprocess-books",
+        apply: "build",
         async closeBundle() {
-            try {
-                const { preprocessBooks } = await import("./build-tools/preprocess-books.mjs");
-                await preprocessBooks();
-            } catch (err) {
-                console.warn("[vite] preprocess-books plugin failed:", err.message);
-            }
+            // Missing tooling is a broken build, not a successful empty library.
+            const { preprocessBooks } = await import("./build-tools/preprocess-books.mjs");
+            await preprocessBooks();
         },
     };
 }
@@ -83,6 +81,7 @@ export default defineConfig({
         preprocessBooksPlugin(),
         {
             name: "postbuild-copy-lib",
+            apply: "build",
             closeBundle() {
                 var root = fileURLToPath(new URL("./", import.meta.url));
                 var distPath = fileURLToPath(new URL("./dist/", import.meta.url));

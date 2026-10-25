@@ -55,6 +55,16 @@ export default [
     },
   },
   {
+    // New pure boundaries have enforceable runtime-error rules now; migrate
+    // legacy DOM/vendor code incrementally rather than hiding its warnings.
+    files: [
+      "client/src/core/setting-values.js", "client/src/core/background-tasks.js",
+      "client/src/modules/file/book-data.js", "client/src/utils/helpers/worker-requests.js",
+      "client/src/modules/reader/search-matcher.js", "shared/core/file/epub-*.js",
+    ],
+    rules: { "no-undef": "error", "no-async-promise-executor": "error", "no-constant-binary-expression": "error" },
+  },
+  {
     // Test files: Node-only globals, allow process/console freely.
     files: ["test/**/*.mjs", "test/**/*.js"],
     languageOptions: {

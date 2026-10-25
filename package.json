@@ -9,7 +9,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p jsconfig.json",
+    "typecheck": "tsc --noEmit -p jsconfig.json && tsc --noEmit -p jsconfig.checked.json",
     "preprocess-books": "node build-tools/preprocess-books.mjs",
     "postinstall": "node build-tools/fetch-opencc-bundle.mjs",
     "test": "node test/run-tests.mjs",
@@ -18,7 +18,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:browser": "node test/run-tests.mjs --browser",
-    "validate": "npm run lint && npm run typecheck && npm run build && npm test && npm run test:browser",
+    "validate": "sh build-tools/validate.sh",
     "test:extension": "node test/extension-browser.mjs"
   },
   "devDependencies": {

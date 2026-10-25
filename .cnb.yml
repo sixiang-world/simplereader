@@ -27,19 +27,20 @@
 # ===== 公共配置：Node 构建环境 =====
 .node-env: &node-env
   docker:
-    image: node:20.18.0-alpine
+    image: node:22-alpine
 
 # ===== 公共构建阶段 =====
 .install: &install
   name: install
   script: |
+    apk add --no-cache python3 chromium
     corepack enable
     corepack prepare pnpm@9.12.0 --activate
     pnpm install --frozen-lockfile
 
-.build: &build
-  name: build
-  script: pnpm run build
+.validate: &validate
+  name: validate
+  script: sh build-tools/validate.sh
 
 .verify-dist: &verify-dist
   name: verify-dist
@@ -83,9 +84,9 @@
     script: |
       BRANCH="${CNB_BRANCH}"
       echo "Pushing branch: ${BRANCH}"
-      git push github "${BRANCH}" 2>&1 || echo "WARN: failed to push branch ${BRANCH}"
+      git push github "${BRANCH}"
       echo "Pushing all tags..."
-      git push github --tags 2>&1 || echo "WARN: failed to push some tags"
+      git push github --tags
 
 # ===== 1. dev 分支 push → 构建并部署预发环境 =====
 dev:
@@ -100,7 +101,7 @@ dev:
         cancel-in-wait: true
       stages:
         - *install
-        - *build
+        - *validate
         - *verify-dist
         - name: 部署到 EdgeOne Pages 预发环境
           image: tencentcom/deploy-eopages:latest
@@ -131,7 +132,7 @@ main:
         cancel-in-wait: true
       stages:
         - *install
-        - *build
+        - *validate
         - *verify-dist
         # 不传 environment 即部署到生产环境
         - name: 部署到 EdgeOne Pages 生产环境
@@ -170,7 +171,7 @@ $:
         cancel-in-wait: true
       stages:
         - *install
-        - *build
+        - *validate
         - *verify-dist
         - name: 部署到 EdgeOne Pages 生产环境
           image: tencentcom/deploy-eopages:latest
@@ -191,7 +192,7 @@ $:
         cancel-in-wait: true
       stages:
         - *install
-        - *build
+        - *validate
         - *verify-dist
         - name: 部署到 EdgeOne Pages 预发环境
           image: tencentcom/deploy-eopages:latest

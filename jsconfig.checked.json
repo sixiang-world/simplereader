@@ -1,0 +1,15 @@
+{
+  "extends": "./jsconfig.json",
+  "compilerOptions": { "checkJs": true },
+  "include": [],
+  "files": [
+    "client/src/core/setting-values.js",
+    "client/src/core/background-tasks.js",
+    "client/src/modules/file/book-data.js",
+    "client/src/utils/helpers/worker-requests.js",
+    "client/src/modules/reader/search-matcher.js",
+    "shared/core/file/epub-path.js",
+    "shared/core/file/epub-budget.js",
+    "shared/core/file/epub-dom.js"
+  ]
+}

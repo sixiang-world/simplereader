@@ -18,9 +18,7 @@ export function checkEpubAbort(signal) {
 }
 
 export function epubLimit(message) {
-    const error = new Error(`EPUB_LIMIT: ${message}`);
-    error.code = "EPUB_LIMIT";
-    return error;
+    return Object.assign(new Error(`EPUB_LIMIT: ${message}`), { code: "EPUB_LIMIT" });
 }
 
 export function rethrowEpubControlError(error) {
