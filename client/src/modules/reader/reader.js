@@ -222,9 +222,11 @@ export const reader = {
                     titleContainer.dataset.lineNum = lineNum;
                     titleContainer.innerHTML = `
                         <a id="a${lineNum}_bull" href="#line${lineNum}" class="prevent-select toc-bullet${activeTitleToken}" style="cursor: pointer;"></a>
-                        <a id="a${lineNum}" href="#line${lineNum}" class="prevent-select toc-text title-original${activeTitleToken}" style="cursor: pointer;"><span id="span${lineNum}" class="toc-text-span">${title}</span></a>
-                        <a id="a${lineNum}_alt" href="#line${lineNum}" class="prevent-select toc-text title-shortened hidden${activeTitleToken}" style="cursor: pointer;"><span id="span${lineNum}_alt" class="toc-text-span">${shortTitle}</span></a>
+                        <a id="a${lineNum}" href="#line${lineNum}" class="prevent-select toc-text title-original${activeTitleToken}" style="cursor: pointer;"><span id="span${lineNum}" class="toc-text-span"></span></a>
+                        <a id="a${lineNum}_alt" href="#line${lineNum}" class="prevent-select toc-text title-shortened hidden${activeTitleToken}" style="cursor: pointer;"><span id="span${lineNum}_alt" class="toc-text-span"></span></a>
                     `;
+                    titleContainer.querySelector(`#span${lineNum}`).textContent = title;
+                    titleContainer.querySelector(`#span${lineNum}_alt`).textContent = shortTitle;
                 }
 
                 return titleContainer;

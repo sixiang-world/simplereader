@@ -404,7 +404,7 @@ export class TextProcessorDOM {
                     const prop = decl.slice(0, colonIdx).trim().toLowerCase();
                     const val = decl.slice(colonIdx + 1).trim();
                     const validator = SAFE_STYLE_PROPS[prop];
-                    if (validator && validator.test(val)) {
+                    if (Object.hasOwn(SAFE_STYLE_PROPS, prop) && validator.test(val)) {
                         safeDecls.push(prop + ":" + val);
                     }
                 }

@@ -140,7 +140,6 @@ export class PopupManager {
         // Get icon and color
         const icon = ICONS[iconName.toUpperCase()];
         const color = CONFIG.RUNTIME_VARS.STYLE[iconColor] || CONFIG.RUNTIME_VARS.STYLE.mainColor_inactive;
-        const htmlContent = text.replace(/\n/g, "<br>");
 
         // Create a unique ID for each notification
         const notificationId = `notification-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -159,11 +158,15 @@ export class PopupManager {
                         <span class="custom-notification-icon ${PopupManager.#customClass.icon}">
                             ${icon}
                         </span>
-                        <span class="custom-notification-text">${htmlContent}</span>
+                        <span class="custom-notification-text"></span>
                     </div>
                 </div>
             </div>
         `;
+
+        const notificationText = notification.querySelector(".custom-notification-text");
+        notificationText.textContent = String(text);
+        notificationText.style.whiteSpace = "pre-line";
 
         // Create a separate style for each notification
         let style = null;
@@ -627,7 +630,7 @@ export class PopupManager {
      */
     static #showNotificationOriginal({ iconName, text, timer = 2000, iconColor = "mainColor_inactive" }) {
         const icon = ICONS[iconName.toUpperCase()];
-        const htmlContent = text.replace(/\n/g, "<br>");
+        const htmlContent = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
         const color = CONFIG.RUNTIME_VARS.STYLE[iconColor] || CONFIG.RUNTIME_VARS.STYLE.mainColor_inactive;
 
         // Create or update the style element
