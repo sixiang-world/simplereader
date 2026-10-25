@@ -669,6 +669,120 @@ await test("pushConfig: success clears pending payload", async () => {
     assert.equal(result, true);
 });
 
+// ── Protocol boundary tests (B05) ───────────────────────────────────────
+//
+// These tests DOCUMENT the current textdb protocol boundary — they do not
+// claim it solved. The KV service is whole-document GET/POST with no CAS,
+// no ETag, and no atomic field merge, so:
+//   - interleaved concurrent pushes can lose one writer's field
+//   - LWW follows each device's *claimed* timestamp, so clock skew wins
+// Sequential pull-edit-push (the flow recommended in the settings UI)
+// preserves both devices' fields.
+
+/**
+ * A tiny shared KV store mimicking textdb: whole-document GET/POST,
+ * last POST wins. `makeClient({ holdGet: true })` parks GETs until
+ * releaseGets() so two writers can interleave read-then-write.
+ */
+function makeSharedStore() {
+    const state = { doc: null, posts: [] };
+    const parkedGets = [];
+    const makeClient = ({ holdGet = false } = {}) => async (url, init) => {
+        if (!init || init.method !== "POST") {
+            if (holdGet) await new Promise((resolve) => parkedGets.push(resolve));
+            if (state.doc === null) {
+                return { ok: false, status: 404, statusText: "Not Found", text: async () => "" };
+            }
+            return { ok: true, status: 200, statusText: "OK", text: async () => JSON.stringify(state.doc) };
+        }
+        const body = JSON.parse(init.body);
+        state.doc = body;
+        state.posts.push(body);
+        return { ok: true, status: 200, statusText: "OK", text: async () => "ok" };
+    };
+    const releaseGets = () => {
+        while (parkedGets.length) parkedGets.shift()();
+    };
+    return { state, makeClient, releaseGets };
+}
+
+await test("protocol boundary: interleaved concurrent pushes lose one writer's field (no CAS)", async () => {
+    reset();
+    setSyncToken("proto_concurrent");
+    const { state, makeClient, releaseGets } = makeSharedStore();
+    const base = Date.now();
+
+    const payloadA = { _meta: { v: 2 }, p_fontSize: { v: "2em", ts: base + 10 } };
+    const payloadB = { _meta: { v: 2 }, p_lineHeight: { v: "1.8", ts: base + 20 } };
+
+    // Both writers GET before either POSTs — the interleaving that
+    // GET-merge-POST cannot prevent without CAS.
+    const pushA = cs.pushMergedConfig(payloadA, { fetchImpl: makeClient({ holdGet: true }) });
+    const pushB = cs.pushMergedConfig(payloadB, { fetchImpl: makeClient({ holdGet: true }) });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releaseGets();
+    const [okA, okB] = await Promise.all([pushA, pushB]);
+
+    // Each push *reports* success — that is precisely why the boundary is
+    // invisible to users. The store, however, kept only the last POST.
+    assert.equal(okA, true, "A's push reports success");
+    assert.equal(okB, true, "B's push reports success");
+    const keys = Object.keys(state.doc).filter((k) => k !== "_meta");
+    assert.equal(
+        keys.length, 1,
+        `expected exactly one field to survive the race, got: ${keys.join(", ")}`
+    );
+    assert.equal(state.posts.length, 2, "both writers reached the store");
+});
+
+await test("protocol: sequential pull-edit-push keeps both devices' fields", async () => {
+    reset();
+    setSyncToken("proto_sequential");
+    const { state, makeClient } = makeSharedStore();
+    const base = Date.now();
+
+    const okA = await cs.pushMergedConfig(
+        { _meta: { v: 2 }, p_fontSize: { v: "2em", ts: base + 10 } },
+        { fetchImpl: makeClient() });
+    assert.equal(okA, true);
+
+    // Device B follows the recommended flow: pull first, then push its own
+    // field alongside what it pulled.
+    const okB = await cs.pushMergedConfig(
+        {
+            _meta: { v: 2 },
+            p_fontSize: { v: "2em", ts: base + 10 },
+            p_lineHeight: { v: "1.8", ts: base + 20 },
+        },
+        { fetchImpl: makeClient() });
+    assert.equal(okB, true);
+
+    assert.equal(state.doc.p_fontSize.v, "2em", "A's field survives");
+    assert.equal(state.doc.p_lineHeight.v, "1.8", "B's field survives");
+});
+
+await test("protocol boundary: clock skew makes an older edit win by claimed timestamp", async () => {
+    reset();
+    setSyncToken("proto_clock");
+    const { state, makeClient } = makeSharedStore();
+    const now = Date.now();
+
+    // Device A's clock runs an hour ahead; its edit is older in real time.
+    await cs.pushMergedConfig(
+        { _meta: { v: 2 }, p_theme: { v: "dark", ts: now + 3600000 } },
+        { fetchImpl: makeClient() });
+
+    // Device B edits the same key later with a correct clock.
+    const okB = await cs.pushMergedConfig(
+        { _meta: { v: 2 }, p_theme: { v: "sepia", ts: now } },
+        { fetchImpl: makeClient() });
+
+    // LWW follows the claimed ts, not real time: B's push succeeds while
+    // its edit is silently reverted in the merged document.
+    assert.equal(okB, true, "B's push reports success");
+    assert.equal(state.doc.p_theme.v, "dark", "skewed older edit wins by timestamp");
+});
+
 // ── Summary ─────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed`);

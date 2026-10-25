@@ -29,4 +29,8 @@ UI 使用 `pushMergedConfig`：先 GET 当前远端，将每字段较新的时�
 - `node test/test-url-settings.mjs`
 - `node test/browser-settings-regressions.mjs`（使用测试 runner 启动的本地服务和无头 Chromium；先生成 dist）
 
+上述并发与时钟偏差边界由 `test-config-sync.mjs` 末尾的 "protocol boundary" 测试固定复现：
+交错并发的两个推送**各自报告成功**但后写者覆盖前写者字段；时钟超前的旧编辑按
+时间戳声明获胜。这些测试展示现有边界，不宣称已解决。
+
 浏览器回归将字体加载设为永久 pending，并在本地拦截同步网络请求，验证核心初始化不等待字体、URL T2S选项、同步语言刷新后保留、异常值拒绝以及离线反馈。

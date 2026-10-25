@@ -411,7 +411,8 @@ export async function pushMergedConfig(payload, opts = {}) {
  * times with exponential backoff on transient failures.
  *
  * On total failure, stores the payload for retry via
- * {@link flushPendingPush} (typically triggered by the `online` event).
+ * {@link flushPendingPush} (explicit manual retry; no online-event
+ * auto-push is wired anywhere — sync stays fully manual).
  *
  * @param {Object} payload - The v2-format config object to sync.
  * @param {Object} [opts]
@@ -481,7 +482,8 @@ export async function pushConfig(payload, opts = {}) {
         }
     }
 
-    // All retries exhausted — store for later retry on `online`.
+    // All retries exhausted — store for a later manual flushPendingPush().
+    // There is deliberately no online/network-recovery auto retry.
     _pendingPushPayload = payload;
     return false;
 }
