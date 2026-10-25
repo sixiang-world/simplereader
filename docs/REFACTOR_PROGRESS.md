@@ -17,3 +17,4 @@
 - T20/T21缓存与供应链门禁已完成：部署复用失败即退出的validate（含浏览器/Python），固定URL重新验证、hash assets保留immutable；OpenCC按锁定依赖字节同步并移除无核验CDN回退，vendor来源/版本清单。新增8个纯边界真实checkJs检查与负例证明，新增模块关键lint规则error；旧正则测试改公共API真实执行、0 skipped。独立快照npm run validate全部通过（Node、8个浏览器文件、6个Python用例）；未执行远程发布。历史代码仍有warning，未伪称全库strict。
 - T21锁定依赖补丁已完成：在原有semver范围内定向更新postcss/nanoid/source-map-js/brace-expansion，同步pnpm/npm锁；两套audit均为0公告（仅涵盖包管理器依赖，不涵盖手工vendor或证明无应用漏洞）。独立快照完整validate通过。
 - T01后续交叉验证补充：书架卡片/信息菜单也有文件名和元数据HTML插值。浏览器负例观察到带事件属性的4个img节点；现改静态骨架+text/attr，修复引用文件名的选择器边界，并将每次菜单新建document listener改为单一生命周期监听。安全回归与完整存储浏览器回归通过；这不是声称初次审查已发现所有漏洞。
+- T19有依据的性能部分已完成：书架列表只保留轻量元数据，旧语言字段迁移离开render循环；500/2000条真实IDB读取与10000节点geometry复杂度回归通过，返回元数据不含File/Blob。现有流式DOM与TXT前缀+全量复算没有虚称已解决；实测边界及不引入未经证明的复杂重写理由见docs/PERFORMANCE_BASELINE.md。存储/功能浏览器回归通过。

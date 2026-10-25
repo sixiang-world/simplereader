@@ -306,6 +306,25 @@ export class BookshelfDB extends DBManager {
      * @returns {Promise<Array>} Array of all books
      * @throws {Error} When database initialization fails or transaction fails
      */
+    /** Lightweight list projection; migrate old language metadata at the data boundary. */
+    async getBookList() {
+        const rows = await this.getAll([this.#objectStoreNames.bookfiles], {
+            useCursor: true,
+            transform: record => ({ name: record.name, size: record.data?.size ?? record.data?.byteLength ?? 0,
+                isEastern: record.isEastern, isFromLocal: record.isFromLocal ?? false,
+                isOnServer: record.isOnServer ?? false }),
+        });
+        for (const row of rows) {
+            if (typeof row.isEastern === "boolean") continue;
+            const original = await this.get([this.#objectStoreNames.bookfiles], row.name);
+            row.isEastern = original?.data instanceof Blob
+                ? (await TextProcessor.getLanguageAndEncodingFromBook(original.data)).isEastern
+                : TextProcessor.getLanguage(row.name);
+            await this.updateBookLanguage(row.name, row.isEastern);
+        }
+        return rows;
+    }
+
     async getAllBooks() {
         if (!(await this.init())) {
             throw new Error("Init local db error!");
@@ -1212,13 +1231,6 @@ export const bookshelf = {
      * @param {Object} book - Book object
      * @returns {Promise<boolean>} Language of the book
      */
-    async _getBookLanguage(book) {
-        if (book.isEastern !== undefined) {
-            return book.isEastern;
-        }
-        const result = await TextProcessor.getLanguageAndEncodingFromBook(book.data);
-        return result.isEastern;
-    },
 
     /**
      * Refreshes the bookshelf display and book list
@@ -1249,21 +1261,10 @@ export const bookshelf = {
                 $("#bookshelfUsageText").hide();
             }
             try {
-                const allBooks = await this.db.getAllBooks();
+                const allBooks = await this.db.getBookList();
+                CONFIG.VARS.ALL_BOOKS_INFO = {};
                 for (const book of allBooks) {
-                    const final_isFromLocal = book.isFromLocal ?? false;
-                    const final_isOnServer = book.isOnServer ?? false;
-                    const final_isEastern = await this._getBookLanguage(book);
-                    const new_book = {
-                        name: book.name,
-                        size: book.data.size,
-                        isFromLocal: final_isFromLocal,
-                        isOnServer: final_isOnServer,
-                        isEastern: final_isEastern,
-                    };
-                    if (book.isEastern === undefined || book.isEastern !== final_isEastern) {
-                        await this.db.updateBookLanguage(book.name, final_isEastern);
-                    }
+                    const new_book = { ...book };
 
                     const lastOpenedTimestamp = localStorage.getItem(`${new_book.name}_lastopened`);
                     if (lastOpenedTimestamp) {
