@@ -21,6 +21,41 @@
 
 `npm audit` / `pnpm audit` 只检查锁定依赖图，不覆盖上述手工脚本。因此清理 npm 公告不能表述为已验证所有浏览器供应商代码。
 
+## 本地文件身份摘要（2026-10-25，D04）
+
+sha256 前 16 位（完整摘要可随时重算：`sha256sum client/lib/<path>`）。此表锚定**文件身份**，
+不等于上游可信来源验证：
+
+| 路径（相对 client/lib） | sha256（前 16 位） | 字节 |
+| --- | --- | --- |
+| `clamps.js` | 9a1178bcfc8810d1… | 7571 |
+| `css-filter-gen.js` | 18bc812f43efdc5b… | 9165 |
+| `css-global-variables.js` | 04f9c96506a1ab00… | 12791 |
+| `hyperlist.js` | 779f27058b285c97… | 8168 |
+| `ipad-cursor.js` | 44ba145667f200ca… | 29760 |
+| `jquery.min.js` | cf5e50b1ac962ec1… | 89795 |
+| `jschardet.min.js` | 458080dc0fd1d370… | 342395 |
+| `jszip.min.js` | f12f367798e35ee2… | 97642 |
+| `opencc/full.js` | 5c03eeb066018546… | 1182099 |
+| `sweetalert2.js` | 129e3800acc411ec… | 74930 |
+| `tippy/popper.min.js` | 75c98720c1e18252… | 20128 |
+| `tippy/tippy-bundle.umd.min.js` | d91ae4e6ab6a94e4… | 25719 |
+| `yaireo/color-picker.js` | 08223d8e20a07ab9… | 15272 |
+| `yaireo/position.js` | 91af81290e4f0fee… | 5640 |
+
+### 版本核实尝试记录（2026-10-25）
+
+- **jschardet.min.js**：与 unpkg 上 npm dist 的 2.3.0 / 3.0.0 / 3.1.0 / 3.1.2 /
+  3.1.3 / 3.1.4 逐一字节比对均不匹配（本地 342395 B，npm 3.1.4 为 341716 B）。本地
+  文件不是任何已发布的 npm dist 构件，版本维持"未确认"；最近属 3.1.x 家族。
+  升级路径：改为从锁定依赖 `jschardet` 的 dist 构建分发（classic script 契约不变）。
+- **tippy-bundle.umd.min.js**：本网络环境下 unpkg 对 tippyjs 全部版本返回 26 字节
+  错误桩、jsdelivr 返回"Failed to fetch version info"错误桩，未取得真实上游构件，
+  比对未完成，版本维持"未确认"。后续在网络可达环境重试。
+- **hyperlist.js**：npm 只发布未压缩构建（hyperlist@1.0.0 dist 为 17013 B），本地
+  为 8168 B 的独立压缩构建，无对应 npm 构件，版本维持"未确认"，来源指向
+  https://github.com/tbranyen/hyperlist 。
+
 ## 本地补丁记录
 
 ### `yaireo/color-picker.js`（0.12.0）
