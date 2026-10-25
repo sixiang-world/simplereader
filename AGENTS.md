@@ -59,8 +59,13 @@ v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态
 | `pnpm run dev` | 启动 Vite dev server（端口 3000，热更新） |
 | `pnpm run build` | 生产构建 → `dist/`（含构建时预分页 books + postbuild 拷贝 lib/worker/shared） |
 | `pnpm run preview` | 本地预览生产构建 |
-| `pnpm run typecheck` | `tsc --noEmit -p jsconfig.json`（JSDoc 类型检查） |
-| `pnpm run test` | 独立运行自动发现的 `test/test-*.mjs`（Node 原生 assert，无测试框架） |
+| `pnpm run typecheck` | `tsc --noEmit -p jsconfig.json` + `jsconfig.checked.json`（JSDoc 基础 + 增量真实 checkJs） |
+| `pnpm run test` | 独立运行自动发现的 `test/test-*.mjs`（38 个文件，Node 原生 assert，无测试框架） |
+| `pnpm run lint` / `lint:fix` | ESLint 9（`eslint.config.js`）。当前基线 0 error / 383 warning；新修改模块不得新增警告 |
+| `pnpm run format` / `format:check` | Prettier（`.prettierrc.json`） |
+| `pnpm run test:browser` | 11 个真实 Chromium 回归文件（需先 `build`；`CHROMIUM_EXECUTABLE_PATH` 可指定浏览器） |
+| `pnpm run validate` | lint + typecheck + build + Node + 浏览器 + Python 回归（`build-tools/validate.sh`，CI/部署共用门禁） |
+| `pnpm run test:extension` | 真实浏览器扩展验收（独立于 validate；被企业策略阻塞时不得称通过） |
 | `pnpm run preprocess-books` | 单独执行 `build-tools/preprocess-books.mjs` 预分页书籍 |
 | `python build-tools/build.py --extension` | 本地打包 Chrome/Firefox 到 `dist/extensions/`，不修改源版本、不部署 |
 | `python build-tools/build.py --extension -v <version>` | 仅覆盖生成产物版本号 |
@@ -125,10 +130,10 @@ v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态
 | `reader/` | `reader.js`、`flow-reader.js`、`search.js`、`go-line.js`、`footnotes.js` | 阅读核心：分页渲染、目录(TOC)、翻页、流式/无限滚动、全文搜索(F)、跳转(G)、脚注 |
 | `file/` | `file-handler.js`、`file-processor.js`、`file-processor-worker.js` | 文件处理：编码检测(jschardet)、TXT/EPUB 解析、分页计算（Worker 后台执行） |
 | `epub/` | `epub-converter.js` | EPUB→TXT 结构转换（JSZip + DOMParser，OPF 清单 + XHTML 章节，**不用 epub.js**） |
-| `bookshelf/` | `bookshelf.js` | 书架视图：浏览、分类、组织书籍 |
+| `bookshelf/` | `bookshelf.js`（UI/public facade）、`bookshelf-db.js`（数据/元数据迁移）、`book-data.js`（保存恢复合约） | 书架视图：浏览、分类、组织书籍；列表 render 只读轻量元数据，不做迁移/全书读取 |
 | `database/` | `db-manager.js`、`db-worker.js` | IndexedDB 抽象 + 后台 Worker（批量导入/查询不阻塞 UI） |
 | `font/` | `fontpool.js` | 自定义字体管理（最多 3 个，拖入加载） |
-| `settings/` | `settings.js`、`font-baseline.js` | 设置系统（见 §9）；`font-baseline.js` 处理字体基线偏移 |
+| `settings/` | `settings.js`（公开状态 facade）、`settings-menu.js`（菜单 DOM）、`core/setting-values.js`（值校验）、`core/settings-state.js`（同步状态过渡）、`font-baseline.js` | 设置系统（见 §9）；`font-baseline.js` 处理字体基线偏移 |
 | `text/` | `text-processor.js`、`text-processor-dom.js` | 文本解析：标题/作者/章节检测、广告过滤、脚注配对 |
 | `init-webpage.js` | — | 网页初始化配置与渲染 |
 
@@ -225,8 +230,16 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 | `test-worker-resolution.mjs` | Worker URL 解析 |
 | `test-preprocess-books.mjs` | 预分页（EPUB DOMParser 兼容） |
 | `test-text-processor-regex.mjs` | 文本处理正则 |
-| `test-version-consistency.mjs` / `test-build-integration.mjs` | 版本号一致性、dist 构建产物 |
+| `test-version-consistency.mjs` / `test-build-integration.mjs` / `test-build-configuration.mjs` | 版本号一致性、dist 构建产物、构建配置 |
 | `test-config-constants.mjs` / `test-base-submodules.mjs` / `test-issue-12.mjs` | 配置常量、基础工具、语言切换回归 |
+| `test-epub-converter.mjs` / `test-epub-images.mjs` / `test-epub-integrity.mjs` / `test-epub-rendering.mjs` | EPUB 转换、图片内联、完整性预算、渲染（真实 ZIP） |
+| `test-book-data.mjs` / `test-reader-handoff.mjs` / `test-page-navigation.mjs` | BookData 装载合约、阅读器交接、页边界导航 |
+| `test-module-boundaries.mjs` / `test-typecheck-gate.mjs` | 模块边界（无 renderer→reader 导入环）、checkJs 门禁 |
+| `test-worker-requests.mjs` | Worker 请求 ID/超时/取消/销毁故障矩阵 |
+| `test-settings-state-regressions.mjs` / `test-background-tasks.mjs` | 设置状态过渡、后台任务边界 |
+| `test-reader-ui-regressions.mjs` / `test-seal-rendering.mjs` / `test-extension-handoff.mjs` | 阅读 UI、藏书章渲染、扩展 claim/ACK 交接 |
+
+浏览器回归（11 个 `browser-*.mjs`，`pnpm run test:browser`）：smoke、security、bookshelf-safety、book-loading、file-worker、storage、settings、reader-ui、performance、module-boundaries、handoff。Python：`test/test_build_tooling.py`（6 用例，validate 内运行）；`test/docker-smoke.py` 需已构建镜像单独跑。遗留问题与任务去向见 `docs/ISSUE-LEDGER.md`。
 
 > **重要**：`test-settings-export.mjs` 是**架构契约测试**，用源码静态检查（正则）验证关键架构约束（因 settings.js 依赖 DOM 无法直接 import）。修改同步/设置架构后须同步更新此测试。
 
@@ -238,15 +251,15 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 
 | 远端名 | URL | 用途 |
 |--------|-----|------|
-| `origin` | `https://cnb.cool/shisheng820/simplereader.git` | CNB 代码托管（主仓库） |
-| `github` | `https://github.com/sixiang-world/simplereader.git` | GitHub fork 镜像 |
+| `cnb` | `https://cnb.cool/shisheng820/simplereader.git` | CNB 代码托管（主仓库，`.cnb.yml` 流水线触发） |
+| `origin` | `https://github.com/sixiang-world/simplereader.git` | GitHub fork 镜像 |
 | `upstream` | `https://github.com/henryxrl/SimpleTextReader.git` | 原版上游，用于同步更新 |
 
-### 分支拓扑（2026-08-30 治理后）
+### 分支拓扑（2026-10-25 历史恢复后）
 
-| 分支（origin） | 指向 | 角色 |
+| 分支（cnb） | 指向 | 角色 |
 |----------------|------|------|
-| `main` | 最新 dev tip | 稳定发布线，随 dev ff-only 推进 |
+| `main` | 与 dev 同步推进（0c82d4f 起） | 稳定发布线，随 dev ff-only 推进 |
 | `dev` | 活跃开发 HEAD | 开发主线，含全部 v2 成果 |
 | `archive/v2-design` | d14512a | v2 设计探索归档，main 不含 |
 
@@ -455,9 +468,15 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 2. **更新 CHANGELOG.md** — `[Unreleased]` 移入新版本段落，格式 `## [x.y.z] - YYYY-MM-DD`
 3. **Commit** — Conventional Commits，如 `feat: vx.y.z — 描述`，Co-Authored-By 标注 Claude
 4. **打 Tag** — `git tag vx.y.z`（指向含 manifest 更新的 commit）
-5. **Push**（需用户确认）— `git push origin main && git push origin --tags` + `git push github main && git push github --tags`
+5. **Push**（需用户确认）— `git push cnb main && git push cnb --tags` + `git push origin main && git push origin --tags`（CNB push 触发 EdgeOne 部署流水线；GitHub 镜像由流水线 sync 兜底，仍显式推送核对 SHA）
 
 > manifest 版本更新单独一个 commit，tag 指向该 commit。
+
+### 14.1 不同交付物的完成标准
+
+- **Web（EdgeOne Pages）**：`pnpm run validate` 全绿 → push dev 触发预发部署 → 预发验收（入口/Worker/缓存升级，见 docs/ISSUE-LEDGER.md E02）→ 生产授权后快进 main。只有 EdgeOne 生产冒烟通过才算上线完成，"Git 已 push" 不算。
+- **浏览器扩展**：`python build-tools/build.py --extension` 打包成功只是产物完成；真实扩展引擎验收（`pnpm run test:extension`）受企业策略阻塞时不称通过。扩展兼容性保留为独立待办，不阻塞 Web 发布，不安排商店上架。
+- **Docker**：仅保留基础多阶段构建检查（docs/DOCKER_BUILD.md、test/docker-smoke.py 用已构建本地镜像），不建设镜像仓库或容器发布链。
 
 ---
 
@@ -475,7 +494,7 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 - **缩进**：JS/CSS 2 空格，Python 4 空格
 - **命名**：JS `camelCase`；CSS 文件 `kebab-case`
 - **CSS**：用 `variables.css` 变量；库样式放 `styles/lib/`
-- **无 linter/formatter**：遵循现有代码风格
+- **Linter/Formatter**：ESLint 9（`eslint.config.js`，模块关键规则为 error）+ Prettier。遗留 warning 基线 383，新修改模块不得新增；修复后再提升规则，不批量格式化
 
 ---
 

@@ -210,7 +210,8 @@ pnpm run validate        # lint + 增量语义检查 + build + Node/浏览器/Py
 pnpm run test:extension  # 独立真实扩展验收；需允许加载扩展的浏览器
 ```
 
-审查修复记录、兼容风险与已知限制见 [实施记录](docs/REFACTOR_PROGRESS.md)。
+审查修复记录、兼容风险与已知限制见 [实施记录](docs/REFACTOR_PROGRESS.md)，
+各审查问题的最终去向与遗留开放项见 [遗留问题台账](docs/ISSUE-LEDGER.md)。
 [同步契约](docs/config-sync-contract.md) 明确无 CAS 的并发限制；
 [性能基准](docs/PERFORMANCE_BASELINE.md) 区分实测与未承诺的流式/内存优化；
 [扩展验收](docs/EXTENSION_TESTING.md) 说明平台策略限制；
