@@ -3,22 +3,29 @@
 # The image now ships ONLY the static frontend. Use any static file server to
 # serve dist/. Here we use Caddy because the project's deployment docs already
 # reference it; nginx would work equally well.
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy package manifests first for layer caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml jsconfig.json ./
 COPY vite.config.js ./
+COPY build-tools/ ./build-tools/
 
 # Enable pnpm via corepack (pnpm is declared in package.json `packageManager`)
 # and install from the committed pnpm-lock.yaml. This keeps the dependency
 # tree identical across EdgeOne / Docker / local dev (single source of truth).
-RUN corepack enable && corepack prepare pnpm@$(node -p "require('./package.json').packageManager.replace(/pnpm@/, '')") --activate && pnpm install --frozen-lockfile
+# Corporate build proxies may supply their public CA as an optional BuildKit
+# secret; it is never baked into either image and verification stays enabled.
+RUN --mount=type=secret,id=registry_ca \
+    if [ -f /run/secrets/registry_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/registry_ca; fi; \
+    export NODE_USE_ENV_PROXY=1; \
+    corepack enable && corepack prepare pnpm@$(node -p "require('./package.json').packageManager.replace(/pnpm@/, '')") --activate && pnpm install --frozen-lockfile
 
 # Copy source
 COPY index.html version.json help.json ./
 COPY client/ ./client/
 COPY shared/ ./shared/
+COPY books/ ./books/
 
 # Build static bundle → /app/dist
 RUN pnpm run build
@@ -41,5 +48,5 @@ VOLUME ["/srv/books"]
 # old server's :8866 port no longer exists, so only :80 is exposed.
 EXPOSE 80
 
-# Inline Caddyfile: serve /srv on :80, enable gzip/br, SPA fallback to index.html
-CMD ["caddy", "file-server", "--root", "/srv", "--listen", ":80", "--browse"]
+# Serve only the static production bundle; directory browsing is unnecessary.
+CMD ["caddy", "file-server", "--root", "/srv", "--listen", ":80"]
