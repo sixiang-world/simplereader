@@ -55,8 +55,10 @@ export class FileProcessor extends FileProcessorCore {
      * @public
      */
     async detectEncodingAndLanguage() {
+        this.signal?.throwIfAborted();
         // console.log("detectEncodingAndLanguage");
         await super.detectEncodingAndLanguage(this.file);
+        this.signal?.throwIfAborted();
 
         // Change UI language based on detected language... or not?
         // CONFIG.RUNTIME_VARS.RESPECT_USER_LANG_SETTING = (document.documentElement.getAttribute("respectUserLangSetting") === "true");

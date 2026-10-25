@@ -41,6 +41,7 @@ import {
 import { flowReader } from "./flow-reader.js";
 import { resolveEpubHref } from "../../../../shared/core/file/epub-path.js";
 import { search } from "./search.js";
+import { pageForLine } from "../../../../shared/core/text/page-navigation.js";
 import { goLine } from "./go-line.js";
 
 /**
@@ -611,23 +612,26 @@ export const reader = {
      * @public
      */
     async gotoLine(lineNumber, isTitle = true) {
+        const filename = CONFIG.VARS.FILENAME;
+        const chunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
+        const isCurrent = () => filename === CONFIG.VARS.FILENAME && chunks === CONFIG.VARS.FILE_CONTENT_CHUNKS;
         // Flow mode: delegate to flowReader
         if (flowReader.isActive()) {
             flowReader.gotoLine(lineNumber, isTitle);
             if (isTitle) {
                 await setChapterTitleActive(lineNumber);
+                if (!isCurrent()) return -1;
                 CONFIG.VARS.GOTO_TITLE_CLICKED = true;
             }
-            setHistory(CONFIG.VARS.FILENAME, lineNumber);
+            if (!isCurrent()) return -1;
+            setHistory(filename, lineNumber);
             return 0;
         }
 
         // Find the page number to jump to
         // console.log(`lineNumber: ${lineNumber}, isTitle: ${isTitle}`);
 
-        let needToGoPage = CONFIG.VARS.PAGE_BREAKS.findIndex((breakPoint) => breakPoint > lineNumber);
-        needToGoPage = needToGoPage === -1 ? CONFIG.VARS.PAGE_BREAKS.length : needToGoPage;
-        needToGoPage = Math.max(1, Math.min(needToGoPage, CONFIG.VARS.TOTAL_PAGES));
+        const needToGoPage = pageForLine(lineNumber, CONFIG.VARS.PAGE_BREAKS, CONFIG.VARS.TOTAL_PAGES);
         // console.log("needToGoPage: ", needToGoPage);
         if (needToGoPage !== CONFIG.VARS.CURRENT_PAGE) {
             this.gotoPage(needToGoPage, "top");
@@ -636,6 +640,7 @@ export const reader = {
         if (isTitle) {
             // Set the current title in the TOC as active
             await setChapterTitleActive(lineNumber);
+                if (!isCurrent()) return -1;
 
             CONFIG.VARS.GOTO_TITLE_CLICKED = true;
             // console.log("gotoTitle_Clicked: ", CONFIG.VARS.GOTO_TITLE_CLICKED);
@@ -654,6 +659,7 @@ export const reader = {
                     // console.log("scrollBackPx: ", scrollBackPx);
                     window.scrollBy(0, -scrollBackPx);
                     await setChapterTitleActive(lineNumber);
+                if (!isCurrent()) return -1;
                 } else if (line) {
                     line.scrollIntoView({ behavior: "instant", block: "start" });
                 } else {
@@ -667,7 +673,8 @@ export const reader = {
         }
 
         // Remember the line number in history
-        setHistory(CONFIG.VARS.FILENAME, lineNumber);
+        if (!isCurrent()) return -1;
+        setHistory(filename, lineNumber);
         return 0;
     },
 
@@ -1005,7 +1012,14 @@ export const reader = {
  * Initializes the reader by setting up event listeners and other configurations
  * @public
  */
+const handleTitleNavigation = (event) => {
+    if (Number.isInteger(event.detail?.lineNumber)) reader.gotoChapterTitleLine(event.detail.lineNumber).catch(console.error);
+};
+
 export function initReader() {
+    const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+    content.removeEventListener("reader-title-navigation", handleTitleNavigation);
+    content.addEventListener("reader-title-navigation", handleTitleNavigation);
     /**
      * Handle scroll events for reading progress
      */

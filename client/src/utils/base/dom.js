@@ -30,9 +30,7 @@ export function removeHashbang() {
  * @param {string} filename - The filename to process
  * @returns {string} Filename without extension
  */
-export function removeFileExtension(filename) {
-    return filename.replace(CONFIG_CONST.CONST_FILE.EXT_REGEX, "");
-}
+export { removeFileExtension } from "../../../../shared/utils/file-name.js";
 
 
 /**

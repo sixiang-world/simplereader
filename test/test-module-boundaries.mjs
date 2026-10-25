@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {removeFileExtension} from '../shared/utils/file-name.js';
+import {CONST_FILE} from '../client/src/config/constants.js';
+import {FileProcessorCore} from '../shared/core/file/file-processor-core.js';
+for(const name of ['book.txt','中文.EPUB','font.ttf','font.otf','other.log'])assert.equal(removeFileExtension(name),name.replace(CONST_FILE.EXT_REGEX,''));
+assert.ok(new FileProcessorCore(10));
+assert.ok(!readFileSync(new URL('../shared/core/file/file-processor-core.js',import.meta.url),'utf8').includes('client/src/utils/base.js"'));
+assert.ok(!/import\s*\{\s*reader\s*\}/.test(readFileSync(new URL('../client/src/modules/text/text-processor-dom.js',import.meta.url),'utf8')));
+console.log('Shared filename behavior and one-way renderer boundary preserved');

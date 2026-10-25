@@ -22,11 +22,16 @@ await withBrowserTest(async({browser,baseURL})=>{
    const a=FileHandler.handleEpubFile(new File([Uint8Array.from(bytes)],'cancelled.epub'));
    const b=FileHandler.handleEpubFile(new File([Uint8Array.from(bytes)],'latest.epub'));
    const outcomes=await Promise.allSettled([a,b]);
-   return {initial,restored,cancelled:outcomes[0].status,last:outcomes[1].status,current:C.VARS.FILENAME,rendered:document.querySelector('#content')?.textContent};
+   const current=C.VARS.FILENAME;
+   const {getHistoryAndSetChapterTitleActive}=await import('/client/src/utils/helpers/reader.js');
+   C.VARS.FILENAME='history-old.txt';localStorage.setItem('history-old.txt','3');
+   let release;const history=getHistoryAndSetChapterTitleActive(()=>new Promise(resolve=>{release=resolve;}),false,false);
+   C.VARS.FILENAME='history-new.txt';C.VARS.FILE_CONTENT_CHUNKS=[];C.VARS.HISTORY_LINE_NUMBER=77;release(0);await history;
+   return {initial,restored,cancelled:outcomes[0].status,last:outcomes[1].status,current,history:C.VARS.HISTORY_LINE_NUMBER};
   }finally{cbReg.rm(token);}
  },bytes);
  assert.equal(result.initial.mapped,result.initial.actual);assert.equal(result.initial.ranges,2);assert.ok(result.initial.notes.includes('OPS/Text/chapter 1.xhtml#note'));assert.equal(result.initial.version,4);
  assert.equal(result.restored.mapped,result.initial.mapped);assert.deepEqual(result.restored.notes,result.initial.notes);assert.equal(result.restored.ranges,2);
- assert.equal(result.cancelled,'rejected');assert.equal(result.last,'fulfilled');assert.equal(result.current,'latest.epub');
+ assert.equal(result.cancelled,'rejected');assert.equal(result.last,'fulfilled');assert.equal(result.current,'latest.epub');assert.equal(result.history,77);
  await page.close();console.log('EPUB transform/index save/restore, cache switch and cancelled-load isolation passed');
 });

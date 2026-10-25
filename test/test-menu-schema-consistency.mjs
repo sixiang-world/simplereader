@@ -7,7 +7,7 @@
  *   2. Every non-hidden SETTINGS_SCHEMA entry appears at least once
  *      in MENU_SCHEMA (prevents orphaned settings that never render).
  *   3. Virtual items (__) that are referenced in MENU_SCHEMA have
- *      corresponding routing logic in settings.js.
+ *      corresponding routing logic in settings-menu.js.
  *   4. Tab IDs in MENU_SCHEMA are from the allowed set.
  *   5. No duplicate items within the same group.
  *
@@ -15,7 +15,7 @@
  *   - Adding a setting to SETTINGS_SCHEMA but forgetting to add it to MENU_SCHEMA
  *   - Typo in MENU_SCHEMA item ID that doesn't match any SETTINGS_SCHEMA key
  *   - Removing a setting from SETTINGS_SCHEMA but leaving it in MENU_SCHEMA
- *   - Virtual items without routing handlers in settings.js
+ *   - Virtual items without routing handlers in settings-menu.js
  *
  * Run: node test/test-menu-schema-consistency.mjs
  */
@@ -94,7 +94,7 @@ function extractSchemaArray(source, marker) {
 const SETTINGS_SCHEMA = extractSchemaArray(schemaSrc, "const SETTINGS_SCHEMA = ");
 const MENU_SCHEMA = extractSchemaArray(schemaSrc, "const MENU_SCHEMA = ");
 
-// ── Read settings.js for virtual item routing ───────────────────────────
+// ── Read settings-menu.js for virtual item routing ───────────────────────────
 
 const SETTINGS_JS_PATH = path.resolve(
     import.meta.dirname,
@@ -103,7 +103,7 @@ const SETTINGS_JS_PATH = path.resolve(
     "src",
     "modules",
     "settings",
-    "settings.js"
+    "settings-menu.js"
 );
 const settingsJsSrc = fs.readFileSync(SETTINGS_JS_PATH, "utf-8");
 
@@ -209,10 +209,10 @@ test("No duplicate items within the same group", () => {
 
 console.log("\nmodules/settings/settings.js — virtual item routing\n");
 
-test("Every virtual item in MENU_SCHEMA has routing in settings.js", () => {
+test("Every virtual item in MENU_SCHEMA has routing in settings-menu.js", () => {
     const unhandled = [];
     for (const itemId of virtualItems) {
-        // Check for `if (itemId === "xxx")` pattern in settings.js
+        // Check for `if (itemId === "xxx")` pattern in settings-menu.js
         const pattern = new RegExp(`if\\s*\\(\\s*itemId\\s*===\\s*["\']${itemId}["\']\\s*\\)`);
         if (!pattern.test(settingsJsSrc)) {
             unhandled.push(itemId);
@@ -221,7 +221,7 @@ test("Every virtual item in MENU_SCHEMA has routing in settings.js", () => {
     assert.equal(
         unhandled.length,
         0,
-        `Virtual items without routing in settings.js: ${unhandled.join(", ")}. ` +
+        `Virtual items without routing in settings-menu.js: ${unhandled.join(", ")}. ` +
             `Add 'if (itemId === "...")' branch in #createTabFromSchema().`
     );
 });

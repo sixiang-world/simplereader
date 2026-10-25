@@ -195,9 +195,26 @@ pnpm run dev
 # 生产构建（输出到 dist/）
 pnpm run build
 
-# 运行全部单元测试（共 22 个测试文件）
+# 运行自动发现的 Node 行为回归
 pnpm run test
 ```
+
+### 完整验证与修复说明
+
+需要 Node 22+、项目锁定的 pnpm 9.12.0、Python 3 和 Chromium。
+`pnpm exec playwright-core install --with-deps chromium` 可安装测试浏览器，
+也可通过 `CHROMIUM_EXECUTABLE_PATH` 使用环境已有的 Chromium。
+
+```bash
+pnpm run validate        # lint + 增量语义检查 + build + Node/浏览器/Python回归
+pnpm run test:extension  # 独立真实扩展验收；需允许加载扩展的浏览器
+```
+
+审查修复记录、兼容风险与已知限制见 [实施记录](docs/REFACTOR_PROGRESS.md)。
+[同步契约](docs/config-sync-contract.md) 明确无 CAS 的并发限制；
+[性能基准](docs/PERFORMANCE_BASELINE.md) 区分实测与未承诺的流式/内存优化；
+[扩展验收](docs/EXTENSION_TESTING.md) 说明平台策略限制；
+[Docker 构建](docs/DOCKER_BUILD.md) 保留 TLS 校验并支持可选可信代理 CA。
 
 ### 项目结构（v2 重构）
 
@@ -228,7 +245,7 @@ client/
   manifests/                # 浏览器扩展清单（Chrome / Firefox / PWA）
 shared/                     # 前后端共享的核心逻辑
 archive/                    # 历史存档（server/, debug/ 等）
-test/                       # 单元测试（22 个测试文件，Node 原生 assert）
+test/                       # Node/浏览器行为回归（自动发现）
 ```
 
 ## v1 → v2 迁移说明（破坏性变更）

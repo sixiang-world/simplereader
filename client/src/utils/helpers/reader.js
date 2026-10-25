@@ -676,7 +676,11 @@ export function removeHistory(filename) {
  * @param {boolean} consoleLog - Whether to log retrieval to console
  */
 export async function getHistoryAndSetChapterTitleActive(gotoLineFunc, setActive = true, consoleLog = true) {
-    CONFIG.VARS.HISTORY_LINE_NUMBER = await getHistory(CONFIG.VARS.FILENAME, gotoLineFunc, consoleLog);
+    const filename = CONFIG.VARS.FILENAME;
+    const chunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
+    const line = await getHistory(filename, gotoLineFunc, consoleLog);
+    if (filename !== CONFIG.VARS.FILENAME || chunks !== CONFIG.VARS.FILE_CONTENT_CHUNKS) return;
+    CONFIG.VARS.HISTORY_LINE_NUMBER = line;
     if (setActive && CONFIG.VARS.CURRENT_PAGE === 1 && CONFIG.VARS.HISTORY_LINE_NUMBER === 0 && getScrollY() === 0) {
         // if the first line is a header, it will show up in TOC
         await setChapterTitleActive(CONFIG.VARS.HISTORY_LINE_NUMBER);

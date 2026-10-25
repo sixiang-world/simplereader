@@ -4,10 +4,10 @@
  * using data provided by TextProcessorCore.
  *
  * @module client/src/modules/text/text-processor-dom
- * @requires client/src/modules/features/reader
+ * @fires reader-title-navigation (owned by the reader container)
  */
 
-import { reader } from "../reader/reader.js";
+
 
 /**
  * @class TextProcessorDOM
@@ -433,10 +433,10 @@ export class TextProcessorDOM {
      * @private
      */
     static #addTitleClickHandler(anchor) {
-        anchor.addEventListener("click", async function (e) {
+        anchor.addEventListener("click", function (e) {
             e.preventDefault();
-            const lineID = parseInt(this.parentElement.id.slice(4));
-            await reader.gotoChapterTitleLine(lineID);
+            const lineID = Number(this.closest("[data-line-num]")?.dataset.lineNum);
+            if (Number.isInteger(lineID)) this.dispatchEvent(new CustomEvent("reader-title-navigation", { bubbles: true, detail: { lineNumber: lineID } }));
         });
     }
 }

@@ -11,29 +11,7 @@
  * @module client/src/config/constants
  */
 
-/**
- * Supported file extensions
- * @type {string}
- */
-const SUPPORTED_FILE_EXT = ".txt";
-
-/**
- * Supported EPUB file extension
- * @type {string}
- */
-const SUPPORTED_EPUB_EXT = ".epub";
-
-/**
- * EPUB MIME type
- * @type {string}
- */
-const EPUB_FILE_TYPE = "application/epub+zip";
-
-/**
- * Supported font extensions
- * @type {string[]}
- */
-const SUPPORTED_FONT_EXT = [".ttf", ".otf"];
+import { SUPPORTED_FILE_EXT, SUPPORTED_EPUB_EXT, EPUB_FILE_TYPE, SUPPORTED_FONT_EXT, FILE_EXTENSION_REGEX } from "../../../shared/config/file-types.js";
 
 /**
  * Configuration constants
@@ -148,7 +126,7 @@ export const CONST_FILE = Object.freeze({
     // re-converted.
     EPUB_CONVERTER_VERSION: 4,
     SUPPORTED_FILE_EXT,
-    EXT_REGEX: new RegExp(`(${SUPPORTED_FILE_EXT}|${SUPPORTED_EPUB_EXT}|${SUPPORTED_FONT_EXT.join("|")})$`, "i"),
+    EXT_REGEX: FILE_EXTENSION_REGEX,
     SUPPORTED_FILE_TYPE: "text/plain",
     SUPPORTED_EPUB_EXT,
     EPUB_FILE_TYPE,

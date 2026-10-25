@@ -1,7 +1,7 @@
 import os,subprocess,urllib.request,json
 cfg=os.environ.copy()
 def docker(*args):return subprocess.check_output(['docker',*args],env=cfg,text=True).strip()
-cid=docker('run','-d','--rm','-p','127.0.0.1::80',os.environ.get('DOCKER_IMAGE', 'simplereader:latest'))
+cid=docker('run','--pull=never','-d','--rm','-p','127.0.0.1::80',os.environ.get('DOCKER_IMAGE', 'simplereader:latest'))
 try:
  port=docker('port',cid,'80/tcp').split(':')[-1]
  for path in ['/', '/version.json','/client/lib/opencc/full.js','/client/src/modules/file/file-processor-worker.js']:

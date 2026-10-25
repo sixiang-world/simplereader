@@ -1,21 +1,10 @@
 /**
  * @fileoverview Preset manager for typography/layout presets.
  *
- * Reserved for the planned "排版预设快捷切换" feature:
- *   - Multiple named presets (e.g. "夜间阅读", "白天舒适", "极简")
- *   - Each preset is a partial settings object (subset of SETTINGS_SCHEMA keys)
- *   - URL parameter `?scheme=1` / `?scheme=夜间` switches to a preset
- *     at boot time, before applySettings() runs
- *   - Presets can be saved/loaded/deleted via this API
- *
- * settings.loadSettings consumes these presets before individual URL
- * overrides. The public storage API can also be used by future UI controls:
- *
- *   1. settings.js loadSettings() should call `applyPresetFromURL()`
- *      AFTER parseURLSettings() runs, so URL `?key=value` overrides
- *      take precedence over preset values.
- *   2. The settings menu should expose a "Presets" tab that calls
- *      savePreset() / loadPreset() / deletePreset().
+ * Named partial settings are applied at boot from ?scheme=, before individual
+ * URL settings. Current precedence: defaults/storage → preset → URL overrides.
+ * This module stores named presets; the full preset editor remains optional UI.
+ * scheme=0 restores schema defaults, scheme=1 selects Infinite Scroll.
  *
  * == Preset storage format ==
  *

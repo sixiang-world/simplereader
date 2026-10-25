@@ -1,7 +1,20 @@
 # Repository Guidelines
 
-> SimpleTextReader（易笺）— 基于 Vite 的浏览器端 TXT/EPUB 阅读器。当前版本 **v2.0.1**。
+> SimpleTextReader（易笺）— 基于 Vite 的浏览器端 TXT/EPUB 阅读器。当前版本 **v2.3.0**。
 > 本文件是代码库的权威架构索引，由源码审查生成。`CLAUDE.md` 是指向本文件的软链接。
+
+---
+
+## 0. 审查修复后的开发约定
+
+- Node 22+、pnpm 9.12.0、Python 3；`pnpm run validate` 统一执行lint、基础与增量JS语义检查、build、Node、Chromium、Python回归。浏览器可用 `CHROMIUM_EXECUTABLE_PATH` 指定。`test:extension` 是独立的真实扩展验收，企业策略阻塞时不能称通过。
+- `settings.js` 保留公开状态facade；菜单DOM在 `settings-menu.js`，值校验与同步状态过渡在 `core/setting-values.js` / `core/settings-state.js`。
+- `bookshelf.js` 保留UI/public facade；`bookshelf-db.js` 持有数据/元数据迁移，`book-data.js` 定义保存恢复合约。不要在列表render里读取全书/做迁移。
+- `shared/config/file-types.js` / `shared/utils/file-name.js` 是无DOM边界；EPUB路径、预算、分页、DOM适配在 `shared/core/file/epub-*.js`。旧TextProcessor默认配置仍兼容client，不能声称共享层已完全无依赖。
+- 渲染器通过 `reader-title-navigation` 向容器派发导航；不要重新引入renderer→reader导入环。搜索regex在可终止Worker运行。
+- 多store写以事务commit为成功；Worker请求必须有ID、错误/超时/取消、明确dispose所有权。保留原始File，不以删除书籍“恢复”转换错误。
+- 实施记录/限制见 `docs/REFACTOR_PROGRESS.md`、`docs/PERFORMANCE_BASELINE.md`、`docs/config-sync-contract.md`。不引入无必要框架或一次重写分页算法。
+- 远端与分支以 `git remote -v` / `git branch -r` 为准；下文§7历史拓扑不能代替实时Git事实。当前origin为GitHub `sixiang-world/simplereader`。
 
 ---
 
@@ -15,7 +28,7 @@
 ├── version.json            # 版本号 + 中英文 changelog（发版数据源）
 ├── help.json               # 帮助中心内容
 ├── jsconfig.json           # JSDoc 类型检查配置
-├── Dockerfile              # node:20-alpine 构建 → caddy:2-alpine 静态服务
+├── Dockerfile              # node:22-alpine 构建 → caddy:2-alpine 静态服务
 ├── edgeone.json            # EdgeOne 部署配置（缓存头、构建命令）
 ├── client/                 # 前端源码（ES modules）
 │   ├── src/                # 核心逻辑（见 §3 模块参考）
@@ -25,7 +38,7 @@
 │   └── manifests/          # Chrome / Firefox / PWA manifest
 ├── shared/                 # 客户端与（历史）服务端共享的纯 JS（见 §3.6）
 ├── build-tools/            # Python 构建脚本 + 字体子集 + 预分页（见 §5）
-├── test/                   # Node 原生 .mjs 测试套件（22 个文件，见 §6）
+├── test/                   # Node 原生 .mjs 测试套件（自动发现 `test/test-*.mjs`，见 §6）
 ├── docs/                   # 架构文档（如 config-sync-fix-plan.md）
 ├── books/                  # 本地书籍库（构建时预分页为 dist/books/*.json）
 ├── archive/                # 归档代码（archive/server、archive/debug），不在主代码路径
@@ -47,10 +60,10 @@ v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态
 | `pnpm run build` | 生产构建 → `dist/`（含构建时预分页 books + postbuild 拷贝 lib/worker/shared） |
 | `pnpm run preview` | 本地预览生产构建 |
 | `pnpm run typecheck` | `tsc --noEmit -p jsconfig.json`（JSDoc 类型检查） |
-| `pnpm run test` | 串联运行全部 22 个 `test/test-*.mjs`（Node 原生 assert，无测试框架） |
+| `pnpm run test` | 独立运行自动发现的 `test/test-*.mjs`（Node 原生 assert，无测试框架） |
 | `pnpm run preprocess-books` | 单独执行 `build-tools/preprocess-books.mjs` 预分页书籍 |
-| `python build-tools/build.py` | 构建 Chrome/Firefox 扩展 + Docker 镜像，输出到 `dist/` |
-| `python build-tools/build.py -v <version>` | 指定版本号构建 |
+| `python build-tools/build.py --extension` | 本地打包 Chrome/Firefox 到 `dist/extensions/`，不修改源版本、不部署 |
+| `python build-tools/build.py --extension -v <version>` | 仅覆盖生成产物版本号 |
 | `python build-tools/generate_changelog.py` | 从 git 历史生成 CHANGELOG.md |
 | `docker build -t simplereader .` | 构建生产 Docker 镜像（Caddy 静态服务） |
 
@@ -100,7 +113,7 @@ v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态
 |------|------|
 | `hooks.js` | `HookRegistry` — 类型化、有序、async 感知的**值转换管道**。与 cbReg 不同：hooks 显式区分 transform（须返回值）与 intercept（可中止），管道遇 intercept 短路。保留钩子名：`file:beforeProcess`、`file:afterProcess`、`reader:beforeRender`、`reader:afterRender`。**T2S 已注册 `file:afterProcess`**。 |
 | `config-sync.js` | 多设备配置同步（手动模式，见 §8） |
-| `presets.js` | 排版预设系统：6 个内置预设（Default/Reading/Compact/Eye-care/Magazine/Code），localStorage `reader_presets` 存储，URL `?scheme=0/1/Name` 切换。API：`savePreset/loadPreset/deletePreset/applyPreset/resolvePresetFromURL` |
+| `presets.js` | 排版预设系统：schema 默认值与 Infinite Scroll 预设，localStorage `reader_presets` 存储，URL `?scheme=0/1/Name` 切换。API：`savePreset/loadPreset/deletePreset/applyPreset/resolvePresetFromURL` |
 | `t2s.js` | 繁→简转换：`t2s_lite`（本地 JSON 映射表 ~2928 对）与 `t2s_pro`（OpenCC Wasm，懒加载）两模式互斥。注册 `file:afterProcess` hook，转换 bookData 的 metadata/processedLines/titles/footnotes |
 | `t2s-opencc.js` | OpenCC 集成（`client/lib/opencc/full.js` 本地化，避免 CDN 被跟踪防护拦截） |
 | `t2s-map.json` | 繁简映射表 |
@@ -196,7 +209,7 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 
 ## 6. 测试套件（`test/`）
 
-**22 个测试文件**，Node 原生 `assert`（无框架），`pnpm run test` 串联运行。主要覆盖：
+**自动发现的 Node 测试文件**，Node 原生 `assert`（无框架），`pnpm run test` 串联运行。主要覆盖：
 
 | 测试文件 | 覆盖 |
 |----------|------|

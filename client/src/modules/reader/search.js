@@ -15,6 +15,7 @@
 import * as CONFIG from "../../config/index.js";
 import { setHistory } from "../../utils/helpers/reader.js";
 import { flowReader } from "./flow-reader.js";
+import { pageForLine } from "../../../../shared/core/text/page-navigation.js";
 
 /** @type {HTMLElement|null} The search dialog element */
 let searchDlg = null;
@@ -210,17 +211,7 @@ async function navigateToLine(lineNumber, isCurrent = () => true) {
         flowReader.gotoLine(lineNumber, false);
     } else {
         // Page mode: find which page contains the line and navigate
-        const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
-        let targetPage = 1;
-        for (let i = 0; i < pageBreaks.length - 1; i++) {
-            if (lineNumber >= pageBreaks[i] && lineNumber < pageBreaks[i + 1]) {
-                targetPage = i + 1;
-                break;
-            }
-        }
-        if (lineNumber >= (pageBreaks[pageBreaks.length - 1] || 0)) {
-            targetPage = CONFIG.VARS.TOTAL_PAGES;
-        }
+        const targetPage = pageForLine(lineNumber, CONFIG.VARS.PAGE_BREAKS, CONFIG.VARS.TOTAL_PAGES);
 
         // Await navigation so the result exists before applying highlights.
         const { reader } = await import("./reader.js");

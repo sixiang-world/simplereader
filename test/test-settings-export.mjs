@@ -43,7 +43,9 @@ const settingsPath = path.resolve(
     "settings",
     "settings.js"
 );
-const src = fs.readFileSync(settingsPath, "utf-8");
+const stateSrc = fs.readFileSync(settingsPath, "utf-8");
+const menuSrc = fs.readFileSync(path.join(path.dirname(settingsPath), "settings-menu.js"), "utf-8");
+const src = stateSrc + "\n" + menuSrc;
 
 console.log("settings.js — P0-4 regression: settings must be exported\n");
 

@@ -14,6 +14,7 @@
 import * as CONFIG from "../../config/index.js";
 import { setHistory } from "../../utils/helpers/reader.js";
 import { flowReader } from "./flow-reader.js";
+import { pageForLine } from "../../../../shared/core/text/page-navigation.js";
 
 /** @type {HTMLElement|null} The go-line dialog element */
 let goLineDlg = null;
@@ -121,17 +122,7 @@ function doGo() {
         flowReader.gotoLine(targetLine, false);
     } else {
         // Page mode: find which page and navigate
-        const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
-        let targetPage = 1;
-        for (let i = 0; i < pageBreaks.length - 1; i++) {
-            if (targetLine >= pageBreaks[i] && targetLine < pageBreaks[i + 1]) {
-                targetPage = i + 1;
-                break;
-            }
-        }
-        if (targetLine >= (pageBreaks[pageBreaks.length - 1] || 0)) {
-            targetPage = CONFIG.VARS.TOTAL_PAGES;
-        }
+        const targetPage = pageForLine(targetLine, CONFIG.VARS.PAGE_BREAKS, CONFIG.VARS.TOTAL_PAGES);
 
         import("./reader.js").then(({ reader }) => {
             if (targetPage !== CONFIG.VARS.CURRENT_PAGE) {

@@ -18,3 +18,13 @@
 - T21锁定依赖补丁已完成：在原有semver范围内定向更新postcss/nanoid/source-map-js/brace-expansion，同步pnpm/npm锁；两套audit均为0公告（仅涵盖包管理器依赖，不涵盖手工vendor或证明无应用漏洞）。独立快照完整validate通过。
 - T01后续交叉验证补充：书架卡片/信息菜单也有文件名和元数据HTML插值。浏览器负例观察到带事件属性的4个img节点；现改静态骨架+text/attr，修复引用文件名的选择器边界，并将每次菜单新建document listener改为单一生命周期监听。安全回归与完整存储浏览器回归通过；这不是声称初次审查已发现所有漏洞。
 - T19有依据的性能部分已完成：书架列表只保留轻量元数据，旧语言字段迁移离开render循环；500/2000条真实IDB读取与10000节点geometry复杂度回归通过，返回元数据不含File/Blob。现有流式DOM与TXT前缀+全量复算没有虚称已解决；实测边界及不引入未经证明的复杂重写理由见docs/PERFORMANCE_BASELINE.md。存储/功能浏览器回归通过。
+- T23边界收敛已完成：SettingsMenu单独模块（状态facade保留），BookshelfDB单独数据模块并注入错误回调、使用纯文本核心；渲染器→reader导入改为容器导航事件；文件类型/扩展名工具迁共享纯模块，旧API re-export兼容；reader/search/quick-jump统一纯页边界查找，保持各自滚动语义。38个Node文件及11个浏览器文件（含边界身份/真实标题点击导航）通过；文档更新真实开发/验证边界，没有进行框架迁移、分页重写或删除未确认的fallback。
+
+## 最终范围与仍需外部验收
+
+T00—T15、T17—T18、T20—T21的实现与本机回归已完成；T16按现有KV能力实现顺序GET合并，无法在无CAS后端保证同时写无损；T19完成已证实有收益的低风险优化与预算/基准，不冒称bounded flow DOM或真正TXT streaming；T23按已验证边界拆分，保留facade和既有算法。
+
+T22代码、协议/应用端测试及两平台打包完成。实际Chrome扩展引擎在此机器被企业安装策略阻止，Firefox引擎也未验收；这两项不标通过，需在允许扩展的真实浏览器执行 `npm run test:extension` 及Firefox专项。未绕过企业策略，未将下载403或扩展未启动改成静默skip。
+
+其他未被证明的风险（包括第三方色彩选择器没有可靠teardown API、超长flow会话DOM增长）仍按审查报告与性能文档记录；没有为追求“零风险”引入大而未经验证的重写。现有legacy lint warning并不等于全库严格检查已完成。
+- 最终整合补充：显式浏览器readiness替代固定等待、隔离Vite测试缓存；旧文档编码检测/历史恢复/标题导航在异步完成后检查当前文档身份，新增旧history不能覆盖新文档的真实方法回归。Docker冒烟只使用已构建的本地镜像（--pull=never）。

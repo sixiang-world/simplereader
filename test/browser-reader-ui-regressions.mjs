@@ -12,15 +12,15 @@ await withBrowserTest(async ({ browser, baseURL, productionURL }) => {
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         try {
-            await page.goto(baseURL);
-            await page.waitForFunction(() => typeof HyperList !== 'undefined');
-            await page.waitForTimeout(1000);
-            errors.length = 0;
+            await page.goto(baseURL, { waitUntil: "domcontentloaded" });
+            await page.waitForFunction(() => typeof HyperList !== 'undefined' &&
+                document.querySelector("#dropzone-text")?.classList.contains("dropzone-text-text"), null, { timeout: 15000 });
+            assert.deepEqual(errors, [], "reader fixture startup must complete without uncaught errors");
             await run(page, errors);
             console.log(`✓ ${name}`);
             passed++;
         } catch (error) {
-            console.error(`✗ ${name}: ${error.stack}`);
+            console.error(`✗ ${name}: ${error.stack}; startup errors: ${JSON.stringify(errors)}`);
             failed++;
         } finally {
             await page.close();

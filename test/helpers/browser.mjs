@@ -34,7 +34,7 @@ async function serveProduction() {
 }
 
 export async function withBrowserTest(run) {
-    const vite = await createViteServer({ root, server:{ host:'127.0.0.1', port:0, open:false } });
+    const vite = await createViteServer({ root, cacheDir: resolve(root, "tmp/.vite-browser-cache"), server:{ host:'127.0.0.1', port:0, open:false } });
     let production, browser;
     try {
         await vite.listen();
