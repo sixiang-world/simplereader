@@ -61,7 +61,7 @@ v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态
 | `pnpm run preview` | 本地预览生产构建 |
 | `pnpm run typecheck` | `tsc --noEmit -p jsconfig.json` + `jsconfig.checked.json`（JSDoc 基础 + 增量真实 checkJs） |
 | `pnpm run test` | 独立运行自动发现的 `test/test-*.mjs`（38 个文件，Node 原生 assert，无测试框架） |
-| `pnpm run lint` / `lint:fix` | ESLint 9（`eslint.config.js`）。当前基线 0 error / 383 warning；新修改模块不得新增警告 |
+| `pnpm run lint` / `lint:fix` | ESLint 9（`eslint.config.js`）。当前基线 0 error / 184 warning（D01 后，vendor/扩展全局已声明，未来 no-undef 即真缺陷）；新修改模块不得新增警告 |
 | `pnpm run format` / `format:check` | Prettier（`.prettierrc.json`） |
 | `pnpm run test:browser` | 真实浏览器回归（需先 `build`；`CHROMIUM_EXECUTABLE_PATH` 可指定浏览器）。Chromium 主门禁 13 个文件；`browser-firefox-smoke.mjs` 在有 Firefox 构建时执行真实 Web 冒烟，缺失时显式打印 UNVERIFIED 跳过 |
 | `pnpm run validate` | lint + typecheck + build + Node + 浏览器 + Python 回归（`build-tools/validate.sh`，CI/部署共用门禁） |
@@ -494,7 +494,7 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 - **缩进**：JS/CSS 2 空格，Python 4 空格
 - **命名**：JS `camelCase`；CSS 文件 `kebab-case`
 - **CSS**：用 `variables.css` 变量；库样式放 `styles/lib/`
-- **Linter/Formatter**：ESLint 9（`eslint.config.js`，模块关键规则为 error）+ Prettier。遗留 warning 基线 383，新修改模块不得新增；修复后再提升规则，不批量格式化
+- **Linter/Formatter**：ESLint 9（`eslint.config.js`，模块关键规则为 error）+ Prettier。遗留 warning 基线 184（2026-10-25 D01 批次后；vendor/扩展全局已在配置声明），新修改模块不得新增；修复后再提升规则，不批量格式化
 
 ---
 
