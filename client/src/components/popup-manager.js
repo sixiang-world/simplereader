@@ -185,23 +185,32 @@ export class PopupManager {
             CONFIG.DOM_ELEMENT.NOTIFICATION_CONTAINER.style.zIndex = zIndex;
         }
         CONFIG.DOM_ELEMENT.NOTIFICATION_CONTAINER.appendChild(notification);
-        PopupManager.#activeNotifications.push({ element: notification, style });
+        let timeoutId = null;
+        const entry = {
+            element: notification,
+            style,
+            removing: false,
+            dispose() {
+                clearTimeout(timeoutId);
+                document.removeEventListener("keydown", handleEsc, true);
+            },
+        };
+        PopupManager.#activeNotifications.push(entry);
 
         // Add ESC key listener
         const handleEsc = (e) => {
             if (e.key === "Escape") {
                 e.stopPropagation();
                 // e.stopImmediatePropagation(); // Enabling this will make notifications dismiss one by one
-                PopupManager.#removeNotification({ element: notification, style });
-                document.removeEventListener("keydown", handleEsc, true);
+                PopupManager.#removeNotification(entry);
             }
         };
         document.addEventListener("keydown", handleEsc, true);
 
         // If a timer is set, automatically remove after the timer expires
         if (timer !== null) {
-            setTimeout(() => {
-                PopupManager.#removeNotification({ element: notification, style });
+            timeoutId = setTimeout(() => {
+                PopupManager.#removeNotification(entry);
             }, timer);
         }
 
@@ -221,7 +230,11 @@ export class PopupManager {
      * @param {Object} options.element - The notification element
      * @param {Object} options.style - The notification style
      */
-    static #removeNotification({ element, style }) {
+    static #removeNotification(entry) {
+        if (!entry || entry.removing) return;
+        entry.removing = true;
+        entry.dispose();
+        const { element, style } = entry;
         PopupManager.#logger.log("[Notification] Starting removal animation");
         PopupManager.isAnimating = true;
 

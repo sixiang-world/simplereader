@@ -12,6 +12,17 @@
 
 import * as CONFIG from "../../config/index.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
+import { resolveEpubHref } from "../../../../shared/core/file/epub-path.js";
+
+function resolveFootnoteTarget(anchor) {
+    const line = anchor?.closest("[data-line-num]");
+    if (!line) return null;
+    const lineNumber = Number(line.dataset.lineNum);
+    const spinePath = CONFIG.VARS.FILE_CONTENT_CHUNKS[lineNumber]?.spinePath ||
+        CONFIG.VARS.SPINE_RANGES?.find(range => lineNumber >= range.start && lineNumber < range.end)?.path;
+    return spinePath ? resolveEpubHref(anchor.getAttribute("href"), spinePath) : null;
+}
+
 
 /**
  * Footnotes class for handling the display, positioning, and interaction of footnotes on a page
@@ -126,8 +137,9 @@ class Footnotes {
         // Get the footnote link
         const $link = jQuery(e.currentTarget);
         const href = $link.attr("href") || "";
-        if (!href.startsWith("#")) return; // Malformed footnote link: ignore
-        const id = href.slice(1); // Get the target footnote ID
+        const target = resolveFootnoteTarget($link[0]);
+        if (!href.startsWith("#") && !target?.fragment) return;
+        const id = target?.fragment || href.slice(1);
 
         // Create the footnote div and position it
         const div = this.#createFootnoteDiv(id, $link[0]);
@@ -161,19 +173,16 @@ class Footnotes {
         // This takes priority over the DOM fallback because EPUB footnote
         // <aside> elements are extracted from the body during conversion.
         if ((!footnoteContent || footnoteContent === CONFIG.CONST_FOOTNOTE.NOTFOUND) && anchorEl) {
-            const href = anchorEl.getAttribute("href") || "";
-            if (href.startsWith("#")) {
-                const fnId = href.slice(1);
-                const epubMap = CONFIG.VARS?.FOOTNOTE_MAP;
-                if (epubMap && epubMap[fnId]) {
-                    footnoteContent = epubMap[fnId];
-                }
+            const target = resolveFootnoteTarget(anchorEl);
+            const epubMap = CONFIG.VARS.FOOTNOTE_MAP;
+            if (target && epubMap && Object.hasOwn(epubMap, target.key)) {
+                footnoteContent = epubMap[target.key];
             }
         }
         // Fallback to old DOM method if needed
         if (!footnoteContent || footnoteContent === CONFIG.CONST_FOOTNOTE.NOTFOUND) {
             footnoteContent =
-                jQuery(`#${id}`)
+                jQuery(document.getElementById(id))
                     .html()
                     ?.replace(/<a[^>]*rev="footnote">.*<\/a>/g, "") || CONFIG.CONST_FOOTNOTE.NOTFOUND;
         }
@@ -228,7 +237,9 @@ class Footnotes {
         const bodyOffset = jQuery(document.body).offset();
 
         // Get the indicator element and its position
-        const $indicator = jQuery(anchorEl).find("img").first();
+        const $image = jQuery(anchorEl).find("img").first();
+        const $indicator = $image.length ? $image : jQuery(anchorEl);
+        if (!$indicator.length) return;
         const indicatorRect = this.#getOuterRect($indicator);
 
         // Get the actual width of the footnote div

@@ -24,6 +24,13 @@ let searchStartLine = 0;
 
 /** @type {Element|null} Currently highlighted element */
 let currentHighlight = null;
+let activeSearch = null;
+let searchChunks = null;
+
+function cancelSearch() {
+    activeSearch?.abort();
+    activeSearch = null;
+}
 
 /**
  * Search module
@@ -91,12 +98,11 @@ export const search = {
     close() {
         if (!searchDlg) return;
 
+        cancelSearch();
         this.clearHighlight();
 
         // Restore original keydown handler
-        if (searchDlg._savedKeydown) {
-            document.onkeydown = searchDlg._savedKeydown;
-        }
+        document.onkeydown = searchDlg._savedKeydown;
 
         searchDlg.remove();
         searchDlg = null;
@@ -108,10 +114,10 @@ export const search = {
      */
     clearHighlight() {
         if (currentHighlight) {
-            const mark = currentHighlight.querySelector("mark");
-            if (mark) {
+            for (const mark of currentHighlight.querySelectorAll("mark[data-search-highlight]")) {
                 mark.replaceWith(document.createTextNode(mark.textContent));
             }
+            currentHighlight.normalize();
             currentHighlight = null;
         }
     },
@@ -121,104 +127,77 @@ export const search = {
  * Perform search in FILE_CONTENT_CHUNKS
  * @param {boolean} down - Search direction (true = forward, false = backward)
  */
-function doSearch(down = true) {
+async function doSearch(down = true) {
     if (!searchDlg) return;
-
     const input = searchDlg.querySelector(".search-txt");
     const pattern = input.value.trim();
     if (!pattern) return;
 
-    let regex;
-    try {
-        regex = new RegExp(pattern, "gi");
-    } catch (e) {
-        // Invalid regex — try as literal string
-        try {
-            regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-        } catch (e2) {
-            return;
-        }
-    }
-
+    cancelSearch();
+    const controller = new AbortController();
+    activeSearch = controller;
     const chunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
+    if (chunks !== searchChunks) {
+        searchStartLine = 0;
+        searchChunks = chunks;
+    }
     const totalLines = chunks.length;
-    if (totalLines === 0) return;
-
-    // Clear previous highlight
+    if (!totalLines) return;
     search.clearHighlight();
 
-    // Search through content chunks
-    let found = false;
-    if (down) {
-        // Forward search from searchStartLine
-        for (let j = searchStartLine + 1; j < totalLines; j++) {
-            const chunk = chunks[j];
-            // Skip image blocks: their content is base64 data URLs,
-            // which would produce false-positive search matches.
-            if (chunk && typeof chunk === "object" && chunk.type === "image") continue;
-            const text = typeof chunk === "object" ? chunk.content : chunk;
-            if (text && regex.test(text)) {
-                regex.lastIndex = 0; // Reset regex state
-                navigateToLine(j);
-                highlightLine(j, regex);
-                searchStartLine = j;
-                found = true;
-                break;
-            }
-        }
-        // Wrap around
-        if (!found) {
-            for (let j = 0; j <= searchStartLine; j++) {
-                const chunk = chunks[j];
-                // Skip image blocks: their content is base64 data URLs,
-            // which would produce false-positive search matches.
-            if (chunk && typeof chunk === "object" && chunk.type === "image") continue;
-            const text = typeof chunk === "object" ? chunk.content : chunk;
-                if (text && regex.test(text)) {
-                    regex.lastIndex = 0;
-                    navigateToLine(j);
-                    highlightLine(j, regex);
-                    searchStartLine = j;
-                    found = true;
-                    break;
+    // Execute all regular expressions off the main thread. Terminating the
+    // worker also stops catastrophic backtracking, which yielding cannot do.
+    const worker = new Worker(new URL("./search-worker.js", import.meta.url), { type: "module" });
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    let finishBatch;
+    const abort = () => {
+        worker.terminate();
+        finishBatch?.(null);
+    };
+    controller.signal.addEventListener("abort", abort, { once: true });
+    const template = document.createElement("template");
+    const isCurrent = () => !controller.signal.aborted && searchDlg && chunks === CONFIG.VARS.FILE_CONTENT_CHUNKS;
+    try {
+        let offset = 0;
+        while (offset < totalLines && isCurrent()) {
+            const lines = [];
+            for (let count = 0; count < 128 && offset < totalLines; count++, offset++) {
+                const step = down ? offset + 1 : -offset - 1;
+                const lineNumber = ((searchStartLine + step) % totalLines + totalLines) % totalLines;
+                const chunk = chunks[lineNumber];
+                if (!chunk || (typeof chunk === "object" && ["image", "seal"].includes(chunk.type))) continue;
+                // A template is inert: parsing book HTML here cannot request
+                // resources or execute handlers. Only visible text is searched.
+                let text;
+                if (typeof chunk === "object" && chunk.source !== "epub" && chunk.type !== "title") {
+                    text = (chunk.dropCap?.content || "") + (chunk.content || "");
+                } else {
+                    template.innerHTML = typeof chunk === "object" ? chunk.content || "" : chunk;
+                    text = template.content.textContent || "";
                 }
+                lines.push({ lineNumber, text });
+            }
+            const result = await new Promise(resolve => {
+                finishBatch = resolve;
+                worker.onmessage = ({ data }) => resolve(data.result || null);
+                worker.onerror = () => { controller.abort(); resolve(null); };
+                worker.postMessage({ lines, pattern });
+            });
+            finishBatch = null;
+            if (!isCurrent()) return;
+            if (result) {
+                await navigateToLine(result.lineNumber, isCurrent);
+                if (!isCurrent()) return;
+                highlightLine(result.lineNumber, result.ranges);
+                searchStartLine = result.lineNumber;
+                return;
             }
         }
-    } else {
-        // Backward search from searchStartLine
-        for (let j = searchStartLine - 1; j >= 0; j--) {
-            const chunk = chunks[j];
-            // Skip image blocks: their content is base64 data URLs,
-            // which would produce false-positive search matches.
-            if (chunk && typeof chunk === "object" && chunk.type === "image") continue;
-            const text = typeof chunk === "object" ? chunk.content : chunk;
-            if (text && regex.test(text)) {
-                regex.lastIndex = 0;
-                navigateToLine(j);
-                highlightLine(j, regex);
-                searchStartLine = j;
-                found = true;
-                break;
-            }
-        }
-        // Wrap around
-        if (!found) {
-            for (let j = totalLines - 1; j >= searchStartLine; j--) {
-                const chunk = chunks[j];
-                // Skip image blocks: their content is base64 data URLs,
-            // which would produce false-positive search matches.
-            if (chunk && typeof chunk === "object" && chunk.type === "image") continue;
-            const text = typeof chunk === "object" ? chunk.content : chunk;
-                if (text && regex.test(text)) {
-                    regex.lastIndex = 0;
-                    navigateToLine(j);
-                    highlightLine(j, regex);
-                    searchStartLine = j;
-                    found = true;
-                    break;
-                }
-            }
-        }
+    } finally {
+        clearTimeout(timeout);
+        controller.signal.removeEventListener("abort", abort);
+        worker.terminate();
+        if (activeSearch === controller) activeSearch = null;
     }
 }
 
@@ -226,7 +205,7 @@ function doSearch(down = true) {
  * Navigate to a specific line (handles both flow and page mode)
  * @param {number} lineNumber
  */
-function navigateToLine(lineNumber) {
+async function navigateToLine(lineNumber, isCurrent = () => true) {
     if (flowReader.isActive()) {
         flowReader.gotoLine(lineNumber, false);
     } else {
@@ -243,32 +222,51 @@ function navigateToLine(lineNumber) {
             targetPage = CONFIG.VARS.TOTAL_PAGES;
         }
 
-        // Import reader dynamically to avoid circular dependency
-        import("./reader.js").then(({ reader }) => {
-            if (targetPage !== CONFIG.VARS.CURRENT_PAGE) {
-                reader.gotoPage(targetPage, "top");
-            }
-            const el = CONFIG.DOM_ELEMENT.GET_LINE(lineNumber);
-            if (el) {
-                el.scrollIntoView({ behavior: "instant", block: "start" });
-            }
-        });
+        // Await navigation so the result exists before applying highlights.
+        const { reader } = await import("./reader.js");
+        if (!isCurrent()) return;
+        if (targetPage !== CONFIG.VARS.CURRENT_PAGE) {
+            reader.gotoPage(targetPage, "top");
+        }
+        const el = CONFIG.DOM_ELEMENT.GET_LINE(lineNumber);
+        if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
     }
-    setHistory(CONFIG.VARS.FILENAME, lineNumber);
+    if (isCurrent()) setHistory(CONFIG.VARS.FILENAME, lineNumber);
 }
 
 /**
  * Highlight a matched line with <mark> tags
  * @param {number} lineNumber
- * @param {RegExp} regex
+ * @param {Array<[number, number]>} ranges
  */
-function highlightLine(lineNumber, regex) {
+function highlightLine(lineNumber, ranges) {
     const el = CONFIG.DOM_ELEMENT.GET_LINE(lineNumber);
     if (!el) return;
-
     currentHighlight = el;
-    const originalHTML = el.innerHTML;
-    // Replace matches with <mark> wrapped text
-    const highlighted = originalHTML.replace(regex, (match) => `<mark>${match}</mark>`);
-    el.innerHTML = highlighted;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    let position = 0;
+    for (const node of nodes) {
+        const text = node.textContent;
+        const end = position + text.length;
+        const matches = ranges.filter(([start, stop]) => start < end && stop > position);
+        if (matches.length) {
+            const fragment = document.createDocumentFragment();
+            let offset = 0;
+            for (const [start, stop] of matches) {
+                const from = Math.max(start - position, 0);
+                const to = Math.min(stop - position, text.length);
+                fragment.append(document.createTextNode(text.slice(offset, from)));
+                const mark = document.createElement("mark");
+                mark.dataset.searchHighlight = "";
+                mark.textContent = text.slice(from, to);
+                fragment.append(mark);
+                offset = to;
+            }
+            fragment.append(document.createTextNode(text.slice(offset)));
+            node.replaceWith(fragment);
+        }
+        position = end;
+    }
 }

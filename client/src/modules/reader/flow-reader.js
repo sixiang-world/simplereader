@@ -48,6 +48,8 @@ export const flowReader = {
 
     /** @type {number} Content chunk length at last full render (detect file reload) */
     _lastChunkLength: 0,
+    _documentChunks: null,
+    _documentFilename: null,
 
     /** @type {number|null} Throttle timer ID for onScrollAppend */
     _scrollTimer: null,
@@ -61,7 +63,10 @@ export const flowReader = {
         // Re-entry guard: if content changed (file reload), force re-enter
         if (this._active) {
             const chunkLen = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
-            if (chunkLen > 0 && chunkLen !== this._lastChunkLength) {
+            if (CONFIG.VARS.FILE_CONTENT_CHUNKS !== this._documentChunks ||
+                CONFIG.VARS.FILENAME !== this._documentFilename ||
+                chunkLen !== this._lastChunkLength) {
+                this._cancelScrollTimer();
                 this._active = false;
             } else {
                 return;
@@ -93,6 +98,8 @@ export const flowReader = {
         CONFIG.VARS.FLOW_CURRENT_LINE = currentLine;
         this._renderedEnd = endLine;
         this._lastChunkLength = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
+        this._documentChunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
+        this._documentFilename = CONFIG.VARS.FILENAME;
 
         // Scroll to the start position
         const targetEl = CONFIG.DOM_ELEMENT.GET_LINE(currentLine);
@@ -125,6 +132,8 @@ export const flowReader = {
         // Reset flow state
         CONFIG.VARS.FLOW_CURRENT_LINE = 0;
         this._lastChunkLength = 0;
+        this._documentChunks = null;
+        this._documentFilename = null;
 
         // Map current line → page number
         const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
@@ -290,19 +299,26 @@ export const flowReader = {
         const viewportHeight = window.innerHeight;
         const contentTop = content.getBoundingClientRect().top;
 
-        let lastVisible = 0;
-
-        for (const child of content.children) {
-            if (!child.id || !child.id.startsWith("line")) continue;
+        // Flow children are appended in line order. Locate the last visible
+        // line with logarithmic geometry reads instead of scanning every node.
+        const children = content.children;
+        let low = 0;
+        let high = children.length - 1;
+        let lastVisible = null;
+        while (low <= high) {
+            const middle = (low + high) >>> 1;
+            const child = children[middle];
             const rect = child.getBoundingClientRect();
-            // Element is visible if any part is within the viewport
-            if (rect.bottom >= contentTop && rect.top <= viewportHeight) {
-                const num = parseInt(child.id.replace("line", ""));
-                if (num > lastVisible) lastVisible = num;
+            if (rect.top <= viewportHeight) {
+                if (rect.bottom >= contentTop && /^line\d+$/.test(child.id)) {
+                    lastVisible = Number(child.id.slice(4));
+                }
+                low = middle + 1;
+            } else {
+                high = middle - 1;
             }
         }
-
-        if (lastVisible > 0) return lastVisible;
+        if (lastVisible !== null) return lastVisible;
 
         // Fallback: estimate from scroll ratio (rare — only if DOM is empty
         // or all elements are off-screen, e.g. during a jump transition)

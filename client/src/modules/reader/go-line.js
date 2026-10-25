@@ -82,9 +82,7 @@ export const goLine = {
         if (!goLineDlg) return;
 
         // Restore original keydown handler
-        if (goLineDlg._savedKeydown) {
-            document.onkeydown = goLineDlg._savedKeydown;
-        }
+        document.onkeydown = goLineDlg._savedKeydown;
 
         goLineDlg.remove();
         goLineDlg = null;

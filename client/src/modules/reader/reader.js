@@ -39,6 +39,7 @@ import {
     getCurrentTitleLineNumber,
 } from "../../utils/helpers/reader.js";
 import { flowReader } from "./flow-reader.js";
+import { resolveEpubHref } from "../../../../shared/core/file/epub-path.js";
 import { search } from "./search.js";
 import { goLine } from "./go-line.js";
 
@@ -105,55 +106,21 @@ export const reader = {
      * @private
      */
     _handleInternalLinkClick(e) {
-        const link = e.target.closest("a");
-        if (!link) return;
-        const href = link.getAttribute("href") || "";
-        // Only intercept internal links: #fragment or relative paths (no protocol).
-        // External links (http/https/mailto) are handled by sanitize with target=_blank.
-        if (!href || href.startsWith("http:") || href.startsWith("https:") || href.startsWith("mailto:")) {
-            return;
-        }
-        // Footnote links (rel="footnote") are handled by the footnotes module
-        // (mouseover popup); don't hijack their click.
-        if (link.getAttribute("rel") === "footnote") return;
-
+        const link = e.target.closest?.("a");
+        if (!link || link.getAttribute("rel") === "footnote") return;
+        const line = link.closest("[data-line-num]");
+        if (!line) return;
+        const lineNumber = Number(line.dataset.lineNum);
+        const spinePath = CONFIG.VARS.FILE_CONTENT_CHUNKS[lineNumber]?.spinePath ||
+            CONFIG.VARS.SPINE_RANGES?.find(range => lineNumber >= range.start && lineNumber < range.end)?.path;
+        if (!spinePath) return;
+        const target = resolveEpubHref(link.getAttribute("href"), spinePath);
+        if (!target) return; // External URLs retain their normal browser behavior.
         e.preventDefault();
-        const fragmentToLine = CONFIG.VARS?.FRAGMENT_TO_LINE || {};
-
-        // Case 1: pure fragment link (#sec1) — resolve against current file.
-        // We don't track the current spine file at runtime, so try the fragment
-        // as-is first; EPUB converters usually use unique IDs across the book.
-        if (href.startsWith("#")) {
-            const frag = href.slice(1);
-            // Search all keys ending with #frag (matches any filePath).
-            for (const [key, lineNum] of Object.entries(fragmentToLine)) {
-                if (key.endsWith("#" + frag)) {
-                    this.gotoLine(lineNum, false);
-                    return;
-                }
-            }
-            return;
-        }
-
-        // Case 2: relative path with fragment (chapter2.xhtml#sec1)
-        if (href.includes("#")) {
-            const [filePath, frag] = href.split("#");
-            const key = `${filePath}#${frag}`;
-            if (fragmentToLine[key] !== undefined) {
-                this.gotoLine(fragmentToLine[key], false);
-                return;
-            }
-            // Fallback: file-only (start of that chapter)
-            if (fragmentToLine[filePath] !== undefined) {
-                this.gotoLine(fragmentToLine[filePath], false);
-                return;
-            }
-        }
-
-        // Case 3: relative path without fragment (chapter2.xhtml)
-        if (fragmentToLine[href] !== undefined) {
-            this.gotoLine(fragmentToLine[href], false);
-        }
+        const fragmentToLine = CONFIG.VARS.FRAGMENT_TO_LINE || {};
+        const fileToLine = CONFIG.VARS.FILE_TO_LINE || {};
+        const targetLine = target.fragment ? fragmentToLine[target.key] : fileToLine[target.path];
+        if (typeof targetLine === "number") this.gotoLine(targetLine, false);
     },
 
     /**
@@ -182,6 +149,7 @@ export const reader = {
      * @public
      */
     processTOC() {
+        this._tocList?.destroy();
         const tocScroller = document.createElement("div");
         tocScroller.id = "toc-scroller";
 
@@ -233,55 +201,19 @@ export const reader = {
             },
 
             afterRender() {
-                if (CONFIG.VARS.ALL_TITLES && CONFIG.VARS.ALL_TITLES.length > 0) {
+                // HyperList renders synchronously, including during construction
+                // before the new container is attached. Notify after attachment.
+                const index = this.latestTitleIndex;
+                const lineNum = this.latestLineNum;
+                queueMicrotask(() => {
+                    if (!tocContainer.isConnected || !tocContainer.querySelector(`#title_${lineNum}`)) return;
                     const height = parseFloat(tocScroller.style.height);
-                    const percentage = (tocContainer.scrollTop / height) * 100;
-
-                    // console.log(`Looking for #title_${this.latestLineNum}`); // Use the correct selector
-
-                    // Create a MutationObserver to wait for DOM updates
-                    const observer = new MutationObserver((mutations, obs) => {
-                        const element = document.querySelector(`#title_${this.latestLineNum}`);
-                        if (element) {
-                            // DOM elements are ready
-                            // console.log(`Found #title_${this.latestLineNum}`);
-                            obs.disconnect(); // Stop observing
-
-                            // Trigger tocRendered event
-                            cbReg.go("tocRendered", {
-                                percentage,
-                                index: this.latestTitleIndex,
-                                lineNum: this.latestLineNum,
-                            });
-                        }
+                    cbReg.go("tocRendered", {
+                        percentage: height > 0 ? (tocContainer.scrollTop / height) * 100 : 0,
+                        index,
+                        lineNum,
                     });
-
-                    // Start observing the container for changes
-                    observer.observe(tocContainer, {
-                        childList: true, // Monitor direct child nodes
-                        subtree: true, // Monitor all descendants
-                    });
-
-                    // Fallback timeout in case the observer doesn't detect changes
-                    setTimeout(() => {
-                        const element = document.querySelector(`#title_${this.latestLineNum}`);
-                        if (element) {
-                            // console.log(`Fallback: Found #title_${this.latestLineNum} after timeout`);
-                            observer.disconnect();
-
-                            // Trigger tocRendered event
-                            cbReg.go("tocRendered", {
-                                percentage,
-                                index: this.latestTitleIndex,
-                                lineNum: this.latestLineNum,
-                            });
-                        } else {
-                            console.log(
-                                `Warning: ToC not fully rendered even after timeout. latestTitleIndex: ${this.latestTitleIndex}, latestLineNum: ${this.latestLineNum}`
-                            );
-                        }
-                    }, 100); // Increase timeout duration if necessary
-                }
+                });
             },
         };
 
@@ -297,7 +229,7 @@ export const reader = {
         });
 
         const tocList = HyperList.create(tocContainer, tocConfig);
-        // console.log(tocList);
+        this._tocList = tocList;
         CONFIG.DOM_ELEMENT.TOC_CONTAINER.replaceChildren(tocContainer);
 
         return tocList;
