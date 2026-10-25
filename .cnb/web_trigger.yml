@@ -1,18 +1,19 @@
 # .cnb/web_trigger.yml — Web 手动触发按钮
 #
 # 按钮可见性：
-#   main 分支：部署到生产 / 部署到 DEV / 同步 GitHub
-#   其他分支：部署到 DEV / 同步 GitHub
+#   main 分支：部署到生产 / 部署到 DEV / 同步 GitHub（当前分支）/ 发布同步（含标签）
+#   其他分支：部署到 DEV / 同步 GitHub（当前分支）
 #
+# 可见性只是 UI 过滤；生产入口在 .cnb.yml 执行端仍独立校验 CNB_BRANCH == main。
 # 对应 .cnb.yml 中 $ 兜底分支下的 web_trigger_* 事件。
 
 branch:
-  # main 分支：三个按钮
+  # main 分支：四个按钮
   - reg: ^main$
     buttons:
       - name: 部署到生产
         event: web_trigger_deploy_production
-        description: 构建 dist 并部署到 EdgeOne Pages 生产环境
+        description: 构建 dist 并部署到 EdgeOne Pages 生产环境（执行端校验 main）
         # roles 非向上包含：只写 master/developer 时 owner 会被排除，必须显式列出
         permissions:
           roles: [owner, master, developer]
@@ -25,11 +26,17 @@ branch:
 
       - name: 同步 GitHub
         event: web_trigger_sync_github
-        description: 推送当前分支和 tags 到 GitHub 镜像
+        description: 仅推送当前分支到 GitHub 镜像（不含标签）
         permissions:
           roles: [owner, master, developer]
 
-  # 其他分支：两个按钮（不含生产）
+      - name: 发布同步（含标签）
+        event: web_trigger_release_sync
+        description: 推送 main 与全部标签到 GitHub 镜像；正式发布任务专用
+        permissions:
+          roles: [owner, master, developer]
+
+  # 其他分支：两个按钮（不含生产与发布同步）
   - reg: ^(?!main$).+
     buttons:
       - name: 部署到 DEV
@@ -40,6 +47,6 @@ branch:
 
       - name: 同步 GitHub
         event: web_trigger_sync_github
-        description: 推送当前分支和 tags 到 GitHub 镜像
+        description: 仅推送当前分支到 GitHub 镜像（不含标签）
         permissions:
           roles: [owner, master, developer]

@@ -2,20 +2,28 @@
 #
 # 流水线总览：
 #   push（所有分支自动触发，并行）：
-#     1a. sync-to-github → 当前分支 + tags 镜像到 GitHub（$ 兜底，所有分支生效）
+#     1a. sync-to-github → 仅当前分支镜像到 GitHub（$ 兜底，所有分支生效）
 #     1b. build-and-deploy-preview → dev 分支构建 + 部署 EdgeOne Pages 预发环境
 #     1c. build-and-deploy-production → main 分支构建 + 部署 EdgeOne Pages 生产环境
 #   手动触发（web_trigger，见 .cnb/web_trigger.yml）：
-#     - 部署到生产（仅 main）
-#     - 部署到 DEV（仅 main）
-#     - 同步 GitHub（仅 main）
-#     - 部署到 DEV（其余分支）
-#     - 同步 GitHub（其余分支）
+#     - 部署到生产（仅 main；执行端仍独立校验分支）
+#     - 部署到 DEV（main + 其余分支）
+#     - 同步 GitHub（仅当前分支，不带标签）
+#     - 发布同步（仅 main；分支 + 标签，正式发布任务专用）
 #
 # 密钥仓库（shisheng820/secret）：
 #   - edgeone.yml → EDGEONE_PAGES_API_TOKEN
 #   - github.yml  → GITHUB_TOKEN
 #   仓库内文件格式：KEY: <value>
+#
+# 安全约定（E01）：
+#   - GITHUB_TOKEN 只通过临时 credential helper 在 push 进程内使用，
+#     不写入任何 remote URL 或 git 配置（原实现把 token 拼进 remote URL）。
+#   - 生产部署入口（main push 与手动按钮）都在执行端强制校验 CNB_BRANCH == main；
+#     web_trigger.yml 的分支正则只控制按钮可见性，不作为权限边界。
+#   - 常规同步只推当前分支；标签只在"发布同步"手动任务中推送。
+#   - 部署只消费本流水线验证通过的 dist/，并把源码 SHA / 版本写入 dist/BUILD_INFO.json。
+#   - 镜像固定版本 tag（digest 见各行注释），不使用 latest。
 #
 # 部署前提：
 #   - 已在 EdgeOne Makers 控制台创建项目 "simplereader"
@@ -51,7 +59,32 @@
     fi
     echo "dist size: $(du -sh dist | cut -f1)"
 
-# ===== GitHub 同步：当前分支 + 所有 tags =====
+# 记录部署产物对应的源码 SHA 与版本（发布记录可对应该次产物）
+.record-build-info: &record-build-info
+  name: record-build-info
+  script: |
+    COMMIT="$(git rev-parse HEAD)"
+    VERSION="$(node -p "require('./version.json').version")"
+    printf '{"commit":"%s","version":"%s","branch":"%s","builtAt":"%s"}\n' \
+      "${COMMIT}" "${VERSION}" "${CNB_BRANCH}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      > dist/BUILD_INFO.json
+    echo "deploying ${VERSION} from ${CNB_BRANCH}@${COMMIT}"
+
+# 生产入口执行端校验：按钮可见性之外，部署前必须确认在 main
+.guard-production: &guard-production
+  name: guard-production-branch
+  script: |
+    BRANCH="${CNB_BRANCH:-}"
+    if [ "${BRANCH}" != "main" ]; then
+      echo "ERROR: production deploy requires branch 'main' (got '${BRANCH}')"
+      exit 78
+    fi
+    echo "production deploy approved for main@$(git rev-parse HEAD)"
+
+# ===== GitHub 同步：临时凭证，token 不落盘 =====
+# push 直接指向 URL，不配置 github remote；credential helper 为一次性内联函数，
+# $GITHUB_TOKEN 在 helper 执行时才从环境展开，不出现在任何 argv、配置或日志中。
+# 常规同步只推当前分支；标签由"发布同步"任务显式推送。
 .sync-github-stages: &sync-github-stages
   - name: validate-token
     script: |
@@ -59,34 +92,38 @@
         echo "ERROR: GITHUB_TOKEN is required (from secret repo github.yml)"
         exit 78
       fi
-  - name: configure-git
-    script: |
-      git config user.name "cnb-sync[bot]"
-      git config user.email "cnb-sync[bot]@users.noreply.github.com"
-  - name: add-github-remote
-    script: |
-      # 幂等设置/添加 github remote（URL 含 token，不打印）
-      if git remote get-url github >/dev/null 2>&1; then
-        git remote set-url github "https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git"
-      else
-        git remote add github "https://x-access-token:${GITHUB_TOKEN}@github.com/sixiang-world/simplereader.git"
-      fi
-      # 校验 token 被注入：URL 里不能含字面量 $GITHUB_TOKEN 或空 token
-      URL="$(git remote get-url github)"
-      case "$URL" in
-        *'$GITHUB_TOKEN'*|*'x-access-token:@'*)
-          echo "ERROR: GITHUB_TOKEN not substituted or empty in remote URL"
-          exit 78
-          ;;
-      esac
-      echo "github remote configured (token hidden)"
-  - name: push-branch-and-tags
+  - name: push-branch
     script: |
       BRANCH="${CNB_BRANCH}"
-      echo "Pushing branch: ${BRANCH}"
-      git push github "${BRANCH}"
-      echo "Pushing all tags..."
-      git push github --tags
+      echo "Pushing branch: ${BRANCH} (tags excluded; use the release sync task for tags)"
+      git -c credential.helper= \
+          -c credential.helper='!f() { echo "username=x-access-token"; echo "password=$GITHUB_TOKEN"; }; f' \
+          push https://github.com/sixiang-world/simplereader.git "${BRANCH}"
+
+# 发布同步：仅 main 手动触发，分支 + 标签（见 web_trigger.yml 的 ^main$ 分组）
+.sync-github-release-stages: &sync-github-release-stages
+  - name: validate-token
+    script: |
+      if [ -z "$GITHUB_TOKEN" ]; then
+        echo "ERROR: GITHUB_TOKEN is required (from secret repo github.yml)"
+        exit 78
+      fi
+  - name: guard-main
+    script: |
+      BRANCH="${CNB_BRANCH:-}"
+      if [ "${BRANCH}" != "main" ]; then
+        echo "ERROR: release sync requires branch 'main' (got '${BRANCH}')"
+        exit 78
+      fi
+  - name: push-branch-and-tags
+    script: |
+      echo "Pushing main and tags"
+      git -c credential.helper= \
+          -c credential.helper='!f() { echo "username=x-access-token"; echo "password=$GITHUB_TOKEN"; }; f' \
+          push https://github.com/sixiang-world/simplereader.git main
+      git -c credential.helper= \
+          -c credential.helper='!f() { echo "username=x-access-token"; echo "password=$GITHUB_TOKEN"; }; f' \
+          push https://github.com/sixiang-world/simplereader.git --tags
 
 # ===== 1. dev 分支 push → 构建并部署预发环境 =====
 dev:
@@ -103,8 +140,10 @@ dev:
         - *install
         - *validate
         - *verify-dist
+        - *record-build-info
         - name: 部署到 EdgeOne Pages 预发环境
-          image: tencentcom/deploy-eopages:latest
+          # v1.7.3 = sha256:0e79d28be64a6c3b85a9236c9a51fcb97d5c2ca7120a6c7feddd0b85ac38874b
+          image: tencentcom/deploy-eopages:v1.7.3
           settings:
             project_name: simplereader
             api_token: $EDGEONE_PAGES_API_TOKEN
@@ -115,7 +154,8 @@ dev:
       imports:
         - https://cnb.cool/shisheng820/secret/-/blob/main/github.yml
       docker:
-        image: alpine/git:latest
+        # v2.54.0 = sha256:e8ceedc73bd80992ae8d58a7d24c58b8322146c354f1d2e81a97db4452068ec0
+        image: alpine/git:v2.54.0
       stages: *sync-github-stages
 
 # ===== 2. main 分支 push → 构建并部署生产环境 =====
@@ -131,12 +171,15 @@ main:
         wait: true
         cancel-in-wait: true
       stages:
+        - *guard-production
         - *install
         - *validate
         - *verify-dist
+        - *record-build-info
         # 不传 environment 即部署到生产环境
         - name: 部署到 EdgeOne Pages 生产环境
-          image: tencentcom/deploy-eopages:latest
+          # v1.7.3 = sha256:0e79d28be64a6c3b85a9236c9a51fcb97d5c2ca7120a6c7feddd0b85ac38874b
+          image: tencentcom/deploy-eopages:v1.7.3
           settings:
             project_name: simplereader
             api_token: $EDGEONE_PAGES_API_TOKEN
@@ -146,20 +189,22 @@ main:
       imports:
         - https://cnb.cool/shisheng820/secret/-/blob/main/github.yml
       docker:
-        image: alpine/git:latest
+        # v2.54.0 = sha256:e8ceedc73bd80992ae8d58a7d24c58b8322146c354f1d2e81a97db4452068ec0
+        image: alpine/git:v2.54.0
       stages: *sync-github-stages
 
-# ===== 3. $ 兜底（所有其他分支）push → 自动同步 GitHub =====
+# ===== 3. $ 兜底（所有其他分支）push → 自动同步 GitHub（仅当前分支） =====
 $:
   push:
     - name: sync-to-github
       imports:
         - https://cnb.cool/shisheng820/secret/-/blob/main/github.yml
       docker:
-        image: alpine/git:latest
+        # v2.54.0 = sha256:e8ceedc73bd80992ae8d58a7d24c58b8322146c354f1d2e81a97db4452068ec0
+        image: alpine/git:v2.54.0
       stages: *sync-github-stages
 
-  # ===== 手动触发：部署生产（仅 main 显示） =====
+  # ===== 手动触发：部署生产（按钮仅 main 可见；执行端仍校验） =====
   web_trigger_deploy_production:
     - name: deploy-production
       <<: *node-env
@@ -170,11 +215,14 @@ $:
         wait: true
         cancel-in-wait: true
       stages:
+        - *guard-production
         - *install
         - *validate
         - *verify-dist
+        - *record-build-info
         - name: 部署到 EdgeOne Pages 生产环境
-          image: tencentcom/deploy-eopages:latest
+          # v1.7.3 = sha256:0e79d28be64a6c3b85a9236c9a51fcb97d5c2ca7120a6c7feddd0b85ac38874b
+          image: tencentcom/deploy-eopages:v1.7.3
           settings:
             project_name: simplereader
             api_token: $EDGEONE_PAGES_API_TOKEN
@@ -194,19 +242,32 @@ $:
         - *install
         - *validate
         - *verify-dist
+        - *record-build-info
         - name: 部署到 EdgeOne Pages 预发环境
-          image: tencentcom/deploy-eopages:latest
+          # v1.7.3 = sha256:0e79d28be64a6c3b85a9236c9a51fcb97d5c2ca7120a6c7feddd0b85ac38874b
+          image: tencentcom/deploy-eopages:v1.7.3
           settings:
             project_name: simplereader
             api_token: $EDGEONE_PAGES_API_TOKEN
             directory: ./dist
             environment: preview
 
-  # ===== 手动触发：同步到 GitHub（main + 其他分支显示） =====
+  # ===== 手动触发：同步到 GitHub（main + 其他分支显示；仅当前分支） =====
   web_trigger_sync_github:
     - name: sync-to-github
       docker:
-        image: alpine/git:latest
+        # v2.54.0 = sha256:e8ceedc73bd80992ae8d58a7d24c58b8322146c354f1d2e81a97db4452068ec0
+        image: alpine/git:v2.54.0
       imports:
         - https://cnb.cool/shisheng820/secret/-/blob/main/github.yml
       stages: *sync-github-stages
+
+  # ===== 手动触发：发布同步（仅 main 显示；分支 + 标签） =====
+  web_trigger_release_sync:
+    - name: release-sync-github
+      docker:
+        # v2.54.0 = sha256:e8ceedc73bd80992ae8d58a7d24c58b8322146c354f1d2e81a97db4452068ec0
+        image: alpine/git:v2.54.0
+      imports:
+        - https://cnb.cool/shisheng820/secret/-/blob/main/github.yml
+      stages: *sync-github-release-stages
