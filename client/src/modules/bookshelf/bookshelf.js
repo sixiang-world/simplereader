@@ -788,7 +788,7 @@ export const bookshelf = {
      */
     updateBookProgressInfo(fname, bookElm = null, inLoop = false) {
         if (!bookElm) {
-            bookElm = $(`.bookshelf .book[data-filename="${fname}"]`);
+            bookElm = $(".bookshelf .book").filter((_, element) => element.getAttribute("data-filename") === fname);
             if (bookElm.length <= 0) {
                 return;
             }
@@ -853,12 +853,12 @@ export const bookshelf = {
             htmlTag = "div";
         }
         const book = $(
-            `<div class="book" data-filename="${bookInfo.name}">
+            `<div class="book">
                 <div class="cover-container">
                     <div class="cover-hidden-text-container">
-                        <span class="cover-hidden-text">${bookInfo.name}</span>
-                        <span class="cover-hidden-text bookName">${currentBookNameAndAuthor.bookName}</span>
-                        <span class="cover-hidden-text author">${currentBookNameAndAuthor.author}</span>
+                        <span class="cover-hidden-text filename"></span>
+                        <span class="cover-hidden-text bookName"></span>
+                        <span class="cover-hidden-text author"></span>
                     </div>
                     <${htmlTag} class="cover-canvas" width="${canvasWidth}" height="${canvasHeight}"></${htmlTag}>
                 </div>
@@ -880,6 +880,10 @@ export const bookshelf = {
                 </div>
             </div>`
         );
+        book.attr("data-filename", bookInfo.name);
+        book.find(".cover-hidden-text.filename").text(bookInfo.name);
+        book.find(".cover-hidden-text.bookName").text(currentBookNameAndAuthor.bookName);
+        book.find(".cover-hidden-text.author").text(currentBookNameAndAuthor.author);
         const coverSettings = this._getCoverSettings({
             width: canvasWidth,
             height: canvasHeight,
@@ -1012,10 +1016,6 @@ export const bookshelf = {
                     book.data("bookNameAndAuthor") ??
                     TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.name));
                 const tempBookTitle = tempBookAuthor.bookName;
-                const tempBookAuthorName =
-                    tempBookAuthor.author === ""
-                        ? `<span class="bookinfo-menu-item-text bookinfo-menu-item-text_unknown"><span>`
-                        : tempBookAuthor.author;
                 const tempBookLastOpenedTimestamp =
                     isVariableDefined(bookInfo.lastOpenedTimestamp) && bookInfo.lastOpenedTimestamp !== ""
                         ? convertUTCTimestampToLocalString(bookInfo.lastOpenedTimestamp)
@@ -1027,15 +1027,15 @@ export const bookshelf = {
                     <div class="bookinfo-menu-clip"></div>
                     <div class="bookinfo-menu_item">
                         <span class="bookinfo-menu-item-text bookinfo-menu-item-text_bookname"></span>
-                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_title">${tempBookTitle}</div>
+                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_title"></div>
                     </div>
                     <div class="bookinfo-menu_item">
                         <span class="bookinfo-menu-item-text bookinfo-menu-item-text_author"></span>
-                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_author">${tempBookAuthorName}</div>
+                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_author"></div>
                     </div>
                     <div class="bookinfo-menu_item">
                         <span class="bookinfo-menu-item-text bookinfo-menu-item-text_filename"></span>
-                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_filename">${bookInfo.name}</div>
+                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_filename"></div>
                     </div>
                     <div class="bookinfo-menu_item">
                         <span class="bookinfo-menu-item-text bookinfo-menu-item-text_filesize"></span>
@@ -1045,12 +1045,21 @@ export const bookshelf = {
                     </div>
                     <div class="bookinfo-menu_item">
                         <span class="bookinfo-menu-item-text bookinfo-menu-item-text_lastopened"></span>
-                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_timestamp">${tempBookLastOpenedTimestamp}</div>
+                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_timestamp"></div>
                     </div>
                 </div>`;
 
                 // Add popup menu to the book
-                book.find(".info-container").append(bookInfoMenu);
+                const menuContent = $(bookInfoMenu);
+                menuContent.find(".bookinfo-menu-item-info_title").text(tempBookTitle);
+                menuContent.find(".bookinfo-menu-item-info_filename").text(bookInfo.name);
+                const authorInfo = menuContent.find(".bookinfo-menu-item-info_author");
+                if (tempBookAuthor.author) authorInfo.text(tempBookAuthor.author);
+                else authorInfo.html('<span class="bookinfo-menu-item-text bookinfo-menu-item-text_unknown"></span>');
+                const timestampInfo = menuContent.find(".bookinfo-menu-item-info_timestamp");
+                if (bookInfo.lastOpenedTimestamp) timestampInfo.text(tempBookLastOpenedTimestamp);
+                else timestampInfo.html('<span class="bookinfo-menu-item-text bookinfo-menu-item-text_unknown"></span>');
+                book.find(".info-container").append(menuContent);
                 book.find(`#bookinfo-menu-${idx} .bookinfo-menu-item-info`).each(function () {
                     this.scrollTop = 0;
                 });
@@ -1076,18 +1085,6 @@ export const bookshelf = {
                 // Hide popup menu
                 book.find(".bookinfo-menu").remove();
             }
-
-            // Hide popup menu when clicked outside
-            document.addEventListener("click", function (e) {
-                const settingsMenu = book.find(`#bookinfo-menu-${idx}`);
-                // if (!settingsMenu) return;
-                if ($(e.target).closest(settingsMenu).length) {
-                    // clicked inside menu
-                } else {
-                    book.find(".dot-menu__checkbox").prop("checked", false);
-                    book.find(".bookinfo-menu").remove();
-                }
-            });
 
             // Reset all book cover art when mouseover the bookinfo-menu
             book.find(".bookinfo-menu").on("mouseenter", function () {
@@ -1898,6 +1895,11 @@ export const bookshelf = {
             await this.db.upgradeBookshelfDB();
             this.enabled = true;
             this._loopCount = 0;
+            $(document).off("click.bookshelfInfo").on("click.bookshelfInfo", (event) => {
+                if ($(event.target).closest(".bookinfo-menu, .bookinfo-menu-btn").length) return;
+                $(".bookshelf .dot-menu__checkbox").prop("checked", false);
+                $(".bookshelf .bookinfo-menu").remove();
+            });
             this._eventSubscriptions = [];
             const register = (event, handler) => {
                 const token = cbReg.add(event, handler);
@@ -2350,6 +2352,7 @@ export const bookshelf = {
             this._eventSubscriptions = [];
             clearTimeout(this._loopTimer);
             $(window).off(".bookshelf");
+            $(document).off(".bookshelfInfo");
             this._wheelElement?.removeEventListener("wheel", this._wheelHandler);
             this._wheelElement = null;
             this._wheelHandler = null;

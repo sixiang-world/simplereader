@@ -470,7 +470,7 @@ export function setSvgPathLength(container) {
  * @returns {HTMLCanvasElement|null}
  */
 export function getBookCoverCanvas(bookName) {
-    const bookElement = document.querySelector(`.book[data-filename="${bookName}"]`);
+    const bookElement = Array.from(document.querySelectorAll(".book")).find((element) => element.getAttribute("data-filename") === bookName);
     return bookElement?.querySelector(".cover-canvas");
 }
 
