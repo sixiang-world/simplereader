@@ -167,10 +167,31 @@
                 ["scope", "wheel", w],
                 ["value", "change", y],
             ].forEach(([t, e, s]) => this.DOM[t].addEventListener(e, s.bind(this), { passive: !1 })),
-                window.addEventListener("storage", v.bind(this)),
-                this.settings.onClickOutside &&
-                    (document.body.addEventListener("click", b.bind(this)),
-                    window.addEventListener("keydown", f.bind(this)));
+                // PATCH(simplereader): keep references to the bound document/window
+                // listeners so the destroy() below can detach them. Upstream 0.12.0
+                // registers anonymous handlers and ships no teardown at all; every
+                // destroyed UI rebuild leaked one body click + window keydown +
+                // window storage listener per instance. Recorded in
+                // docs/vendor-inventory.md.
+                (this._srListeners = {
+                    storage: v.bind(this),
+                    bodyClick: this.settings.onClickOutside ? b.bind(this) : null,
+                    keydown: this.settings.onClickOutside ? f.bind(this) : null,
+                }),
+                window.addEventListener("storage", this._srListeners.storage),
+                this._srListeners.bodyClick &&
+                    (document.body.addEventListener("click", this._srListeners.bodyClick),
+                    window.addEventListener("keydown", this._srListeners.keydown));
+        },
+        // PATCH(simplereader): minimal teardown missing from upstream 0.12.0.
+        destroy: function () {
+            var L = this._srListeners;
+            if (((this._srListeners = null), L)) {
+                window.removeEventListener("storage", L.storage);
+                if (L.bodyClick) document.body.removeEventListener("click", L.bodyClick);
+                if (L.keydown) window.removeEventListener("keydown", L.keydown);
+            }
+            this.DOM && this.DOM.scope && this.DOM.scope.remove();
         },
     });
     function M() {

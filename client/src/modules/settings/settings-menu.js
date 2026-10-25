@@ -30,6 +30,12 @@ export class SettingsMenu {
      */
     #SETTINGS_MAP = Object.fromEntries(SETTINGS_SCHEMA.map((def) => [def.key, def]));
 
+    /** Color picker wrapper owned by this menu instance; destroyed in remove(). */
+    #colorPicker = null;
+
+    /** Set by remove() so the deferred picker initialization is skipped after teardown. */
+    #colorPickerTornDown = false;
+
     /**
      * Creates an instance of SettingsMenu.
      * Initializes the menu with references to settings and default configurations.
@@ -236,6 +242,14 @@ export class SettingsMenu {
      * Cleans up all resources associated with the menu.
      */
     remove() {
+        // Release the color picker resources (observers + third-party
+        // document/window listeners) before dropping the DOM they served.
+        // Show/hide intentionally keeps instances alive; only a real menu
+        // rebuild/teardown destroys them.
+        this.#colorPickerTornDown = true;
+        this.#colorPicker?.destroy();
+        this.#colorPicker = null;
+
         // Remove the menu
         if (this.settingsMenu) {
             this.settingsMenu.remove();
@@ -992,7 +1006,8 @@ export class SettingsMenu {
      */
     #initializeComponents() {
         setTimeout(() => {
-            getColorPicker({
+            if (this.#colorPickerTornDown) return;
+            this.#colorPicker = getColorPicker({
                 callbackOnInput: () => {
                     // cbReg.go("updateAllBookCovers");
                     this.settingsObj.saveSettings(false, false, true);

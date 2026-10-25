@@ -9,7 +9,7 @@
 | `sweetalert2.js` | 11.17.2 | 文件头；https://github.com/sweetalert2/sweetalert2 |
 | `tippy/popper.min.js` | @popperjs/core 2.11.8 | 文件头；https://github.com/floating-ui/floating-ui （Popper 历史项目） |
 | `tippy/tippy-bundle.umd.min.js` | 未确认 | https://github.com/atomiks/tippyjs |
-| `yaireo/color-picker.js` | 0.12.0 | 文件头；https://github.com/yairEO/color-picker |
+| `yaireo/color-picker.js` | 0.12.0 | 文件头；https://github.com/yairEO/color-picker；**含本地补丁**（见下） |
 | `yaireo/position.js` | 1.1.1 | 文件头记录 `/npm/@yaireo/position@1.1.1/dist/position.umd.js` |
 | `jschardet.min.js` | 未确认 | https://github.com/aadsm/jschardet；不能用 npm 锁定版本推定该手工文件的版本 |
 | `hyperlist.js` | 未确认 | https://github.com/tbranyen/hyperlist |
@@ -20,6 +20,23 @@
 | `opencc/full.js` | 由安装的锁定 `opencc-js` 版本生成 | https://github.com/nk2028/opencc-js；`build-tools/fetch-opencc-bundle.mjs` 直接从 `node_modules/opencc-js/dist/umd/full.js` 比较并复制实际字节 |
 
 `npm audit` / `pnpm audit` 只检查锁定依赖图，不覆盖上述手工脚本。因此清理 npm 公告不能表述为已验证所有浏览器供应商代码。
+
+## 本地补丁记录
+
+### `yaireo/color-picker.js`（0.12.0）
+
+上游 0.12.0 的 `bindEvents` 为每个实例在 `document.body`（click）、`window`（keydown、
+storage）上注册匿名 bound 监听，且不提供任何 teardown。设置菜单每次真实重建
+（如 `customFontsLoaded`）都会永久泄漏一组监听与 observer。
+
+本地最小适配补丁（2026-10-25，随 B02）：
+
+1. `bindEvents` 把 bound 监听存到 `this._srListeners`（原注册行为不变）。
+2. 新增 `destroy()`：解绑上述 document/window 监听并移除 `DOM.scope`。
+
+上游若发布带官方 teardown 的版本，升级时应以官方实现替换本补丁。
+行为验证：`test/browser-color-picker-lifecycle.mjs`（destroy 后 click/Escape 不再
+触发 `onClickOutside`；补丁缺失时该测试失败）。
 
 ## 更新约定
 
