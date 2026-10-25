@@ -22,6 +22,7 @@ import {
     pairAnchorsAndFootnotes,
 } from "../../utils/base.js";
 import { createWorker } from "../../utils/helpers/worker.js";
+import { WorkerRequests } from "../../utils/helpers/worker-requests.js";
 
 /**
  * Chunked file processor
@@ -35,12 +36,15 @@ export class FileProcessor extends FileProcessorCore {
      * @param {string} encoding - File encoding
      * @public
      */
-    constructor(file, isEastern = null, encoding = null) {
+    constructor(file, isEastern = null, encoding = null, options = {}) {
         super(file.size, isEastern, encoding);
 
         this.file = file;
         this.initialChunk = this.file.slice(0, this.initialChunkSize);
         this.worker = createWorker("client/src/modules/file/file-processor-worker.js", import.meta.url);
+        this.requests = new WorkerRequests(this.worker);
+        this.signal = options.signal;
+        this.timeoutMs = options.timeoutMs;
         /** @type {boolean} Whether to process in log mode (skip title/footnote/optimize) */
         this.logMode = false;
     }
@@ -280,59 +284,28 @@ export class FileProcessor extends FileProcessorCore {
      */
     async #sendWorkerMessage(operation, data = {}) {
         let animation = null;
-
-        return new Promise((resolve, reject) => {
-            /**
-             * Handler for Worker messages
-             * @param {MessageEvent} e - Message event from Worker
-             */
-            const handler = (e) => {
-                const { type, error, ...result } = e.data;
-
-                if (type === "processingProgress") {
-                    // console.log(`Processing ${operation}:`, {
-                    //     filename: this.file.name,
-                    //     stage: result.stage,
-                    //     processedLines: result.processedLines,
-                    //     totalLines: result.totalLines,
-                    //     percentage: result.percentage,
-                    // });
-
-                    const canvas = getBookCoverCanvas(this.file.name);
-                    if (canvas) {
-                        if (!animation) {
-                            animation = CoverAnimation.create(canvas);
-                        }
-                        animation.start(result.percentage);
-                    }
-                    return;
-                }
-
-                if (type === `${operation}Complete`) {
-                    if (animation) {
-                        animation.stop();
-                        animation.reset();
-                    }
-
-                    this.worker.onmessage = null;
-                    resolve(result);
-                } else if (type === "error") {
-                    if (animation) {
-                        animation.stop();
-                    }
-                    reject(new Error(error));
-                }
-            };
-
-            this.worker.onmessage = handler;
-            this.worker.postMessage({
+        try {
+            const { type: _type, id: _id, ...result } = await this.requests.request({
                 operation,
                 encoding: this.encoding,
                 isEasternLan: this.isEasternLan,
                 metadata: this.bookMetadata,
                 ...data,
+            }, {
+                signal: this.signal,
+                timeoutMs: this.timeoutMs,
+                progress: ({ percentage }) => {
+                    const canvas = getBookCoverCanvas(this.file.name);
+                    if (!canvas) return;
+                    animation ||= CoverAnimation.create(canvas);
+                    animation.start(percentage);
+                },
             });
-        });
+            return result;
+        } finally {
+            animation?.stop();
+            animation?.reset();
+        }
     }
 
     /**
@@ -340,14 +313,8 @@ export class FileProcessor extends FileProcessorCore {
      * @public
      */
     destroy() {
-        WebSocketClient.removeListener("processingProgress");
-        if (this.animation) {
-            this.animation.stop();
-            this.animation = null;
-        }
-        if (this.worker) {
-            this.worker.terminate();
-            this.worker = null;
-        }
+        if (!this.worker) return;
+        this.requests.dispose();
+        this.worker = null;
     }
 }

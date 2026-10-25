@@ -15,8 +15,8 @@
  * Worker message handler
  */
 self.onmessage = async function (e) {
-    const { importDependencies } = await import("../../utils/helpers/worker.js");
     const {
+        id,
         operation = null,
         file = null,
         fileName = null,
@@ -51,6 +51,7 @@ self.onmessage = async function (e) {
     // console.groupEnd();
 
     try {
+        const { importDependencies } = await import("../../utils/helpers/worker.js");
         const [FileProcessorCore, CONSTANTS, VARS, Logger] = await importDependencies(
             [
                 "shared/core/file/file-processor-core.js",
@@ -69,6 +70,7 @@ self.onmessage = async function (e) {
                 const { bookName, author, bookNameRE, authorRE } = FileProcessorCore.getBookNameAndAuthor(fileName);
 
                 self.postMessage({
+                    id,
                     type: "processMetadataComplete",
                     bookName,
                     author,
@@ -94,6 +96,7 @@ self.onmessage = async function (e) {
                 });
 
                 self.postMessage({
+                    id,
                     type: "processInitialChunkComplete",
                     ...processedChunk,
                 });
@@ -117,6 +120,7 @@ self.onmessage = async function (e) {
                     logMode,
                     // progressCallback: (progress) => {
                     //     self.postMessage({
+                    id,
                     //         type: "processingProgress",
                     //         ...progress,
                     //     });
@@ -124,6 +128,7 @@ self.onmessage = async function (e) {
                 });
 
                 self.postMessage({
+                    id,
                     type: "processRemainingContentComplete",
                     ...processedChunk,
                 });
@@ -135,6 +140,7 @@ self.onmessage = async function (e) {
                 const titlePageLines = FileProcessorCore.generateTitlePage(metadata, styles);
 
                 self.postMessage({
+                    id,
                     type: "generateTitlePageComplete",
                     titlePageLines,
                 });
@@ -146,15 +152,19 @@ self.onmessage = async function (e) {
                 const endPageLine = FileProcessorCore.generateEndPage(totalLines);
 
                 self.postMessage({
+                    id,
                     type: "generateEndPageComplete",
                     endPageLine,
                 });
                 break;
             }
+            default:
+                throw new Error(`Unknown operation: ${operation}`);
         }
     } catch (error) {
         console.error("Worker error:", error);
         self.postMessage({
+                    id,
             type: "error",
             error: error.message,
             operation,
