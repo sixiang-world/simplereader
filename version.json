@@ -1,5 +1,5 @@
 {
-    "version": "2.3.0",
+    "version": "2.3.1",
     "changelog": {
         "2.2.0": {
             "date": "2026-09-02",
@@ -507,6 +507,29 @@
                     "**EPUB cross-chapter links** — internal links (#fragment / chapter.xhtml#sec) are clickable and jump to the target chapter position",
                     "**EPUB inline SVG** — inline <svg> serialized as sandboxed data URL (browser-enforced script disable), oversized SVG degrades to placeholder",
                     "**Engineering & tests** — 25 new EPUB image unit tests; fixed CI workflow step ordering; multiple rounds of independent code review and bug fixes"
+                ]
+            }
+        },
+        "2.3.1": {
+            "date": "2026-10-25",
+            "changes": {
+                "zh": [
+                    "**修复 TXT 脚注弹窗 XSS** — 脚注原文不再未转义进入弹窗 HTML；EPUB 新增图片数量上限（maxImages=2000），超限明确失败",
+                    "**修复设置与阅读器真实缺陷** — 色彩选择器实例/监听泄漏（上游库补 teardown）、NaN 恒真比较、字体选择回退死代码、章节导航吞没错误",
+                    "**加固发布流水线** — 凭证不落盘、生产入口执行端分支校验、部署镜像固定版本、产物记录源码 SHA",
+                    "**新增 Firefox Web 冒烟** — Firefox 144 真实引擎通过核心阅读链路；Safari/iOS/Android 维持未验收标记",
+                    "**新增真实双标签存储竞争回归** — 同名书并发保存/删除无可见半成品；removeAll 接口实测",
+                    "**建立分阶段性能基线** — 量化 TXT 处理超线性（5× 输入 ≈126× 耗时），为后续优化提供同环境对比",
+                    "**质量与文档** — lint 基线 383→184（0 error）；遗留问题台账（T00—T23 全量去向）；vendor 文件摘要锚定"
+                ],
+                "en": [
+                    "Fix TXT footnote popup XSS - raw footnote text is no longer assigned unescaped into popup HTML; EPUB gains an image-count budget (maxImages=2000) that fails explicitly when exceeded",
+                    "Fix real settings/reader defects - color picker instance and listener leaks (vendored lib patched with teardown), always-true NaN comparison, dead font-selector fallback, swallowed navigation rejections",
+                    "Harden the release pipeline - credentials never persisted, execution-side branch guard on production entrypoints, pinned deploy images, build provenance recorded into the artifact",
+                    "Add a real Firefox Web smoke - Firefox 144 passes the core reading path; Safari/iOS/Android stay explicitly UNVERIFIED",
+                    "Add a real two-tab storage race regression - concurrent same-book save/delete never leaves a visible half-book; removeAll APIs exercised",
+                    "Establish a staged performance baseline - quantifies the superlinear TXT processing (5x input costs ~126x time) for like-for-like future comparisons",
+                    "Quality and docs - lint baseline 383->184 warnings (0 errors); full issue ledger for T00-T23; vendor file digests anchored"
                 ]
             }
         }

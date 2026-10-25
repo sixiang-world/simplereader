@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.3.1] — 2026-10-25
+
+### 修复（安全）
+- **TXT 脚注弹窗 XSS** — TXT 脚注原文不再未转义进入弹窗 HTML；负例已双向验证（`4295252`）
+- **EPUB 图片数量预算** — 新增 maxImages=2000（覆盖内联 data: URL 与 SVG），超限明确失败（`4295252`）
+
+### 修复
+- 色彩选择器实例与 document/window 监听泄漏（上游 0.12.0 无 teardown，打最小补丁并记录差异）（`b9337b5`）
+- `isVariableDefined` 的 `v !== NaN` 恒真比较；字体选择器 getValue 回退死代码；章节导航 async Promise executor 吞没 rejection（`4f37eb0`）
+- 跨页搜索高亮回归的固定睡眠在本机 Chrome 稳定误报——改为有界轮询（基线提交已验证非新回归）（`19d6172`）
+
+### 工程与发布
+- CNB 流水线加固：凭证经一次性 helper 不落盘、生产入口执行端分支校验、镜像固定 v1.7.3/v2.54.0、dist 记录源码 SHA（`379211c`）
+- 新增 Firefox 144 真实引擎 Web 冒烟（无构建时显式 UNVERIFIED 跳过）；Safari/iOS/Android 明确未验收（`e6b4e27`）
+- 新增真实双标签存储竞争回归与 removeAll 接口实测；记录 Chromium 强关滞留连接的平台事实（`8004333`）
+- 同步协议边界测试固定复现（无 CAS 并发丢更新、时钟偏差获胜路径）（`48b45a6`）
+- 分阶段性能基线：量化 TXT 处理超线性（10k 行 1.4s → 50k 行 ~172s，5×输入≈126×耗时；解码/分页可忽略）（`f54fddb`）
+- lint 基线 383→184（0 error）；遗留问题台账 T00—T23 全量去向；vendor 文件 sha256 锚定（`4f37eb0`、`49b9af4`、`49a2773`）
+
 ## [2.3.0] — 2026-09-04
 
 ### 新增
