@@ -15,3 +15,4 @@
 - T22实现已完成：Python构建无隐式部署/源版本修改、扩展输出隔离；durable claim/ACK/恢复、真实无sender.tab的reader页核验、模块就绪后处理、空文件和失败重试。独立快照构建/34个Node文件/6个Python回归/浏览器真实TXT处理(API传输stub)/Chrome与Firefox打包通过。真实扩展引擎验收受本机ExtensionInstallBlocklist企业策略阻塞，Playwright浏览器下载亦被网络域策略拒绝；未绕过策略。npm run test:extension与docs/EXTENSION_TESTING.md保留明确后续验收，不记为已通过。
 - T05已完成：安装前复制postinstall/构建工具、Node22、静态运行镜像禁目录浏览；独立提交快照真实Docker构建成功，并启动Caddy容器验证页面/version/OpenCC/Worker HTTP。当前代理需BuildKit仅安装阶段挂可信CA+支持的proxy路由；TLS/签名校验始终启用。命令见docs/DOCKER_BUILD.md；test/docker-smoke.py可重复运行（DOCKER_IMAGE指定已构建镜像）。
 - T20/T21缓存与供应链门禁已完成：部署复用失败即退出的validate（含浏览器/Python），固定URL重新验证、hash assets保留immutable；OpenCC按锁定依赖字节同步并移除无核验CDN回退，vendor来源/版本清单。新增8个纯边界真实checkJs检查与负例证明，新增模块关键lint规则error；旧正则测试改公共API真实执行、0 skipped。独立快照npm run validate全部通过（Node、8个浏览器文件、6个Python用例）；未执行远程发布。历史代码仍有warning，未伪称全库strict。
+- T21锁定依赖补丁已完成：在原有semver范围内定向更新postcss/nanoid/source-map-js/brace-expansion，同步pnpm/npm锁；两套audit均为0公告（仅涵盖包管理器依赖，不涵盖手工vendor或证明无应用漏洞）。独立快照完整validate通过。
