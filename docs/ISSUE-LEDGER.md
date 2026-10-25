@@ -56,7 +56,7 @@ reparent-map。基线 d7d4e5d（上游原哈希）为审查起点。
 | B01 | 安全边界复核（EPUB 正文/脚注/链接/SVG/资源 URL、书架元数据、构建产物） | 待验证 | 不预设仍有漏洞；以 sink 审计 + 浏览器安全 fixture 补齐为准 |
 | B02 | 色彩选择器及设置组件生命周期（ResizeObserver/IntersectionObserver/RAF 无 destroy） | 已修复 | 包装层模块级幂等注册 + `destroy()`；上游 0.12.0 无 teardown，打最小本地补丁（docs/vendor-inventory.md 本地补丁记录）；SettingsMenu.remove() 接线销毁，show/hide 复用不销毁。验证：test/browser-color-picker-lifecycle.mjs（真实监听脱离证据 + 20 次重建/销毁回基线） |
 | B03 | 跨标签页、存储故障、旧数据兼容验收 | 待验证 | 双标签竞争、versionchange、配额、converterVersion 旧缓存 |
-| B04 | Web 浏览器兼容矩阵 | 待验证 | Chromium 主门禁已有；Firefox Web 冒烟、Safari/iOS、Android 真机未做 |
+| B04 | Web 浏览器兼容矩阵 | 部分完成 | Chromium：13 个自动回归文件（validate 门禁）。Firefox 144（playwright 真实引擎）：Web 冒烟通过——启动零 page error、真实 TXT 导入管线、TOC、渲染、搜索/设置弹窗（test/browser-firefox-smoke.mjs；无 Firefox 构建时显式打印 UNVERIFIED 并跳过，不虚称覆盖）。Safari/iOS Safari/Android Chrome：**未验收**（无真实设备，不以 WebKit 自动化或扩展最低版本替代声明）。触屏脚注关闭链接（"ontouchstart" 检测）代码已存在，触屏真机行为未实测 |
 | B05 | 同步限制用户可见提示（无 CAS 并发边界） | 待开发 | UI 提示“依次拉取—修改—推送”+ 并发协议测试；不做新后端 |
 | C01 | 真实使用性能基线（10k/50k 行 TXT、多形态 EPUB、500/2000 本书架） | 待开发 | 冷热各 ≥5 次；为 C02—C04 提供同环境对比 |
 | C02 | flow 长会话 DOM 窗口化 | 明确暂缓（条件性） | 仅当 C01 证明持续增长伴布局/内存恶化才开发；失败保留实验模式 |

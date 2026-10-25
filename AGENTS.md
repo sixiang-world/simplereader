@@ -63,7 +63,7 @@ v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态
 | `pnpm run test` | 独立运行自动发现的 `test/test-*.mjs`（38 个文件，Node 原生 assert，无测试框架） |
 | `pnpm run lint` / `lint:fix` | ESLint 9（`eslint.config.js`）。当前基线 0 error / 383 warning；新修改模块不得新增警告 |
 | `pnpm run format` / `format:check` | Prettier（`.prettierrc.json`） |
-| `pnpm run test:browser` | 11 个真实 Chromium 回归文件（需先 `build`；`CHROMIUM_EXECUTABLE_PATH` 可指定浏览器） |
+| `pnpm run test:browser` | 真实浏览器回归（需先 `build`；`CHROMIUM_EXECUTABLE_PATH` 可指定浏览器）。Chromium 主门禁 13 个文件；`browser-firefox-smoke.mjs` 在有 Firefox 构建时执行真实 Web 冒烟，缺失时显式打印 UNVERIFIED 跳过 |
 | `pnpm run validate` | lint + typecheck + build + Node + 浏览器 + Python 回归（`build-tools/validate.sh`，CI/部署共用门禁） |
 | `pnpm run test:extension` | 真实浏览器扩展验收（独立于 validate；被企业策略阻塞时不得称通过） |
 | `pnpm run preprocess-books` | 单独执行 `build-tools/preprocess-books.mjs` 预分页书籍 |
