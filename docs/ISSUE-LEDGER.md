@@ -53,21 +53,21 @@ reparent-map。基线 d7d4e5d（上游原哈希）为审查起点。
 
 | 计划任务 | 事项 | 状态 | 说明 |
 |---|---|---|---|
-| B01 | 安全边界复核（EPUB 正文/脚注/链接/SVG/资源 URL、书架元数据、构建产物） | 待验证 | 不预设仍有漏洞；以 sink 审计 + 浏览器安全 fixture 补齐为准 |
+| B01 | 安全边界复核（EPUB 正文/脚注/链接/SVG/资源 URL、书架元数据、构建产物） | 已修复 | 全量 sink 审计（HTML/URL/CSS/选择器/协议）完成；发现并修复 2 个真缺口：TXT 脚注弹窗 XSS（lookup 原文直进 div.html()，已转义；负例双向验证）、EPUB 图片数量无独立预算（新增 maxImages=2000，含内联 data: URL 与 SVG）。sanitizeHtml/converter 属性白名单/搜索惰性 template/重复资源去重均复核无缺口。提交 4295252 |
 | B02 | 色彩选择器及设置组件生命周期（ResizeObserver/IntersectionObserver/RAF 无 destroy） | 已修复 | 包装层模块级幂等注册 + `destroy()`；上游 0.12.0 无 teardown，打最小本地补丁（docs/vendor-inventory.md 本地补丁记录）；SettingsMenu.remove() 接线销毁，show/hide 复用不销毁。验证：test/browser-color-picker-lifecycle.mjs（真实监听脱离证据 + 20 次重建/销毁回基线） |
-| B03 | 跨标签页、存储故障、旧数据兼容验收 | 待验证 | 双标签竞争、versionchange、配额、converterVersion 旧缓存 |
+| B03 | 跨标签页、存储故障、旧数据兼容验收 | 已修复（一项平台限制） | 单标签故障矩阵（分块/回滚/晚到 abort/versionchange 释放/旧语言迁移/converter 旧缓存）沿用既有回归；新增真实双标签测试（test/browser-storage-multitab.mjs）：同名书并发保存/删除无可见半成品且事后重试可用；**平台事实**：当前 Chromium 强制关闭滞留连接（即使注册了 versionchange handler），跨标签阻塞升级在本平台不可复现——DBManager 保留防御性 onbounded 显式错误 + 10s 超时；removeAllBooks/removeAllFonts 实测调用且各只清自己的 store。提交 8004333 |
 | B04 | Web 浏览器兼容矩阵 | 部分完成 | Chromium：13 个自动回归文件（validate 门禁）。Firefox 144（playwright 真实引擎）：Web 冒烟通过——启动零 page error、真实 TXT 导入管线、TOC、渲染、搜索/设置弹窗（test/browser-firefox-smoke.mjs；无 Firefox 构建时显式打印 UNVERIFIED 并跳过，不虚称覆盖）。Safari/iOS Safari/Android Chrome：**未验收**（无真实设备，不以 WebKit 自动化或扩展最低版本替代声明）。触屏脚注关闭链接（"ontouchstart" 检测）代码已存在，触屏真机行为未实测 |
-| B05 | 同步限制用户可见提示（无 CAS 并发边界） | 待开发 | UI 提示“依次拉取—修改—推送”+ 并发协议测试；不做新后端 |
-| C01 | 真实使用性能基线（10k/50k 行 TXT、多形态 EPUB、500/2000 本书架） | 待开发 | 冷热各 ≥5 次；为 C02—C04 提供同环境对比 |
-| C02 | flow 长会话 DOM 窗口化 | 明确暂缓（条件性） | 仅当 C01 证明持续增长伴布局/内存恶化才开发；失败保留实验模式 |
-| C03 | TXT 前缀+全量重算优化 | 明确暂缓（条件性） | 先测各阶段成本；流式解析不作为默认交付 |
+| B05 | 同步限制用户可见提示（无 CAS 并发边界） | 已修复 | UI 提示上一轮已存在（”依次拉取、修改、推送”）；本轮补协议边界测试：交错并发两推送各自报成功但后写覆盖前写字段、顺序流保留双方字段、时钟超前旧编辑按 ts 获胜——固定复现边界而非宣称解决（test-config-sync.mjs protocol boundary 段）；config-sync.js 两处误导性”online 自动重试”注释已改正（无任何自动接线）。提交 48b45a6 |
+| C01 | 真实使用性能基线（10k/50k 行 TXT、多形态 EPUB、500/2000 本书架） | 已修复 | test/browser-performance.mjs 扩展：确定性 TXT 生成器（章节/长行/脚注/空白）+ 三形态 EPUB fixture，Node 侧分阶段计时（浏览器侧保留 DOM/IDB 测量），迭代数可 env 覆盖，输出确定性断言+观测数字。**量化发现（C03 证据）**：50k 行 processChunkStatic 单次 ~172s（10k 为 1.4s，5×输入≈126×耗时，热=冷→算法性超线性；解码/分页 <5ms 可忽略）。EPUB：120 章 1.8s、3000 段 17ms、40 章图文 0.6s 无超线性。详见 docs/PERFORMANCE_BASELINE.md |
+| C02 | flow 长会话 DOM 窗口化 | 待开发（前置已满足） | 前置 C01/B04 已完成；下一步按计划做 5 万行前进/回滚/目录跳转/搜索/字体变化会话测量，证实持续增长伴布局/内存恶化后再开发窗口化；失败保留实验模式 |
+| C03 | TXT 前缀+全量重算优化 | 待开发（证据已量化） | C01 已定位：processChunkStatic 对 5× 输入耗时 ~126×（50k 行 ~172s，热=冷），解码/分页可忽略——阶段成本测量完成，可按计划进入"移除可证明重复的中间数组/投影"局部优化；流式解析仍不作默认交付 |
 | C04 | 书架/EPUB/字体布局按瓶颈优化 | 明确暂缓（条件性） | 无实测收益不合入 |
-| D01 | lint 383 警告分类与增量收紧 | 待开发 | 分类→修真实缺陷→逐模块提升规则；不以归零为目标 |
+| D01 | lint 383 警告分类与增量收紧 | 进行中（批次 1 完成） | 分类：193 no-undef 全为 vendor/扩展全局（已声明，未来 no-undef 即真缺陷）、92 unused-vars + 66 prefer-const（遗留风格）、其余少量。修复 4 个真实缺陷：isVariableDefined 的 `!== NaN` 恒真、schema 两处模板字面量恒真致死回退、reader.js async Promise executor 吞 rejection；全局 `position` 改局部只读绑定。警告 383→184（0 error）。提交 4f37eb0。后续批次：unused-vars/prefer-const 逐模块清理后提升规则 |
 | D02 | shared→client 反向依赖解除（TextProcessorCore 导 client 配置） | 待开发 | 常量入 shared、运行时状态显式传参、客户端兼容层 |
 | D03 | 编排重复与模块循环收敛 | 待开发 | 依赖 D02；按职责验收 |
-| D04 | vendor 未确认版本核实（tippy、jschardet、hyperlist） | 待验证 | docs/vendor-inventory.md 已建；未确认项与上游发布物核验 |
-| E01 | CNB 流水线加固（token 不落 URL、生产执行端校验、标签随发布、镜像固定） | 待开发 | 本轮修复 |
-| E02 | EdgeOne 预发真实验收 | 待验证 | 依赖 E01；Worker 响应类型、缓存升级、版本升级路径 |
+| D04 | vendor 未确认版本核实（tippy、jschardet、hyperlist） | 已核实（保持未确认状态） | 全部 vendor 文件 sha256+字节数已登记（文件身份锚点）；jschardet 与 npm 全部已发布 dist（2.3.0–3.1.4）逐一比对不匹配（独立构建，最近属 3.1.x）；tippy 上游构件本网络不可达（unpkg/jsdelivr 返回错误桩，后续网络可达时重试）；hyperlist npm 无压缩构件（本地为独立 8KB 压缩版）。区分"文件身份"与"来源验证"，不虚称已验证。CI/部署镜像/CLI 版本固定见 E01。提交 49b9af4 |
+| E01 | CNB 流水线加固（token 不落 URL、生产执行端校验、标签随发布、镜像固定） | 已修复 | token 经一次性内联 credential helper（git credential fill 验证过 git 会在 helper 后追加操作参数，正确习语为 `}; f`）；生产入口执行端强制 CNB_BRANCH==main（本地模拟 dev→exit 78 / main→通过）；常规同步仅当前分支、标签仅"发布同步"手动任务；部署镜像固定 v1.7.3（digest 注释）、alpine/git v2.54.0；dist/BUILD_INFO.json 记录源码 SHA/版本。三层离线校验（YAML/语义/Schema）通过；真实 dev 流水线验证：本会话全部推送的 GitHub 镜像同步成功（镜像 HEAD 与 CNB 一致）。提交 379211c |
+| E02 | EdgeOne 预发真实验收 | 部分完成（受外部条件阻塞） | 前置已就绪：E01 流水线三层校验通过、dev 每次推送触发预发部署、GitHub 镜像同步全部成功。**未完成**：预发 URL 的 HTTP 实测（Worker 响应类型/缓存头/版本升级路径/安全头）需要 EdgeOne 控制台或带 API token 的 CLI，本机无 token，保留为需控制台访问的后续验收 |
 | E03 | 发布候选整合 | 待验证 | 2026-10-25 历史恢复后 main 与 dev 已一致（0c82d4f），无分叉合并需求；后续发布按 §14 流程走 2.3.1 候选 |
 | E04 | 生产发布、冒烟、回滚演练 | 待开发 | 需生产授权；回滚路径先在预发演练 |
 | E05 | 持续维护节奏 | 待开发 | 首次发布后生效 |
