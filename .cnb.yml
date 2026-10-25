@@ -59,11 +59,14 @@
     fi
     echo "dist size: $(du -sh dist | cut -f1)"
 
-# 记录部署产物对应的源码 SHA 与版本（发布记录可对应该次产物）
+# 记录部署产物对应的源码 SHA 与版本（发布记录可对应该次产物）。
+# 注意：阶段容器（node:22-alpine）里没有 git 二进制——用 CNB 内置的
+# CNB_COMMIT 提供源码 SHA，禁止在此处调用 git rev-parse（曾致 exit 127、
+# 预发部署在部署前失败）。
 .record-build-info: &record-build-info
   name: record-build-info
   script: |
-    COMMIT="$(git rev-parse HEAD)"
+    COMMIT="${CNB_COMMIT:-unknown}"
     VERSION="$(node -p "require('./version.json').version")"
     printf '{"commit":"%s","version":"%s","branch":"%s","builtAt":"%s"}\n' \
       "${COMMIT}" "${VERSION}" "${CNB_BRANCH}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -79,7 +82,7 @@
       echo "ERROR: production deploy requires branch 'main' (got '${BRANCH}')"
       exit 78
     fi
-    echo "production deploy approved for main@$(git rev-parse HEAD)"
+    echo "production deploy approved for main@${CNB_COMMIT:-unknown}"
 
 # ===== GitHub 同步：临时凭证，token 不落盘 =====
 # push 直接指向 URL，不配置 github remote；credential helper 为一次性内联函数，
