@@ -14,7 +14,10 @@ portable thresholds or a before/after speedup claim.
 ## C01 staged baseline (2026-10-25, Node v22.22.2, same machine)
 
 Deterministic generated samples; `PERF_BASELINE_RUNS` overrides iteration
-count (default 5). Timings are same-machine observations for before/after
+count (default 5). **The 50k heavy sample only runs when
+`PERF_BASELINE_HEAVY=1`** — it costs minutes per run (superlinear, see
+below) and would dominate CI validate; the suite default is 10k×RUNS plus
+the EPUB shapes. Timings are same-machine observations for before/after
 comparison only — never thresholds. Structure counts are asserted:
 10k→45,679/9,138 htmlLines, 1,253/253 titles, 425/85 pages stay identical
 across runs (determinism check).

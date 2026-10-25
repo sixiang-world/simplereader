@@ -87,10 +87,15 @@ await withBrowserTest(async({browser,baseURL})=>{
    hotMedianMs:{decode:median(samples.map(s=>s.decode)),process:median(samples.map(s=>s.process)),paginate:median(samples.map(s=>s.paginate))}};
  };
  const txt10k=await runTxt(10000,RUNS);
- // 50k keeps only a cold+hot pair: the 5x-input stage scales superlinearly
- // in this environment (a C03 finding — recorded in PERFORMANCE_BASELINE),
- // so five full runs would dominate every validate invocation.
- const txt50k=await runTxt(50000,2);
+ // The 50k heavy sample scales superlinearly (~172s per run on a fast
+ // dev machine; several times that on CI runners) — running it inside
+ // every validate would dominate the pipeline. It stays reproducible on
+ // demand: PERF_BASELINE_HEAVY=1 node test/browser-performance.mjs
+ // (the recorded 10k/50k observations live in docs/PERFORMANCE_BASELINE.md).
+ let txt50k=null;
+ if(process.env.PERF_BASELINE_HEAVY==='1'){
+  txt50k=await runTxt(50000,2);
+ }
 
  // EPUB shapes: multi-short-chapter, single-long-chapter, illustrated
  // (one shared image — exercises the cross-spine dedup cache).
@@ -120,8 +125,12 @@ await withBrowserTest(async({browser,baseURL})=>{
   singleLong:await runEpub(await mkEpub([3000],false),3),
   illustrated:await runEpub(await mkEpub(Array.from({length:40},()=>9),true),3)};
 
- assert.ok(txt10k.htmlLines>0&&txt50k.htmlLines>txt10k.htmlLines,'TXT processing must produce scaled output');
- assert.ok(txt10k.titles>=250&&txt50k.titles>=1250,'chapter detection must find the generated headings');
+ assert.ok(txt10k.htmlLines>0,'TXT processing must produce scaled output');
+ assert.ok(txt10k.titles>=250,'chapter detection must find the generated headings');
+ if(txt50k){
+  assert.ok(txt50k.htmlLines>txt10k.htmlLines,'50k sample must out-scale 10k');
+  assert.ok(txt50k.titles>=1250,'50k chapter detection must scale');
+ }
  assert.ok(epub.singleLong.htmlLines>2900&&epub.illustrated.imageLines===80,'EPUB shapes converted with expected structure');
- console.log('C01 staged baseline (Node '+process.version+'; observations not thresholds): '+JSON.stringify({runs:RUNS,txt10k,txt50k,epub}));
+ console.log('C01 staged baseline (Node '+process.version+'; observations not thresholds): '+JSON.stringify({runs:RUNS,heavy:process.env.PERF_BASELINE_HEAVY==='1',txt10k,txt50k,epub}));
 }

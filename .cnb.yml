@@ -33,9 +33,12 @@
 # 以 . 开头的 key 不会被识别为分支名，用作可复用片段（YAML 锚点）。
 
 # ===== 公共配置：Node 构建环境 =====
+# volumes 缓存 pnpm store：install 从 ~1.6m 降至秒级（首次构建后）
 .node-env: &node-env
   docker:
     image: node:22-alpine
+    volumes:
+      - /root/.local/share/pnpm/store
 
 # ===== 公共构建阶段 =====
 .install: &install
