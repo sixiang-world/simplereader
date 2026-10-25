@@ -106,10 +106,15 @@ export class BookshelfDB extends DBManager {
      * @async
      * @param {string} name - Book filename
      * @param {Object} processedData - Processed book data
-     * @returns {Promise<IDBValidKey>} Key of updated book
+     * @returns {Promise<boolean>} True when persisted; false when skipped (anonymous mode)
      * @throws {Error} When database initialization fails or transaction fails
      */
     async updateProcessedBook(name, processedData) {
+        // Anonymous mode never persists books — putBook() no-ops the same way,
+        // so skip instead of failing the open on a missing shelf entry.
+        if (CONFIG.CONST_CONFIG.ANONYMOUS_MODE) {
+            return false;
+        }
         if (!(await this.init())) {
             throw new Error("Init local db error!");
         }
@@ -134,8 +139,11 @@ export class BookshelfDB extends DBManager {
                 }
             }
 
+            // A bookfiles row can exist without its derived record (older saves
+            // were not written atomically). Upsert it from the snapshot — the
+            // final put fills every field — instead of failing the open.
             if (!existingProcessedBook) {
-                throw new Error(`Processed book with name "${name}" not found in the database.`);
+                existingProcessedBook = { name };
             }
 
             await this.put(
