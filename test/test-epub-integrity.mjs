@@ -70,6 +70,19 @@ const imageZip = await JSZip.loadAsync(await imageSource.arrayBuffer());
 imageZip.file("OPS/big.png", new Uint8Array(4096));
 const imageBook = new File([await imageZip.generateAsync({ type: "uint8array" })], "image.epub");
 await assert.rejects(() => EpubConverter.convert(imageBook, null, { limits: { maxEntryBytes: 2048 } }), /EPUB_LIMIT/, "image budget failures must not be downgraded to placeholders");
+// Image count budget: counts every rendered <img>/<svg> across the spine
+// (registry-inlined, inline data: URLs, and SVG blocks alike).
+const manyImages = await epubFixture([
+    { path: "img1.xhtml", href: "img1.xhtml", body: '<p><img src="data:image/png;base64,iVBORw0KGgo="/></p><p><img src="data:image/png;base64,iVBORw0KGgo="/></p>' },
+]);
+await assert.rejects(() => EpubConverter.convert(manyImages, null, { limits: { maxImages: 1 } }), /EPUB_LIMIT/, "too many images must fail explicitly, including inline data: URLs");
+const svgImages = await epubFixture([
+    { path: "svg.xhtml", href: "svg.xhtml", body: '<p><svg xmlns="http://www.w3.org/2000/svg"><rect width="2" height="2"/></svg></p><p><svg xmlns="http://www.w3.org/2000/svg"><rect width="2" height="2"/></svg></p>' },
+]);
+await assert.rejects(() => EpubConverter.convert(svgImages, null, { limits: { maxImages: 1 } }), /EPUB_LIMIT/, "SVG blocks must count toward the image budget");
+// A single image stays within the default budget.
+const oneImage = await EpubConverter.convert(manyImages);
+assert(oneImage.htmlLines.some(l => l.type === "image" || /<img/.test(l.content || "")), "single inline image must still convert normally");
 const abort = new AbortController();
 abort.abort();
 await assert.rejects(() => EpubConverter.convert(book, null, { signal: abort.signal }), { name: "AbortError" });

@@ -702,6 +702,7 @@ export class EpubConverter {
         const footnoteMap = Object.create(null);   // {footnoteId: htmlContent}
         const missingFiles = [];
         let lineNumber = 0;
+        let imageCount = 0;
         this.#logger.log(`Processing ${spine.length} spine items...`);
         for (const [idx, item] of spine.entries()) {
             const filePath = this.#resolveHref(item.href, opfPath);
@@ -743,6 +744,10 @@ export class EpubConverter {
             const xhtml = await file.async("text");
             const doc = this.#parseXhtml(xhtml);
             checkEpubDocument(doc, limits, signal);
+            // Image count budget covers every rendered image element
+            // (registry-inlined, inline data: URLs, and SVG blocks alike).
+            imageCount += doc.querySelectorAll("img, svg").length;
+            if (imageCount > limits.maxImages) throw epubLimit("too many images");
             const t1 = performance.now();
             // Pre-resolve image resources referenced by this spine file so the
             // (synchronous) HTML walker can inline them as data: URLs.

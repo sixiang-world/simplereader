@@ -23,6 +23,20 @@ function resolveFootnoteTarget(anchor) {
     return spinePath ? resolveEpubHref(anchor.getAttribute("href"), spinePath) : null;
 }
 
+/**
+ * Escape plain text for safe assignment to an HTML-rendering sink.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeHtmlText(str) {
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
 
 /**
  * Footnotes class for handling the display, positioning, and interaction of footnotes on a page
@@ -167,7 +181,13 @@ class Footnotes {
         if (anchorEl && this._lookupFootnote) {
             const markerCode = anchorEl.getAttribute("data-marker-code");
             const index = anchorEl.getAttribute("data-index");
-            footnoteContent = this._lookupFootnote(markerCode, index) || CONFIG.CONST_FOOTNOTE.NOTFOUND;
+            const lookedUp = this._lookupFootnote(markerCode, index);
+            // TXT lookup returns raw file text; escape it because the popup
+            // below renders its content as HTML. EPUB map content is
+            // pre-sanitized by the converter and must keep its markup.
+            footnoteContent = lookedUp && lookedUp !== CONFIG.CONST_FOOTNOTE.NOTFOUND
+                ? escapeHtmlText(lookedUp)
+                : CONFIG.CONST_FOOTNOTE.NOTFOUND;
         }
         // EPUB footnotes: look up by href#id in the converter-built map.
         // This takes priority over the DOM fallback because EPUB footnote

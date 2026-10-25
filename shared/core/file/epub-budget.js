@@ -7,6 +7,10 @@ export const EPUB_LIMITS = Object.freeze({
     maxDocumentNodes: 100000,
     maxDepth: 128,
     maxLines: 100000,
+    // Total <img>/<svg> occurrences across the spine. Byte/entry budgets
+    // already bound image *data*; this bounds the number of rendered image
+    // elements (each becomes a pagination/DOM entry).
+    maxImages: 2000,
 });
 
 export function checkEpubAbort(signal) {
