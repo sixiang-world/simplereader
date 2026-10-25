@@ -1,222 +1,149 @@
 /**
- * @fileoverview DBWorker module for handling database operations in a background worker
- * @module client/src/modules/database/db-worker
- * @requires client/src/utils/helpers-worker
- * @requires shared/utils/logger
+ * IndexedDB operations run in this worker. A request succeeds only after its
+ * transaction commits. Related stores and chunk records share one transaction.
+ * The on-disk chunk naming/layout stays compatible with existing books.
  */
+const connections = new Map();
 
-/**
- * Worker message handler
- */
-self.onmessage = async function (e) {
-    const { importDependencies } = await import("../../utils/helpers/worker.js");
-    const { type, data } = e.data;
-    let logger = null;
-
+self.onmessage = async ({ data: message }) => {
+    const { type, data = {} } = message;
     try {
-        const [Logger] = await importDependencies(["shared/utils/logger.js"], import.meta.url);
-
-        logger = Logger.getLogger("DBWorker", false);
-
-        logger.log("Worker received message", type);
-        logger.log("Payload", data);
-
-        switch (type) {
-            case "put":
-                try {
-                    logger.log("DBWorker put");
-                    const { storeName, storeData, dbName, dbVersion } = data;
-                    const db = await openDatabase(dbName, dbVersion);
-                    const tx = db.transaction(storeName, "readwrite");
-                    const store = tx.objectStore(storeName);
-
-                    logger.log("DBWorker put", storeData);
-
-                    await wrapRequest(store.put(storeData));
-                    self.postMessage({ type: "success", id: data.id });
-                } catch (error) {
-                    console.error("DBWorker put error", error);
-                    self.postMessage({ type: "error", error: error.message, id: data.id });
-                }
-                break;
-
-            case "checkSize":
-                try {
-                    logger.log("DBWorker checkSize");
-                    const { data: checkData, threshold } = data;
-                    const size = calculateSize(checkData);
-                    const needsChunking = size > threshold;
-
-                    logger.log("DBWorker checkSize - before postMessage", {
-                        threshold,
-                        size,
-                        needsChunking,
-                    });
-
-                    const message = {
-                        type: "success",
-                        id: data.id,
-                        result: {
-                            needsChunking,
-                            size,
-                        },
-                    };
-
-                    logger.log("DBWorker checkSize - message to send", message);
-
-                    self.postMessage(message);
-
-                    logger.log("DBWorker checkSize - after postMessage");
-                } catch (error) {
-                    console.error("DBWorker checkSize error", error);
-                    self.postMessage({
-                        type: "error",
-                        error: error.message,
-                        id: data.id,
-                    });
-                }
-                break;
-
-            case "storeChunks":
-                try {
-                    logger.log("DBWorker storeChunks");
-                    const { data: originalData, chunkSize, key, fieldName, dbName, dbVersion, storeName, size } = data;
-
-                    const db = await openDatabase(dbName, dbVersion);
-                    const tx = db.transaction(storeName, "readwrite");
-                    const store = tx.objectStore(storeName);
-
-                    const chunkRefs = await storeChunksData(store, key, fieldName, originalData, chunkSize, size);
-
-                    logger.log("DBWorker storeChunks", { chunkRefs });
-
-                    self.postMessage({
-                        type: "success",
-                        id: data.id,
-                        result: chunkRefs,
-                    });
-                } catch (error) {
-                    console.error("DBWorker storeChunks error", error);
-                    self.postMessage({ type: "error", error: error.message, id: data.id });
-                }
-                break;
-
-            case "get":
-                try {
-                    logger.log("DBWorker get");
-                    const { storeNames, key, dbName, dbVersion } = data;
-                    const db = await openDatabase(dbName, dbVersion);
-
-                    const results = await Promise.all(
-                        storeNames.map(async (storeName) => {
-                            const tx = db.transaction(storeName, "readonly");
+        let result;
+        if (type === "checkSize") {
+            const size = calculateSize(data.data);
+            result = { size, needsChunking: size > data.threshold };
+        } else {
+            const db = await openDatabase(data.dbName, data.dbVersion, data.objectStores);
+            switch (type) {
+                case "put":
+                case "putMany": {
+                    const records = type === "put" ? [{ storeName: data.storeName, data: data.storeData }] : data.records;
+                    const save = (rows) => runTransaction(db, rows.map((row) => row.storeName), "readwrite", async (tx) => {
+                        // Read existing references before replacing them. Old chunks and
+                        // their replacements commit together, including smaller rewrites.
+                        await Promise.all(rows.map(async ({ storeName, data: record }) => {
                             const store = tx.objectStore(storeName);
-                            const storeData = await wrapRequest(store.get(key));
-
-                            // Check if there are chunks to be reassembled
-                            if (storeData && typeof storeData === "object") {
-                                for (const [field, value] of Object.entries(storeData)) {
-                                    if (isChunkRefs(value)) {
-                                        storeData[field] = await loadChunksData(store, key, field, value);
+                            const key = record[store.keyPath];
+                            const previous = await wrapRequest(store.get(key));
+                            await deleteRecordChunks(store, key, previous);
+                            const next = { ...record };
+                            for (const [field, value] of Object.entries(next)) {
+                                if (Array.isArray(value) && !isChunkRefs(value) && value.length) {
+                                    const size = calculateSize(value);
+                                    if (size > (data.chunkThreshold ?? 50 * 1024 * 1024)) {
+                                        next[field] = await storeChunksData(store, key, field, value,
+                                            data.chunkSize ?? 64 * 1024 * 1024, size);
                                     }
                                 }
                             }
-
-                            return {
-                                storeName,
-                                data: storeData,
-                            };
-                        })
-                    );
-
-                    self.postMessage({ type: "success", id: data.id, result: results });
-                } catch (error) {
-                    console.error("DBWorker get error", error);
-                    self.postMessage({ type: "error", error: error.message, id: data.id });
+                            await wrapRequest(store.put(next));
+                        }));
+                        return rows.map(() => true);
+                    });
+                    result = data.allowPartialSuccess
+                        ? await Promise.all(records.map((row) => save([row]).then(() => true, () => false)))
+                        : await save(records);
+                    break;
                 }
-                break;
-
-            case "delete":
-                try {
-                    logger.log("DBWorker delete");
-                    const { storeNames, key, dbName, dbVersion } = data;
-                    const db = await openDatabase(dbName, dbVersion);
-
-                    const results = await Promise.all(
-                        storeNames.map(async (storeName) => {
-                            const tx = db.transaction(storeName, "readwrite");
+                case "get": {
+                    const names = normalizeStores(data.storeNames);
+                    result = await runTransaction(db, names, "readonly", (tx) => Promise.all(names.map(async (storeName) => {
+                        const store = tx.objectStore(storeName);
+                        const record = await wrapRequest(store.get(data.key));
+                        if (record && typeof record === "object") {
+                            await Promise.all(Object.entries(record).map(async ([field, value]) => {
+                                if (isChunkRefs(value)) record[field] = await loadChunksData(store, data.key, field, value);
+                            }));
+                        }
+                        return { storeName, data: record };
+                    })));
+                    break;
+                }
+                case "delete": {
+                    const names = normalizeStores(data.storeNames);
+                    const remove = (stores) => runTransaction(db, stores, "readwrite", async (tx) => {
+                        await Promise.all(stores.map(async (storeName) => {
                             const store = tx.objectStore(storeName);
-
-                            try {
-                                // Get data to check for chunks
-                                const storeData = await wrapRequest(store.get(key));
-
-                                // If there are chunks, delete all chunks first
-                                if (storeData && typeof storeData === "object") {
-                                    for (const [field, value] of Object.entries(storeData)) {
-                                        if (isChunkRefs(value)) {
-                                            await deleteChunksData(store, key, field, value);
-                                        }
-                                    }
-                                }
-
-                                // Remove the main record
-                                await wrapRequest(store.delete(key));
-                                return true;
-                            } catch (error) {
-                                console.error(`Error deleting from ${storeName}`, error);
-                                return false;
-                            }
-                        })
-                    );
-
-                    self.postMessage({ type: "success", id: data.id, result: results });
-                } catch (error) {
-                    console.error("DBWorker delete error", error);
-                    self.postMessage({ type: "error", error: error.message, id: data.id });
+                            const record = await wrapRequest(store.get(data.key));
+                            await deleteRecordChunks(store, data.key, record);
+                            await wrapRequest(store.delete(data.key));
+                        }));
+                        return stores.map(() => true);
+                    });
+                    result = data.allowPartialSuccess
+                        ? await Promise.all(names.map((name) => remove([name]).then(() => true, () => false)))
+                        : await remove(names);
+                    break;
                 }
-                break;
+                case "clear": {
+                    const names = normalizeStores(data.storeNames);
+                    result = await runTransaction(db, names, "readwrite", async (tx) => {
+                        await Promise.all(names.map((name) => wrapRequest(tx.objectStore(name).clear())));
+                        return true;
+                    });
+                    break;
+                }
+                // Compatibility for callers that explicitly request chunk storage.
+                case "storeChunks":
+                    result = await runTransaction(db, [data.storeName], "readwrite", (tx) =>
+                        storeChunksData(tx.objectStore(data.storeName), data.key, data.fieldName,
+                            data.data, data.chunkSize, data.size));
+                    break;
+                default:
+                    throw new Error(`Unknown database operation: ${type}`);
+            }
         }
+        self.postMessage({ type: "success", id: data.id, result });
     } catch (error) {
-        console.error("Worker error:", error);
-        console.error("Error stack:", error.stack);
-        self.postMessage({
-            type: "error",
-            id: data?.id,
-            error: error.message,
-            stack: error.stack,
-        });
+        self.postMessage({ type: "error", id: data.id, error: error.message });
     }
 };
 
-/**
- * Opens a database connection
- * @param {string} name - The name of the database
- * @param {number} version - The version of the database
- * @returns {Promise<IDBDatabase>} A promise that resolves to the database connection
- */
-function openDatabase(name, version) {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(name, version);
-
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve(request.result);
-
-        request.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            // Create required object stores
-            if (!db.objectStoreNames.contains("bookProcessed")) {
-                db.createObjectStore("bookProcessed", { keyPath: "name" });
-            }
-        };
-    });
+function normalizeStores(names) {
+    return [...new Set(Array.isArray(names) ? names : [names])];
 }
 
-/**
- * Wraps an IDBRequest in a Promise
- * @param {IDBRequest} request - The request to wrap
- * @returns {Promise<any>} A promise that resolves to the result of the request
- */
+/** One owned connection per database/version, closed before another tab upgrades. */
+function openDatabase(name, version, objectStores = []) {
+    const key = JSON.stringify([name, version]);
+    if (connections.has(key)) return connections.get(key);
+    const connection = new Promise((resolve, reject) => {
+        const request = indexedDB.open(name, version);
+        let settled = false;
+        const timer = setTimeout(() => fail(new Error("Database open timed out; close other reader tabs and retry")), 10000);
+        function fail(error) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            connections.delete(key);
+            reject(error);
+        }
+        request.onerror = () => fail(request.error);
+        request.onblocked = () => fail(new Error("Database upgrade blocked; close other reader tabs and retry"));
+        request.onupgradeneeded = () => {
+            // A late open after timeout must not perform an unexpected upgrade.
+            if (settled) { request.transaction.abort(); return; }
+            for (const store of objectStores) {
+                if (store.index < version && !request.result.objectStoreNames.contains(store.name)) {
+                    request.result.createObjectStore(store.name, store.options);
+                }
+            }
+        };
+        request.onsuccess = () => {
+            const db = request.result;
+            if (settled) { db.close(); return; }
+            settled = true;
+            clearTimeout(timer);
+            const close = () => { db.close(); connections.delete(key); };
+            db.onversionchange = close;
+            db.onclose = () => connections.delete(key);
+            resolve(db);
+        };
+    });
+    connections.set(key, connection);
+    return connection;
+}
+
 function wrapRequest(request) {
     return new Promise((resolve, reject) => {
         request.onsuccess = () => resolve(request.result);
@@ -224,154 +151,73 @@ function wrapRequest(request) {
     });
 }
 
-/**
- * Checks if the value is a chunk reference array
- * @param {any} value - The value to check
- * @returns {boolean} True if the value is a chunk reference array, false otherwise
- */
-function isChunkRefs(value) {
-    return (
-        Array.isArray(value) &&
-        value.length > 0 &&
-        value.every((item) => typeof item === "string" && item.startsWith("chunk_"))
-    );
+/** Attach handlers before issuing requests: request success is not commit. */
+async function runTransaction(db, names, mode, work) {
+    const tx = db.transaction(normalizeStores(names), mode);
+    const committed = new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error || new Error("Database transaction aborted"));
+        tx.onerror = () => {}; // Request errors abort the transaction; onabort settles it.
+    });
+    // A request may fail before work's promise rejects. Handle the completion
+    // rejection immediately so that it cannot become an unhandled rejection.
+    committed.catch(() => {});
+    try {
+        const result = await work(tx);
+        await committed;
+        return result;
+    } catch (error) {
+        try { tx.abort(); } catch { /* Already aborted or committed. */ }
+        await committed.catch(() => {});
+        throw error;
+    }
 }
 
-/**
- * Calculates the size of data
- * @param {any} data - The data to calculate the size of
- * @returns {number} The size of the data
- */
+function isChunkRefs(value) {
+    return Array.isArray(value) && value.length > 0 &&
+        value.every((item) => typeof item === "string" && /^chunk_\d+$/.test(item));
+}
+
 function calculateSize(data) {
-    if (data instanceof Blob || data instanceof ArrayBuffer) {
-        return data.byteLength || data.size;
-    } else if (typeof data === "string") {
-        return new Blob([data]).size;
-    } else if (Array.isArray(data)) {
-        return new Blob([JSON.stringify(data)]).size;
-    }
+    if (data instanceof Blob) return data.size;
+    if (data instanceof ArrayBuffer) return data.byteLength;
+    if (typeof data === "string") return new Blob([data]).size;
+    if (Array.isArray(data)) return new Blob([JSON.stringify(data)]).size;
     return 0;
 }
 
-/**
- * Stores data in chunks using a single transaction and batch processing
- * @param {IDBObjectStore} store - The object store to store data in
- * @param {string} key - The key to store the data under
- * @param {string} fieldName - The field name to store the data in
- * @param {Array} originalData - The data to store
- * @param {number} chunkSize - The size of each chunk
- * @param {number} [size] - Optional pre-calculated total size
- * @returns {Promise<string[]>} Array of chunk references
- */
+/** Queue all chunks without yielding to another task, which would end the tx. */
 async function storeChunksData(store, key, fieldName, originalData, chunkSize, size) {
-    // Calculate chunks needed
-    const totalSize = size || calculateSize(originalData);
-    const numChunks = Math.ceil(totalSize / chunkSize);
+    if (!Number.isFinite(chunkSize) || chunkSize <= 0) throw new Error("Invalid database chunk size");
+    if (!originalData.length) return [];
+    const numChunks = Math.min(originalData.length, Math.max(1, Math.ceil((size || calculateSize(originalData)) / chunkSize)));
     const itemsPerChunk = Math.ceil(originalData.length / numChunks);
-
-    // Prepare all chunks first
-    const chunks = new Array(numChunks);
-    const chunkRefs = new Array(numChunks);
-
-    for (let i = 0; i < numChunks; i++) {
-        const start = i * itemsPerChunk;
-        const end = Math.min(start + itemsPerChunk, originalData.length);
-        const chunkRef = `chunk_${i + 1}`;
-        chunkRefs[i] = chunkRef;
-
-        const chunkData = {};
-        const chunkKey = `${key}_${fieldName}_${chunkRef}`;
-
-        if (store.keyPath) {
-            chunkData[store.keyPath] = chunkKey;
-        }
-
-        // Create chunk array and copy data
-        const chunk = new Array(end - start);
-        for (let j = 0, k = start; k < end; j++, k++) {
-            chunk[j] = originalData[k];
-        }
-        chunkData[fieldName] = chunk;
-        chunks[i] = chunkData;
+    const refs = [];
+    const requests = [];
+    for (let start = 0; start < originalData.length; start += itemsPerChunk) {
+        const ref = `chunk_${refs.length + 1}`;
+        refs.push(ref);
+        requests.push(wrapRequest(store.put({
+            [store.keyPath]: `${key}_${fieldName}_${ref}`,
+            [fieldName]: originalData.slice(start, start + itemsPerChunk),
+        })));
     }
-
-    // Store chunks in batches to prevent browser from freezing
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < numChunks; i += BATCH_SIZE) {
-        const batchEnd = Math.min(i + BATCH_SIZE, numChunks);
-        const putRequests = chunks.slice(i, batchEnd).map((chunkData) => store.put(chunkData));
-
-        // Wait for current batch to complete
-        await Promise.all(putRequests.map((request) => wrapRequest(request)));
-
-        // Small pause between batches
-        if (i + BATCH_SIZE < numChunks) {
-            await new Promise((resolve) => setTimeout(resolve, 0));
-        }
-    }
-
-    return chunkRefs;
+    await Promise.all(requests);
+    return refs;
 }
 
-/**
- * Loads data from chunks using a single transaction
- * @param {IDBObjectStore} store - The object store to load data from
- * @param {string} key - The key of the data to load
- * @param {string} fieldName - The field name of the data to load
- * @param {string[]} chunkRefs - The chunk references to load
- * @returns {Promise<any[]>} A promise that resolves to the loaded data
- */
-async function loadChunksData(store, key, fieldName, chunkRefs) {
-    // Create all get requests within the same transaction
-    const getRequests = chunkRefs.map((chunkRef) => {
-        const chunkKey = `${key}_${fieldName}_${chunkRef}`;
-        return store.get(chunkKey);
-    });
-
-    // Wait for all requests to complete
-    const results = await Promise.all(getRequests.map((request) => wrapRequest(request)));
-
-    // Process results
-    let totalLength = 0;
-    const chunks = results.map((chunk) => {
-        if (chunk && Array.isArray(chunk[fieldName])) {
-            totalLength += chunk[fieldName].length;
-            return chunk[fieldName];
-        }
-        return null;
-    });
-
-    // Create final array and fill data
-    const fullData = new Array(totalLength);
-    let currentIndex = 0;
-
-    // Copy data from stored chunks
-    for (const chunkData of chunks) {
-        if (chunkData) {
-            for (let i = 0; i < chunkData.length; i++) {
-                fullData[currentIndex + i] = chunkData[i];
-            }
-            currentIndex += chunkData.length;
-        }
+async function loadChunksData(store, key, fieldName, refs) {
+    const chunks = await Promise.all(refs.map((ref) => wrapRequest(store.get(`${key}_${fieldName}_${ref}`))));
+    const result = [];
+    for (const chunk of chunks) {
+        if (!chunk || !Array.isArray(chunk[fieldName])) throw new Error(`Incomplete cached book: ${key}/${fieldName}`);
+        for (const item of chunk[fieldName]) result.push(item);
     }
-
-    return fullData;
+    return result;
 }
 
-/**
- * Deletes data from chunks using a single transaction
- * @param {IDBObjectStore} store - The object store to delete data from
- * @param {string} key - The key of the data to delete
- * @param {string} fieldName - The field name of the data to delete
- * @param {string[]} chunkRefs - The chunk references to delete
- */
-async function deleteChunksData(store, key, fieldName, chunkRefs) {
-    // Create all delete requests within the same transaction
-    const deleteRequests = chunkRefs.map((chunkRef) => {
-        const chunkKey = `${key}_${fieldName}_${chunkRef}`;
-        return store.delete(chunkKey);
-    });
-
-    // Wait for all requests to complete
-    await Promise.all(deleteRequests.map((request) => wrapRequest(request)));
+async function deleteRecordChunks(store, key, record) {
+    if (!record || typeof record !== "object") return;
+    await Promise.all(Object.entries(record).flatMap(([field, value]) => isChunkRefs(value)
+        ? value.map((ref) => wrapRequest(store.delete(`${key}_${field}_${ref}`))) : []));
 }

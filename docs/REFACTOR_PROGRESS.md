@@ -9,3 +9,4 @@
 - T03 文件Worker请求部分已完成：请求ID分发、错误/克隆失败/超时/取消清理、destroy终止；Node故障矩阵与真实Worker处理/取消回归通过。FileHandler所有权接入随BookData装载任务提交，DB部分随事务任务提交。
 - EPUB转换任务（T10/T11解析部分/T12/T14及T19限额）：统一编码URI、最终索引与脚注采集，Node SVG和实际多页预处理，日志保真；限制解压流/节点/深度/行数并支持取消。独立提交快照构建与28个Node测试文件通过，包含真实ZIP和Node产物回归。读者导航/缓存接入在后续任务验证。
 - T06 装载合约已完成：统一BookData快照/恢复/reset，持久化脚注与章节索引，converter缓存升4；统一mount，转换先于分页/保存/首次渲染，保存等待完成，TXT finally销毁Worker，取消旧load不污染新书。独立快照构建、29个Node文件与真实Chromium新导入/重开/切书取消回归通过。隐藏TOC等待有界，不再永久挂起。
+- 存储一致性任务（T02/T03 DB/T07/T08/T09）已完成：语言元数据不擦缓存；读取快照/写入/删除跨store原子且以commit应答；6块以上事务修复与旧块清理；错误/timeout/dispose收敛、versionchange释放；转换失败保留原始File。字体等待load再注册/回收URL，书架启停清理监听。独立快照构建、Node suite与真实Chromium分块/故障回滚/原书保护/字体/根与子目录Worker往返通过。

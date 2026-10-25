@@ -31,6 +31,7 @@ import { ICONS } from "../../config/icons.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 import { Logger } from "../../../../shared/utils/logger.js";
 import { DBManager } from "../database/db-manager.js";
+import { isProcessedBookComplete } from "../file/book-data.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { FileHandler } from "../file/file-handler.js";
 import { PopupManager } from "../../components/popup-manager.js";
@@ -66,7 +67,7 @@ import { getProgressText, removeHistory, getIsBookFinished } from "../../utils/h
  * @description Handles IndexedDB operations for book storage
  * @private
  */
-class BookshelfDB extends DBManager {
+export class BookshelfDB extends DBManager {
     /**
      * Logger instance
      * @type {Logger}
@@ -189,12 +190,6 @@ class BookshelfDB extends DBManager {
                     existingBook = await this.get([this.#objectStoreNames.bookfiles], name);
                     if (existingBook) {
                         existingBook.is_epub = processedData.is_epub || false;
-                        existingBook.processed = true;
-                        await this.put({ name, ...existingBook }, {
-                            stores: {
-                                [this.#objectStoreNames.bookfiles]: () => existingBook,
-                            },
-                        });
                     }
                     existingProcessedBook = await this.get([this.#objectStoreNames.bookProcessed], name);
                 } else {
@@ -258,9 +253,6 @@ class BookshelfDB extends DBManager {
                             ...existingBook,
                             isEastern,
                         }),
-                        [this.#objectStoreNames.bookProcessed]: () => ({
-                            name,
-                        }),
                     },
                 }
             );
@@ -270,6 +262,15 @@ class BookshelfDB extends DBManager {
             console.error("Error updating book language:", error);
             throw error;
         }
+    }
+
+    /** Invalidate derived content without touching the original File/Blob. */
+    async invalidateProcessedBook(name) {
+        const book = await this.get([this.#objectStoreNames.bookfiles], name);
+        if (!book) return false;
+        return this.put({ name }, {
+            stores: { [this.#objectStoreNames.bookfiles]: () => ({ ...book, processed: false }) },
+        });
     }
 
     /**
@@ -285,20 +286,15 @@ class BookshelfDB extends DBManager {
         }
 
         try {
-            const [bookFile, processedBook] = await Promise.all([
-                this.get([this.#objectStoreNames.bookfiles], name),
-                this.get([this.#objectStoreNames.bookProcessed], name),
-            ]);
-
-            if (!bookFile && !processedBook) {
-                return null;
-            }
-
-            return {
-                ...(bookFile || {}),
-                ...(processedBook || {}),
-            };
+            // Read original metadata and derived cache in the same snapshot.
+            return await this.get([this.#objectStoreNames.bookfiles, this.#objectStoreNames.bookProcessed], name);
         } catch (error) {
+            // A missing derived chunk is recoverable as long as the original
+            // file remains. Return an invalid cache so openBook reprocesses it.
+            if (error.message?.startsWith("Incomplete cached book:")) {
+                const original = await this.get([this.#objectStoreNames.bookfiles], name);
+                return original ? { ...original, processed: false } : null;
+            }
             console.error("Error getting book:", error);
             throw error;
         }
@@ -508,7 +504,7 @@ class BookshelfDB extends DBManager {
  * @private
  * @namespace
  */
-const bookshelf = {
+export const bookshelf = {
     enabled: false,
     db: null,
     logger: Logger.getLogger("Bookshelf", false),
@@ -609,6 +605,7 @@ const bookshelf = {
                     resetVars();
                     if (
                         !book_processed ||
+                        !isProcessedBookComplete(fetchedBook) ||
                         book_epubConverterStale ||
                         CONFIG.RUNTIME_CONFIG.ALWAYS_PROCESS ||
                         book_pageBreakOnTitle !== CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE ||
@@ -662,19 +659,20 @@ const bookshelf = {
             const isEastern = fetchedBook.isEastern ?? null;
             const encoding = fetchedBook.encoding ?? null;
             await FileHandler.handleSelectedFile([book], isEastern, encoding, forceRefresh);
-        } catch (e) {
-            console.log(e);
+        } catch (error) {
+            // Never delete the user's original file because derived parsing
+            // failed. Invalidate only the cache flag and let the next open retry.
             try {
-                await this.removeBook(book.name); // Remove book from db
-                if (fetchedBook?.is_epub) {
-                    // Can't retry EPUB without data
-                    console.error("EPUB reprocess failed, data removed from DB");
-                } else {
-                    await FileHandler.handleSelectedFile([book]); // Retry processing the book
-                }
-            } catch (retryError) {
-                console.log(retryError);
+                await this.db.invalidateProcessedBook(fetchedBook.name || book.name);
+            } catch (invalidateError) {
+                console.error("Could not invalidate book cache", invalidateError);
             }
+            PopupManager.showNotification({
+                iconName: "ERROR",
+                text: `${CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToOpen} "${truncateText(fetchedBook.name || book.name)}"`,
+                iconColor: "error",
+            });
+            throw error;
         }
     },
 
@@ -1886,7 +1884,7 @@ const bookshelf = {
             }
 
             this._loopCount++;
-            setTimeout(() => this.loop(), this._loopInterval);
+            this._loopTimer = setTimeout(() => this.loop(), this._loopInterval);
         }
     },
 
@@ -1899,12 +1897,19 @@ const bookshelf = {
             this.db = new BookshelfDB();
             await this.db.upgradeBookshelfDB();
             this.enabled = true;
+            this._loopCount = 0;
+            this._eventSubscriptions = [];
+            const register = (event, handler) => {
+                const token = cbReg.add(event, handler);
+                this._eventSubscriptions.push([event, token]);
+                return token;
+            };
 
             // Register the callback after database save
-            this._tokenAfterDBSave = cbReg.add("afterDBSave", () => FileHandler.markDBSaveComplete());
+            this._tokenAfterDBSave = register("afterDBSave", () => FileHandler.markDBSaveComplete());
 
             // Register the callback before file load
-            this._tokenBeforeFileLoad = cbReg.add("fileBefore", async (file) => {
+            this._tokenBeforeFileLoad = register("fileBefore", async (file) => {
                 // console.log("fileBefore", file);
                 await this.saveBook(
                     file,
@@ -1928,7 +1933,7 @@ const bookshelf = {
             }
 
             // Register the callback after book opened
-            this._tokenAfterBookOpen = cbReg.add("fileAfter", () => {
+            this._tokenAfterBookOpen = register("fileAfter", () => {
                 CONFIG.VARS.IS_BOOK_OPENED = true;
                 localStorage.setItem(this._FILENAME_, CONFIG.VARS.FILENAME);
             });
@@ -1944,57 +1949,58 @@ const bookshelf = {
             }
 
             // Listen for startLoop event
-            cbReg.add("startBookshelfLoop", () => {
+            register("startBookshelfLoop", () => {
                 this._loopCount = 0;
-                setTimeout(() => this.loop(), this._loopInterval);
+                clearTimeout(this._loopTimer);
+                this._loopTimer = setTimeout(() => this.loop(), this._loopInterval);
             });
 
             // Listen for refreshBookList event
-            cbReg.add("refreshBookList", async (e) => {
+            register("refreshBookList", async (e) => {
                 const { hardRefresh, sortBookshelf } = e;
                 await this.refreshBookList(hardRefresh, sortBookshelf);
             });
 
             // Listen for settings change events
-            cbReg.add("updateAllBookCovers", async (e = {}) => {
+            register("updateAllBookCovers", async (e = {}) => {
                 const { colorOnly = false, message = "" } = e;
                 await this.updateAllBookCovers(colorOnly, message);
                 cbReg.go("truncateBookCoverText");
             });
 
             // Listen for updateAllBookCoversAfterFontsLoaded event
-            cbReg.add("updateAllBookCoversAfterFontsLoaded", (e = {}) => {
+            register("updateAllBookCoversAfterFontsLoaded", (e = {}) => {
                 const { message = "" } = e;
                 this.loadBookCoversAfterFontsLoaded(message);
             });
 
             // Listen for updateFilterBar event
-            cbReg.add("updateFilterBar", () => {
+            register("updateFilterBar", () => {
                 this._updateFilterBar();
             });
 
             // Listen for showBookshelfTriggerBtn event
-            cbReg.add("showBookshelfTriggerBtn", () => {
+            register("showBookshelfTriggerBtn", () => {
                 this.showTriggerBtn();
             });
 
             // Listen for hideBookshelfTriggerBtn event
-            cbReg.add("hideBookshelfTriggerBtn", () => {
+            register("hideBookshelfTriggerBtn", () => {
                 this.hideTriggerBtn();
             });
 
             // Listen for showBookshelf event
-            cbReg.add("showBookshelf", async () => {
+            register("showBookshelf", async () => {
                 await this.show();
             });
 
             // Listen for hideBookshelf event
-            cbReg.add("hideBookshelf", () => {
+            register("hideBookshelf", () => {
                 this.hide();
             });
 
             // Listen for handleMultipleBooks event
-            cbReg.add("handleMultipleBooks", async (e) => {
+            register("handleMultipleBooks", async (e) => {
                 const { files, isFromLocal, isOnServer } = e;
 
                 if (this.enabled) {
@@ -2032,7 +2038,7 @@ const bookshelf = {
             });
 
             // Listen for handleMultipleBooksWithoutLoading event
-            cbReg.add("handleMultipleBooksWithoutLoading", async (e) => {
+            register("handleMultipleBooksWithoutLoading", async (e) => {
                 const { files, isFromLocal, isOnServer } = e;
 
                 if (this.enabled) {
@@ -2126,25 +2132,25 @@ const bookshelf = {
             });
 
             // Listen for printAllBooks event
-            cbReg.add("printAllBooks", async () => {
+            register("printAllBooks", async () => {
                 await this.db.printAllDatabases();
             });
 
             // Listen for openBook event
-            cbReg.add("openBook", async (e) => {
+            register("openBook", async (e) => {
                 const { name, forceRefresh } = e;
                 await this.openBook(name, forceRefresh);
             });
 
             // Listen for closeBook event
-            cbReg.add("closeBook", () => {
+            register("closeBook", () => {
                 CONFIG.VARS.IS_BOOK_OPENED = false;
                 // Clear the filename from localStorage for reopening the same book
                 localStorage.setItem(this._FILENAME_, "");
             });
 
             // Listen for saveProcessedBook event
-            cbReg.add("saveProcessedBook", async (e) => {
+            register("saveProcessedBook", async (e) => {
                 await this.db.updateProcessedBook(e.name, e);
             });
 
@@ -2153,7 +2159,7 @@ const bookshelf = {
             // archived, so neither event is fired anymore.
 
             // Listen for toggleFilterBar event
-            cbReg.add("toggleFilterBar", () => {
+            register("toggleFilterBar", () => {
                 this._setFilterBarVisibility(CONFIG.CONST_CONFIG.SHOW_FILTER_BAR);
             });
 
@@ -2186,39 +2192,21 @@ const bookshelf = {
 
             function defineScrollBtns() {
                 const $booklist = $(".booklist");
-                const scrollTop = $booklist.scrollTop();
-                const scrollHeight = $booklist[0].scrollHeight;
-                const offsetHeight = $booklist[0].offsetHeight;
-
-                if ($booklist.css("visibility") === "visible") {
-                    if (scrollTop > 0) {
-                        $("#scroll-top-btn")
-                            .css("visibility", "visible")
-                            .on("click", () => {
-                                // $booklist.scrollTop = 0;
-                                $booklist.stop(true, false);
-                                $booklist.animate({ scrollTop: 0 }, scrollHeight / 10);
-                            });
-                    } else {
-                        $("#scroll-top-btn").css("visibility", "hidden");
-                    }
-                    if (scrollHeight - offsetHeight - scrollTop > 1) {
-                        $("#scroll-bottom-btn")
-                            .css("visibility", "visible")
-                            .on("click", () => {
-                                $booklist.stop(true, false);
-                                $booklist.animate(
-                                    {
-                                        scrollTop: scrollHeight - offsetHeight,
-                                    },
-                                    scrollHeight / 10
-                                );
-                            });
-                    } else {
-                        $("#scroll-bottom-btn").css("visibility", "hidden");
-                    }
-                }
+                const list = $booklist[0];
+                if (!list) return;
+                const visible = $booklist.css("visibility") === "visible";
+                $("#scroll-top-btn").css("visibility", visible && list.scrollTop > 0 ? "visible" : "hidden");
+                $("#scroll-bottom-btn").css("visibility", visible && list.scrollHeight - list.offsetHeight - list.scrollTop > 1 ? "visible" : "hidden");
             }
+            // Bind once: scroll/layout updates only change visibility.
+            $("#scroll-top-btn").on("click.bookshelf", () => {
+                const list = $(".booklist");
+                list.stop(true, false).animate({ scrollTop: 0 }, list[0].scrollHeight / 10);
+            });
+            $("#scroll-bottom-btn").on("click.bookshelf", () => {
+                const list = $(".booklist");
+                list.stop(true, false).animate({ scrollTop: list[0].scrollHeight - list[0].offsetHeight }, list[0].scrollHeight / 10);
+            });
 
             $(".booklist").on("scroll", () => {
                 defineScrollBtns();
@@ -2317,28 +2305,20 @@ const bookshelf = {
                 this._updateFilterBar();
             });
 
-            $(window).on("resize", () => {
+            $(window).on("resize.bookshelf", () => {
                 $(".booklist").trigger("contentchange");
                 $(".dot-menu__checkbox").prop("checked", false);
                 $(".bookinfo-menu").remove();
             });
 
             // capable of scrolling booklist within the entire bookshelf
-            document.getElementsByClassName("bookshelf")[0].addEventListener(
-                "wheel",
-                (e) => {
-                    // prevent scrolling booklist when mouse is hovering on bookinfo-menu
-                    if ($(".bookinfo-menu").length > 0) {
-                        if ($(".bookinfo-menu").is(":hover")) {
-                            return;
-                        }
-                    }
-
-                    // scroll booklist accordingly
-                    document.getElementsByClassName("booklist")[0].scrollTop += e.deltaY;
-                },
-                { passive: true }
-            );
+            this._wheelElement = document.getElementsByClassName("bookshelf")[0];
+            this._wheelHandler = (e) => {
+                if ($(".bookinfo-menu").length > 0 && $(".bookinfo-menu").is(":hover")) return;
+                const list = document.getElementsByClassName("booklist")[0];
+                if (list) list.scrollTop += e.deltaY;
+            };
+            this._wheelElement.addEventListener("wheel", this._wheelHandler, { passive: true });
 
             // // Set tooltip for Dropzone
             // document.getElementsByClassName("bookshelf")[0].addEventListener("mouseenter", () => {
@@ -2365,13 +2345,18 @@ const bookshelf = {
      * @returns {Object} The bookshelf instance for chaining
      */
     disable() {
-        if (this.enabled) {
-            cbReg.rm("fileBefore", this._tokenBeforeFileLoad);
-            cbReg.rm("fileAfter", this._tokenAfterBookOpen);
-            cbReg.rm("afterDBSave", this._tokenAfterDBSave);
-
+        if (this.enabled || this.db) {
+            for (const [event, token] of this._eventSubscriptions || []) cbReg.rm(event, token);
+            this._eventSubscriptions = [];
+            clearTimeout(this._loopTimer);
+            $(window).off(".bookshelf");
+            this._wheelElement?.removeEventListener("wheel", this._wheelHandler);
+            this._wheelElement = null;
+            this._wheelHandler = null;
             this.hide(false);
             this.hideTriggerBtn(false);
+            $(".bookshelf").remove();
+            this.db?.dispose();
             this.db = null;
             this.enabled = false;
             console.log("Module <Bookshelf> disabled.");
@@ -2383,6 +2368,8 @@ const bookshelf = {
      * Initializes the bookshelf UI by creating the trigger button
      */
     init() {
+        if (this._uiInitialized) return;
+        this._uiInitialized = true;
         // Initialize the bookshelf trigger button
         const $button = $(
             `<div id="bookshelf-btn" class="btn-icon hasTitle" data-title="${CONFIG.RUNTIME_VARS.STYLE.ui_tooltip_goToBookshelf}">${ICONS.BOOKSHELF}</div>`

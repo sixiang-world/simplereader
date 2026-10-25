@@ -44,6 +44,10 @@ export class DBManager {
     #worker = null;
     #pendingOperations = new Map();
     #operationId = 0;
+    #connectionPromise = null;
+    #disposed = false;
+    #workerError = null;
+    #workerTimeoutMs = 120000;
     #logger = Logger.getLogger("DBManager", false);
 
     /**
@@ -73,10 +77,16 @@ export class DBManager {
         this.#dbVersion = config.dbVersion;
         this.#objectStores = config.objectStores;
         this.#errorCallback = config.errorCallback;
+        this.#workerTimeoutMs = config.workerTimeoutMs ?? 120000;
 
         // Initialize worker
         this.#worker = createWorker("client/src/modules/database/db-worker.js", import.meta.url);
         this.#worker.onmessage = this.#handleWorkerMessage.bind(this);
+        this.#worker.onerror = (event) => {
+            event.preventDefault?.();
+            this.#failWorker(new Error(event.message || "Database worker failed"));
+        };
+        this.#worker.onmessageerror = () => this.#failWorker(new Error("Invalid database worker response"));
     }
 
     /**
@@ -85,11 +95,12 @@ export class DBManager {
      * @param {MessageEvent} e - The message event
      */
     #handleWorkerMessage(e) {
-        const { type, id, error, chunkRefs, result } = e.data;
+        const { type, id, error, result } = e.data || {};
         const operation = this.#pendingOperations.get(id);
         if (!operation) return;
 
         this.#pendingOperations.delete(id);
+        clearTimeout(operation.timer);
 
         if (type === "error") {
             operation.reject(new Error(error));
@@ -107,20 +118,43 @@ export class DBManager {
      * @returns {Promise<any>} The result of the operation
      */
     async #execInWorker(type, data) {
+        if (this.#disposed) throw new Error("Database manager is disposed");
+        if (this.#workerError) throw this.#workerError;
         const id = this.#operationId++;
         return new Promise((resolve, reject) => {
-            this.#pendingOperations.set(id, { resolve, reject });
-
-            this.#worker.postMessage({
-                type,
-                data: {
-                    id,
-                    dbName: this.#dbName,
-                    dbVersion: this.#dbVersion,
-                    ...data,
-                },
-            });
+            const timer = setTimeout(() => this.#failWorker(new Error("Database worker request timed out")), this.#workerTimeoutMs);
+            this.#pendingOperations.set(id, { resolve, reject, timer });
+            try {
+                this.#worker.postMessage({
+                    type,
+                    data: { id, dbName: this.#dbName, dbVersion: this.#dbVersion,
+                        objectStores: this.#objectStores, ...data },
+                });
+            } catch (error) {
+                clearTimeout(timer);
+                this.#pendingOperations.delete(id);
+                reject(error);
+            }
         });
+    }
+
+    #failWorker(error) {
+        this.#workerError = error;
+        this.#worker?.terminate();
+        for (const operation of this.#pendingOperations.values()) {
+            clearTimeout(operation.timer);
+            operation.reject(error);
+        }
+        this.#pendingOperations.clear();
+    }
+
+    /** Release all resources owned by this manager. In-flight work rejects. */
+    dispose() {
+        if (this.#disposed) return;
+        this.#disposed = true;
+        this.#failWorker(new Error("Database manager is disposed"));
+        this.#db?.close();
+        this.#db = null;
     }
 
     /**
@@ -130,8 +164,12 @@ export class DBManager {
      */
     async init() {
         try {
+            if (this.#disposed) throw new Error("Database manager is disposed");
             if (!this.#db) {
-                this.#db = await this.#connect();
+                if (!this.#connectionPromise) {
+                    this.#connectionPromise = this.#connect().finally(() => { this.#connectionPromise = null; });
+                }
+                this.#db = await this.#connectionPromise;
             }
             return true;
         } catch (e) {
@@ -148,22 +186,21 @@ export class DBManager {
      * @throws {Error} When connection fails or database creation fails
      */
     async #connect() {
-        if (this.#db) {
-            try {
-                const state = this.#db.state;
-                if (state !== "versionchange") {
-                    return this.#db;
-                }
-            } catch (e) {
-                console.error("Existing connection is invalid, creating new one");
-                this.#db = null;
-            }
-        }
-
+        if (this.#db) return this.#db;
         return new Promise((resolve, reject) => {
             const req = this.#indexedDB.open(this.#dbName, this.#dbVersion);
+            let settled = false;
+            const timer = setTimeout(() => fail(new Error("Database open timed out; close other reader tabs and retry")), 10000);
+            const fail = (error) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                reject(error);
+            };
+            req.onblocked = () => fail(new Error("Database upgrade blocked; close other reader tabs and retry"));
 
             req.onupgradeneeded = (e) => {
+                if (settled || this.#disposed) { req.transaction.abort(); return; }
                 const db = e.target.result;
                 const oldVersion = e.oldVersion;
 
@@ -171,7 +208,7 @@ export class DBManager {
                 console.log("Old version:", oldVersion);
                 console.log("New version:", this.#dbVersion);
 
-                const storesByVersion = this.#objectStores.sort((a, b) => a.index - b.index);
+                const storesByVersion = [...this.#objectStores].sort((a, b) => a.index - b.index);
                 this.#logger.log("storesByVersion", storesByVersion);
                 storesByVersion.forEach((store) => {
                     if (store.index < this.#dbVersion) {
@@ -184,14 +221,18 @@ export class DBManager {
             };
 
             req.onsuccess = (e) => {
-                this.#db = e.target.result;
-                resolve(e.target.result);
+                const db = e.target.result;
+                if (settled || this.#disposed) { db.close(); fail(new Error("Database manager is disposed")); return; }
+                settled = true;
+                clearTimeout(timer);
+                this.#db = db;
+                db.onversionchange = () => { db.close(); if (this.#db === db) this.#db = null; };
+                db.onclose = () => { if (this.#db === db) this.#db = null; };
+                resolve(db);
             };
-
             req.onerror = (e) => {
-                console.error("openDB.onError");
+                fail(e.target.error);
                 if (this.#errorCallback) this.#errorCallback();
-                reject(e.target.error);
             };
         });
     }
@@ -285,7 +326,7 @@ export class DBManager {
             const results = await this.#execInWorker("get", {
                 storeNames,
                 key,
-                options,
+                allowPartialSuccess: options.allowPartialSuccess ?? false,
             });
 
             // Check if there are results
@@ -347,7 +388,7 @@ export class DBManager {
                 return await this.#getAllDirect(stores, options);
             }
         } catch (error) {
-            transaction.abort();
+            try { transaction.abort(); } catch { /* Read transaction already completed. */ }
             console.error("Error getting all records:", error);
             throw error;
         }
@@ -462,40 +503,15 @@ export class DBManager {
                 await options.beforePut(data);
             }
 
-            const results = await Promise.all(
-                Object.keys(options.stores).map(async (storeName) => {
-                    let storeData = options.stores[storeName](data);
-
-                    try {
-                        if (typeof storeData === "object") {
-                            for (const [field, value] of Object.entries(storeData)) {
-                                if (Array.isArray(value)) {
-                                    const sizeCheck = await this.#needsChunking(value);
-                                    this.#logger.log("sizeCheck", sizeCheck);
-                                    if (sizeCheck.needsChunking) {
-                                        const chunks = await this.#storeInChunks(
-                                            storeName,
-                                            data.name,
-                                            field,
-                                            value,
-                                            sizeCheck.size
-                                        );
-                                        this.#logger.log("chunks", chunks);
-                                        storeData[field] = chunks;
-                                    }
-                                }
-                            }
-                        }
-                        await this.#execInWorker("put", { storeName, storeData });
-                        return true;
-                    } catch (error) {
-                        if (options.allowPartialSuccess) {
-                            return false;
-                        }
-                        throw error;
-                    }
-                })
-            );
+            const records = Object.entries(options.stores).map(([storeName, transform]) => ({
+                storeName, data: transform(data),
+            }));
+            const results = await this.#execInWorker("putMany", {
+                records,
+                chunkSize: DBManager.CHUNK_SIZE,
+                chunkThreshold: DBManager.CHUNK_THRESHOLD,
+                allowPartialSuccess: options.allowPartialSuccess ?? false,
+            });
 
             if (options.afterPut) {
                 await options.afterPut(data, results);
@@ -511,60 +527,6 @@ export class DBManager {
                 : results.every((success) => success);
         } catch (error) {
             console.error("Error putting data:", error);
-            throw error;
-        }
-    }
-
-    /**
-     * Checks if data needs to be stored in chunks
-     * @private
-     * @async
-     * @param {*} data - Data to check
-     * @returns {Promise<boolean>} - Whether chunking is needed
-     * @throws {Error} - When database operation fails
-     */
-    async #needsChunking(data) {
-        if (!data) return false;
-
-        try {
-            const response = await this.#execInWorker("checkSize", {
-                data,
-                threshold: DBManager.CHUNK_THRESHOLD,
-            });
-
-            this.#logger.log("Got response from worker", response);
-
-            return response;
-        } catch (error) {
-            console.error("Error checking data size:", error);
-            return { needsChunking: false, size: 0 };
-        }
-    }
-
-    /**
-     * Stores data in chunks
-     * @private
-     * @async
-     * @param {string} storeName - The name of the object store to store the data in
-     * @param {string} key - The key to store the data under
-     * @param {string} fieldName - The field name to store the data in
-     * @param {Array} data - The data to store
-     * @returns {Promise<string[]>} - The chunk keys
-     * @throws {Error} - When database operation fails
-     */
-    async #storeInChunks(storeName, key, fieldName, data, size) {
-        try {
-            this.#logger.log("storeInChunks");
-            return this.#execInWorker("storeChunks", {
-                storeName,
-                key,
-                fieldName,
-                data,
-                chunkSize: DBManager.CHUNK_SIZE,
-                size,
-            });
-        } catch (error) {
-            console.error("Error in storeInChunks:", error);
             throw error;
         }
     }
@@ -616,7 +578,7 @@ export class DBManager {
             const results = await this.#execInWorker("delete", {
                 storeNames,
                 key,
-                options,
+                allowPartialSuccess: options.allowPartialSuccess ?? false,
             });
 
             if (options.afterDelete) {
@@ -630,6 +592,12 @@ export class DBManager {
             console.error("Error deleting data:", error);
             throw error;
         }
+    }
+
+    /** Clear selected stores atomically, including their chunk records. */
+    async clear(storeNames) {
+        if (!(await this.init())) throw new Error("Init local db error!");
+        return this.#execInWorker("clear", { storeNames });
     }
 
     /**

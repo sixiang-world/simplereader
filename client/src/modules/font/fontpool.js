@@ -28,7 +28,7 @@ import { extractFontName } from "../../utils/helpers/fonts.js";
  * @description Handles IndexedDB operations for font storage
  * @private
  */
-class FontpoolDB extends DBManager {
+export class FontpoolDB extends DBManager {
     /**
      * Object store names
      * @type {Object}
@@ -288,7 +288,7 @@ class FontpoolDB extends DBManager {
  * @private
  * @namespace
  */
-const fontpool = {
+export const fontpool = {
     enabled: false,
     db: null,
 
@@ -372,7 +372,7 @@ const fontpool = {
 
             try {
                 const fontFace = await this.addFontToRegistry(fontData, fontUrl);
-                return [true, fontFace];
+                return [Boolean(fontFace), fontFace];
             } catch (error) {
                 console.error(`Error loading font ${fontName}:`, error);
                 return [false, null];
@@ -409,36 +409,13 @@ const fontpool = {
         try {
             const fonts = await this.db.getAllFonts();
             const loadedFonts = [];
-            const loadedFontPromises = [];
 
-            // Collect all font loading promises
             for (const font of fonts) {
                 const [success, fontFace] = await this.loadFont(font.name);
-                if (success && fontFace) {
-                    loadedFonts.push(fontFace);
-                    // Add a Promise to wait for the font to be fully loaded and registered
-                    loadedFontPromises.push(
-                        fontFace.loaded.then(() => {
-                            return new Promise((resolve) => {
-                                // Ensure the font is fully registered
-                                if (document.fonts.check(`12px "${fontFace.family}"`)) {
-                                    resolve();
-                                } else {
-                                    document.fonts.ready.then(() => resolve());
-                                }
-                            });
-                        })
-                    );
-                } else {
-                    // console.warn(`Failed to load font: ${font.name}`);
-                }
+                if (success && fontFace) loadedFonts.push(fontFace);
             }
 
-            // Only proceed if we have successfully loaded fonts
             if (loadedFonts.length > 0) {
-                // Wait for all fonts to be fully loaded and registered
-                await Promise.all(loadedFontPromises);
-
                 // Wait for one more frame to ensure all updates are complete
                 await new Promise((resolve) => requestAnimationFrame(resolve));
 
@@ -479,36 +456,23 @@ const fontpool = {
             return null;
         }
 
-        if (!CONFIG.VARS.CUSTOM_FONTS[family] || !CONFIG.VARS.CUSTOM_FONTS_LOADED) {
-            const fontFace = new FontFace(family, `url(${fontURL})`);
-
-            fontFace
-                .load()
-                .then(() => {
-                    // Add the font to document fonts
-                    document.fonts.add(fontFace);
-
-                    CONFIG.VARS.CUSTOM_FONTS[family] = {
-                        zh: fontData.zh,
-                        en: fontData.en,
-                        label_zh: fontData.label_zh,
-                        label_en: fontData.label_en,
-                    };
-                    localStorage.setItem("custom_fonts", JSON.stringify(CONFIG.VARS.CUSTOM_FONTS));
-
-                    // console.log(`Font "${family}" added with metadata:`, fontData);
-                })
-                .catch((err) => {
-                    console.error(`Failed to load font "${family}":`, err);
-                    console.log("Custom fonts:", CONFIG.VARS.CUSTOM_FONTS);
-                    console.log("Font availability:", CONFIG.VARS.FONT_AVAILABILITY);
-                    return null;
-                });
-            return fontFace;
-        } else {
-            console.log(`Font "${family}" is already in the registry.`);
-            return null;
+        // Reuse an actual loaded face, not just metadata persisted by a
+        // previous session. A failed font must not hide other valid fonts.
+        for (const existing of document.fonts) {
+            if (existing.family.replace(/^"|"$/g, "") === family && existing.status === "loaded") return existing;
         }
+        const generation = this._generation ?? 0;
+        const fontFace = new FontFace(family, `url(${fontURL})`);
+        await fontFace.load();
+        if (!this.enabled || generation !== (this._generation ?? 0)) throw new Error("Fontpool disabled while loading font");
+        const fonts = {
+            ...CONFIG.VARS.CUSTOM_FONTS,
+            [family]: { zh: fontData.zh, en: fontData.en, label_zh: fontData.label_zh, label_en: fontData.label_en },
+        };
+        localStorage.setItem("custom_fonts", JSON.stringify(fonts));
+        CONFIG.VARS.CUSTOM_FONTS = fonts;
+        document.fonts.add(fontFace);
+        return fontFace;
     },
 
     /**
@@ -537,6 +501,11 @@ const fontpool = {
         }
 
         try {
+            // Commit storage first. A failed delete must leave the visible
+            // registry/settings intact so the user can retry safely.
+            const fontFileName = await this.db.fontFamilyToFileName(fontFamily);
+            if (!fontFileName || !(await this.db.removeFont(fontFileName))) return false;
+
             // Remove the font from the registry
             for (const font of document.fonts) {
                 if (font.family === `"${fontFamily}"` || font.family === fontFamily) {
@@ -553,7 +522,7 @@ const fontpool = {
 
             // Remove from filtered font names
             const groupIndex = CONFIG.VARS.FONT_GROUP_ORDER.indexOf("custom");
-            const fontIndex = CONFIG.VARS.FILTERED_FONT_NAMES[groupIndex].indexOf(fontFamily);
+            const fontIndex = CONFIG.VARS.FILTERED_FONT_NAMES[groupIndex]?.indexOf(fontFamily) ?? -1;
             if (fontIndex !== -1) {
                 CONFIG.VARS.FILTERED_FONT_NAMES[groupIndex].splice(fontIndex, 1);
                 CONFIG.VARS.FILTERED_FONT_LABELS[groupIndex].splice(fontIndex, 1);
@@ -562,7 +531,8 @@ const fontpool = {
                     CONFIG.VARS.FONT_AVAILABILITY[groupIndex].splice(fontIndex, 1);
                 }
             }
-            if (CONFIG.VARS.FILTERED_FONT_NAMES[groupIndex].length === 0) {
+            if (CONFIG.VARS.FILTERED_FONT_NAMES[groupIndex]?.length === 0) {
+                CONFIG.VARS.FONT_GROUP_ORDER.splice(groupIndex, 1);
                 CONFIG.VARS.FILTERED_FONT_NAMES.splice(groupIndex, 1);
                 CONFIG.VARS.FILTERED_FONT_LABELS.splice(groupIndex, 1);
                 CONFIG.VARS.FILTERED_FONT_LABELS_ZH.splice(groupIndex, 1);
@@ -572,19 +542,8 @@ const fontpool = {
                 CONFIG.VARS.FONT_GROUP_TYPES.splice(groupIndex, 1);
             }
 
-            // Remove from database
-            const fontFileName = await this.db.fontFamilyToFileName(fontFamily);
-            let success = false;
-            if (fontFileName) {
-                success = await this.db.removeFont(fontFileName);
-            }
-
-            // Call success callback if provided
-            if (success && onSucc) {
-                onSucc();
-            }
-
-            return success;
+            if (onSucc) onSucc();
+            return true;
         } catch (error) {
             console.error(`Failed to remove font "${fontFamily}":`, error);
             return false;
@@ -606,6 +565,7 @@ const fontpool = {
                     "Fontpool requires database version 3 or higher. Current max version:",
                     Math.max(currentDBVersion, configuredDBVersion)
                 );
+                this.db.dispose();
                 this.db = null;
                 return;
             }
@@ -621,7 +581,7 @@ const fontpool = {
                 await this.db.printAllDatabases();
             }
 
-            cbReg.add("handleMultipleFonts", async (e) => {
+            this._handleMultipleFontsToken = cbReg.add("handleMultipleFonts", async (e) => {
                 const { files } = e;
 
                 if (this.enabled) {
@@ -686,7 +646,7 @@ const fontpool = {
                 }
             });
 
-            cbReg.add("deleteCustomFont", async (e) => {
+            this._deleteCustomFontToken = cbReg.add("deleteCustomFont", async (e) => {
                 const { fontFamily } = e;
                 await this.removeFont(fontFamily, () => {
                     console.log(`Font "${fontFamily}" removed.`);
@@ -703,9 +663,17 @@ const fontpool = {
      * @returns {Object} The fontpool instance for chaining
      */
     disable() {
-        if (this.enabled) {
+        if (this.enabled || this.db) {
+            cbReg.rm("handleMultipleFonts", this._handleMultipleFontsToken);
+            cbReg.rm("deleteCustomFont", this._deleteCustomFontToken);
+            this._generation = (this._generation ?? 0) + 1;
+            this.db?.dispose();
             this.db = null;
             this.enabled = false;
+            CONFIG.VARS.CUSTOM_FONTS_LOADED = false;
+            for (const face of document.fonts) {
+                if (Object.hasOwn(CONFIG.VARS.CUSTOM_FONTS, face.family.replace(/^"|"$/g, ""))) document.fonts.delete(face);
+            }
             console.log("Module disabled.");
         }
         return this;
