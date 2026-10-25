@@ -67,113 +67,25 @@ function getExtensionUrl(path) {
 }
 
 /**
- * Resolve the absolute URL for a worker script based on a base URL and a relative/absolute path.
- *
- * If the absolutePath is already a full URL, it returns as is.
- * Otherwise, it tries to replace the matching path segment in baseUrl with absolutePath.
- *
- * Priority order:
- * 1. Equivalent path replacement (e.g., shared replaces client)
- * 2. Longest common subsequence
- * 3. Direct concatenation
- *
- * @param {string} absolutePath - The worker script path, can be relative to the app root.
- * @param {string} baseUrl - The base URL, usually the current script's URL.
- * @returns {string} The resolved absolute URL for the worker script.
+ * Resolve app-root paths from source modules or Vite's assets directory.
+ * Keep the deployment prefix (e.g. /reader/) in both cases. Workers and
+ * imported shared modules use the same root; extensions use runtime.getURL.
+ * @param {string} absolutePath
+ * @param {string} baseUrl
+ * @returns {string}
  */
-function resolveWorkerUrl(absolutePath, baseUrl) {
-    if (/^https?:\/\//.test(absolutePath)) {
-        // If already an absolute URL, return directly
-        return absolutePath;
-    }
-
+export function resolveWorkerUrl(absolutePath, baseUrl) {
+    if (/^https?:\/\//.test(absolutePath)) return absolutePath;
     const base = new URL(baseUrl);
-    const baseParts = base.pathname.split("/").filter(Boolean);
-    const absParts = absolutePath.split("/").filter(Boolean);
-    // console.log("baseParts", baseParts);
-    // console.log("absParts", absParts);
-
-    // Define equivalent paths at the same level
-    const equivalentPaths = ["client", "shared", "server"];
-
-    // Priority 1: Check if absParts starts with an equivalent path
-    const firstAbsPart = absParts[0];
-    if (equivalentPaths.includes(firstAbsPart)) {
-        // Find the position of any equivalent path in baseParts
-        let equivalentIndex = -1;
-        for (let i = 0; i < baseParts.length; i++) {
-            if (equivalentPaths.includes(baseParts[i])) {
-                equivalentIndex = i;
-                break;
-            }
-        }
-
-        if (equivalentIndex !== -1) {
-            // Replace from the equivalent path position
-            const resultParts = [...baseParts.slice(0, equivalentIndex), ...absParts];
-            return base.origin + "/" + resultParts.join("/");
-        }
-
-        // Vite production build: the caller (index.js) lives under
-        // /assets/, so baseParts has no equivalent path. The absolutePath
-        // (e.g. "client/src/modules/database/db-worker.js") is relative
-        // to the site root. Resolve it directly against the origin.
-        // Without this, the fallback "append" logic produces garbage
-        // like /assets/index.js/client/src/.../db-worker.js.
-        return base.origin + "/" + absParts.join("/");
+    const parts = base.pathname.split("/");
+    // Prefer the nearest known app directory, so a deployment directory
+    // itself named "client" does not replace the actual source root.
+    let marker = -1;
+    for (let i = parts.length - 1; i >= 0; i--) {
+        if (["client", "shared", "assets"].includes(parts[i])) { marker = i; break; }
     }
-
-    // Priority 2: Try to find the position where absParts matches a subarray in baseParts
-    let startIndex = -1;
-    for (let i = 0; i <= baseParts.length - absParts.length; i++) {
-        let match = true;
-        for (let j = 0; j < absParts.length; j++) {
-            if (baseParts[i + j] !== absParts[j]) {
-                match = false;
-                break;
-            }
-        }
-        if (match) {
-            startIndex = i;
-            break;
-        }
-    }
-
-    // Priority 3: Try to find the longest common subsequence
-    let maxCommonLength = 0;
-    let bestStartIndex = -1;
-    for (let i = 0; i < baseParts.length; i++) {
-        for (let j = 0; j < absParts.length; j++) {
-            let commonLength = 0;
-            while (
-                i + commonLength < baseParts.length &&
-                j + commonLength < absParts.length &&
-                baseParts[i + commonLength] === absParts[j + commonLength]
-            ) {
-                commonLength++;
-            }
-            if (commonLength > maxCommonLength) {
-                maxCommonLength = commonLength;
-                bestStartIndex = i;
-            }
-        }
-    }
-
-    let resultParts;
-    if (startIndex !== -1) {
-        // If a full match is found, replace from startIndex
-        resultParts = [...baseParts.slice(0, startIndex), ...absParts];
-    } else if (maxCommonLength > 0) {
-        // If any common subsequence is found, replace from its start
-        resultParts = [...baseParts.slice(0, bestStartIndex), ...absParts];
-    } else {
-        // If no commonality, just append
-        resultParts = [...baseParts, ...absParts];
-    }
-
-    const workerUrl = base.origin + "/" + resultParts.join("/");
-    // console.log("workerUrl", workerUrl);
-    return workerUrl;
+    const appRoot = marker === -1 ? new URL("./", base) : new URL(parts.slice(0, marker).join("/") + "/", base);
+    return new URL(absolutePath.replace(/^\/+/, ""), appRoot).href;
 }
 
 /**
