@@ -208,6 +208,10 @@ export const CONST_FOOTNOTE = Object.freeze({
  * @readonly
  */
 export const CONST_UI = Object.freeze({
+    EXTENSION_HANDOFF_TEXT: {
+        zh: { retry: "重试导入", failed: "导入失败。可以重试，或重新打开原始 TXT 文件。" },
+        en: { retry: "Retry import", failed: "Import failed. Retry or reopen the original TXT file." },
+    },
     LANGUAGE_MAPPING: {
         zh: "简体中文",
         en: "English",

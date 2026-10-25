@@ -1,104 +1,116 @@
-/**
- * @fileoverview The entry point for the extension.
- *
- * This script handles the initialization and event listeners for the extension.
- *
- * @module client/src/extension/activate
- */
-
-/**
- * The main function that initializes the extension.
- *
- * @function activate
- * @public
- */
+/** Durable, per-tab handoff between a TXT content script and the reader page. */
 (function () {
-    /**
-     * Get the extension API
-     */
-    const api = typeof chrome !== "undefined" ? chrome : typeof browser !== "undefined" ? browser : null;
-    if (!api || !api.storage || !api.storage.local) {
-        console.error("Extension API not available");
-        return;
+    const callbackAPI = typeof chrome !== "undefined";
+    const api = callbackAPI ? chrome : typeof browser !== "undefined" ? browser : null;
+    if (!api?.runtime || !api?.storage?.local) return;
+    const prefix = "pendingReaderFile:";
+    const maxAge = 30 * 60 * 1000;
+
+    function call(owner, method, ...args) {
+        if (!callbackAPI) return owner[method](...args);
+        return new Promise((resolve, reject) => {
+            owner[method](...args, (result) => {
+                const error = api.runtime.lastError;
+                if (error) reject(new Error(error.message));
+                else resolve(result);
+            });
+        });
     }
 
-    /**
-     * Add listener for the extension icon click event
-     */
-    const addOnClickedListener = () => {
-        if (api.action && api.action.onClicked) {
-            api.action.onClicked.addListener(() => {
-                api.tabs.create({
-                    url: api.runtime.getURL("index.html"),
-                    active: true,
-                });
-            });
-        } else if (api.browserAction && api.browserAction.onClicked) {
-            api.browserAction.onClicked.addListener(() => {
-                api.tabs.create({
-                    url: api.runtime.getURL("index.html"),
-                    active: true,
-                });
-            });
-        } else {
-            console.error("Unsupported extension API.");
+    const action = api.action || api.browserAction;
+    action?.onClicked?.addListener(() => {
+        call(api.tabs, "create", { url: api.runtime.getURL("index.html"), active: true })
+            .catch((error) => console.error("Cannot open reader:", error.message));
+    });
+    api.tabs.onRemoved?.addListener((tabId) => {
+        call(api.storage.local, "remove", prefix + tabId).catch(() => {});
+    });
+
+    function isReaderRequest(url, requestId) {
+        try {
+            const actual = new URL(url);
+            const expected = new URL(api.runtime.getURL("index.html"));
+            return actual.protocol === expected.protocol && actual.host === expected.host &&
+                actual.pathname === expected.pathname &&
+                actual.searchParams.get("extensionRequest") === requestId;
+        } catch {
+            return false;
         }
-    };
+    }
 
-    /**
-     * Add listener for the extension message event
-     */
-    const addMessageListener = () => {
-        api.runtime.onMessage.addListener((message, sender, sendResponse) => {
-            if (message.action === "replaceCurrentTab") {
-                const currentTabId = sender.tab.id;
-
-                api.storage.local.set({ openedAsNoUI: true }, () => {
-                    api.tabs.update(
-                        currentTabId,
-                        {
-                            url: api.runtime.getURL("index.html"),
-                        },
-                        (tab) => {
-                            const sendFileToTab = (tabId) => {
-                                api.storage.local.remove("openedAsNoUI");
-                                api.tabs.sendMessage(tabId, {
-                                    action: "loadFile",
-                                    fileName: message.fileName,
-                                    fileType: message.fileType,
-                                    fileContent: message.fileContent,
-                                });
-                            };
-
-                            if (api.tabs.onUpdated) {
-                                const listener = (tabId, changeInfo) => {
-                                    if (tabId === tab.id && changeInfo.status === "complete") {
-                                        setTimeout(() => {
-                                            sendFileToTab(tabId);
-                                        }, 500);
-                                        api.tabs.onUpdated.removeListener(listener);
-                                    }
-                                };
-                                api.tabs.onUpdated.addListener(listener);
-                            } else {
-                                sendFileToTab(tab.id);
-                            }
-                        }
-                    );
-                });
-                sendResponse({ success: true });
-                return true;
+    async function handle(message, sender) {
+        // Content scripts have sender.tab; extension pages generally do not.
+        // Never trust a content script's claimed tabId over the platform sender.
+        let tabId = sender.tab?.id;
+        if (!Number.isInteger(tabId) && message.action !== "replaceCurrentTab") {
+            if (!Number.isInteger(message.tabId) || !isReaderRequest(sender.url, message.requestId)) {
+                throw new Error("A reader tab is required");
             }
-        });
-    };
+            const tab = await call(api.tabs, "get", message.tabId);
+            if (tab?.id !== message.tabId || !isReaderRequest(tab.url, message.requestId)) {
+                throw new Error("Reader tab does not match the pending request");
+            }
+            tabId = message.tabId;
+        }
+        if (!Number.isInteger(tabId)) throw new Error("A reader tab is required");
+        const key = prefix + tabId;
+        if (message.action === "replaceCurrentTab") {
+            const original = new URL(sender.url);
+            if (original.protocol !== "file:" || !original.pathname.toLowerCase().endsWith(".txt")) {
+                throw new Error("Only local TXT documents can be handed to the reader");
+            }
+            if (typeof message.fileName !== "string" || !message.fileName ||
+                message.fileType !== "text/plain" || typeof message.fileContent !== "string" ||
+                (message.fileContent.length % 4 !== 0 || /[^A-Za-z0-9+/=]/.test(message.fileContent))) {
+                throw new Error("Invalid file handoff");
+            }
+            const requestId = crypto.randomUUID();
+            await call(api.storage.local, "set", { [key]: {
+                requestId, createdAt: Date.now(), originalUrl: original.href,
+                file: { action: "loadFile", fileName: message.fileName,
+                    fileType: message.fileType, fileContent: message.fileContent },
+            } });
+            try {
+                await call(api.tabs, "update", tabId, {
+                    url: api.runtime.getURL("index.html") + "?extensionRequest=" + requestId,
+                });
+            } catch (error) {
+                await call(api.storage.local, "remove", key);
+                throw error;
+            }
+            return { success: true, requestId };
+        }
 
-    /**
-     * Initialize the extension
-     */
-    const initialize = () => {
-        addOnClickedListener();
-        addMessageListener();
-    };
+        // Only the extension reader page in the original tab can claim/ack data.
+        if (!isReaderRequest(sender.url, message.requestId)) {
+            throw new Error("Only the reader page can access a pending file");
+        }
+        const record = (await call(api.storage.local, "get", key))[key];
+        if (!record || record.requestId !== message.requestId) throw new Error("Pending file not found");
+        if (message.action === "claimPendingFile") {
+            if (Date.now() - record.createdAt > maxAge) {
+                throw new Error("File handoff expired; restore the original document");
+            }
+            return { success: true, file: record.file };
+        }
+        if (message.action === "ackPendingFile") {
+            await call(api.storage.local, "remove", key);
+            return { success: true };
+        }
+        if (message.action === "restorePendingFile") {
+            const original = new URL(record.originalUrl);
+            original.searchParams.set("readerSkip", "1");
+            await call(api.tabs, "update", tabId, { url: original.href });
+            await call(api.storage.local, "remove", key);
+            return { success: true };
+        }
+        throw new Error("Unsupported reader request");
+    }
 
-    initialize();
+    const actions = new Set(["replaceCurrentTab", "claimPendingFile", "ackPendingFile", "restorePendingFile"]);
+    api.runtime.onMessage.addListener((message, sender, respond) => {
+        if (!actions.has(message?.action)) return false;
+        handle(message, sender).then(respond, (error) => respond({ success: false, error: error.message }));
+        return true;
+    });
 })();

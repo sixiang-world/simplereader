@@ -18,13 +18,15 @@
     /**
      * Get the extension API
      */
-    const api = chrome || browser;
+    const api = typeof chrome !== "undefined" ? chrome : typeof browser !== "undefined" ? browser : null;
+    if (!api?.runtime) return;
 
     /**
      * Check if the current URL matches the `.txt` file pattern
      */
     async function isTextFile(url) {
         const urlObj = new URL(url);
+        if (urlObj.searchParams.get("readerSkip") === "1") return false;
         const txtFileRegex = /^(?:file|https?):\/\/.*\/[^\/]+\.txt(?:\?.*|#.*|$)/;
         if (urlObj.pathname.endsWith(".txt") && txtFileRegex.test(urlObj.href)) {
             // Ignore links with query parameters suggesting downloads
@@ -61,11 +63,8 @@
         const fileUrl = location.href;
 
         try {
-            // Prevent the page from being rendered, but allow the content to be loaded
-            document.documentElement.style.display = "none";
-            document.documentElement.style.visibility = "hidden";
-            document.documentElement.style.opacity = "0";
-
+            // Keep the original document readable until durable handoff and
+            // navigation succeed. Storage/quota errors must never hide the file.
             if (document.readyState !== "complete") {
                 await new Promise((resolve) => {
                     document.addEventListener("DOMContentLoaded", resolve, { once: true });
@@ -83,27 +82,36 @@
                 document.body?.textContent ||
                 document.documentElement?.textContent;
 
-            if (!content) {
+            if (typeof content !== "string") {
                 throw new Error("No content found");
             }
 
             // Convert content to Base64
-            const fileName = decodeURIComponent(fileUrl.split("/").pop());
+            const fileName = decodeURIComponent(new URL(fileUrl).pathname.split("/").pop());
             const encoder = new TextEncoder();
             const uint8Array = encoder.encode(content);
-            const base64Content = btoa(
-                Array.from(uint8Array)
-                    .map((byte) => String.fromCharCode(byte))
-                    .join("")
-            );
+            // Avoid Array.from(...).map(...).join(...) making millions of
+            // boxed byte entries for large text documents.
+            let binary = "";
+            for (let offset = 0; offset < uint8Array.length; offset += 0x8000) {
+                binary += String.fromCharCode(...uint8Array.subarray(offset, offset + 0x8000));
+            }
+            const base64Content = btoa(binary);
 
             // Directly send replaceCurrentTab message
-            api.runtime.sendMessage({
-                action: "replaceCurrentTab",
-                fileName,
-                fileType: "text/plain",
-                fileContent: base64Content,
+            const message = { action: "replaceCurrentTab", fileName,
+                fileType: "text/plain", fileContent: base64Content };
+            const result = await new Promise((resolve, reject) => {
+                if (typeof chrome !== "undefined") {
+                    api.runtime.sendMessage(message, (response) => {
+                        if (api.runtime.lastError) reject(new Error(api.runtime.lastError.message));
+                        else resolve(response);
+                    });
+                } else {
+                    api.runtime.sendMessage(message).then(resolve, reject);
+                }
             });
+            if (!result?.success) throw new Error(result?.error || "Reader handoff failed");
         } catch (error) {
             console.error("Failed to process the text file:", error);
         }

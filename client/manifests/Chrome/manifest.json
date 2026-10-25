@@ -23,7 +23,7 @@
     "content_security_policy": {
         "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; font-src 'self' https://fontsapi.zeoseven.com blob:"
     },
-    "minimum_chrome_version": "88",
+    "minimum_chrome_version": "109",
     "icons": {
         "24": "client/images/icon24.png",
         "64": "client/images/icon64.png",

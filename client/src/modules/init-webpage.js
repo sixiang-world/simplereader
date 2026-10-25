@@ -122,30 +122,14 @@ async function checkAndSetNoUIMode() {
      * @param {number} delayMs - Delay in milliseconds between attempts
      * @returns {Promise<boolean>}
      */
-    const _waitForStorage = async (maxAttempts = 10, delayMs = 100) => {
-        for (let i = 0; i < maxAttempts; i++) {
-            if (api?.storage?.local) return true;
-            await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
-        return false;
-    };
-
     /**
      * Check if the page was opened as no-UI mode from extension
      * @returns {Promise<boolean>}
      */
     const _checkOpenedAsNoUI = async () => {
-        // Wait for storage API to be available
-        const storageAvailable = await _waitForStorage();
-        if (!storageAvailable) return false;
-
-        const result = await new Promise((resolve) => {
-            api.storage.local.get(["openedAsNoUI"], (res) =>
-                resolve(api.runtime.lastError ? false : !!res.openedAsNoUI)
-            );
-        });
-
-        return result;
+        // Per-request URL state prevents two extension tabs racing through a
+        // single shared storage flag. Pending bytes are validated by background.
+        return Boolean(api?.runtime && new URLSearchParams(window.location.search).get("extensionRequest"));
     };
 
     /**

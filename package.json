@@ -18,7 +18,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:browser": "node test/run-tests.mjs --browser",
-    "validate": "npm run lint && npm run typecheck && npm run build && npm test && npm run test:browser"
+    "validate": "npm run lint && npm run typecheck && npm run build && npm test && npm run test:browser",
+    "test:extension": "node test/extension-browser.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9",

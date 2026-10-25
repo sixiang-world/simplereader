@@ -8,10 +8,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from shutil import copy2, copytree, rmtree
-from tqdm import tqdm
-
-from splitfont_css2manifest import css2manifest, save_manifest, save_css
+from shutil import copy2, copytree, rmtree, make_archive
 
 
 class VersionManager:
@@ -47,11 +44,9 @@ class VersionManager:
         return None
 
     def validate_version_str(self, version_str):
-        """Validate version string format"""
-        assert isinstance(version_str, str), 'Version string must be a string.'
-        version_strs = version_str.split('.')
-        assert all(x.isdigit()
-                   for x in version_strs), 'Version string must only contain numbers and dots.'
+        """Validate artifact versions without relying on optimizable asserts."""
+        if not isinstance(version_str, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,3}", version_str):
+            raise ValueError("Version must contain one to four numeric components")
         return version_str
 
     def _update_version_json(self, new_version_str):
@@ -160,19 +155,7 @@ class Builder:
 
     # Constants
     BROWSERS = ['Chrome', 'Firefox']
-    DOCKER_IMAGE_NAME = 'henryxrl/simpletextreader'
-
-    # Hosting via Apache2
-    # REMOTE_HOST = 'web_server'
-    # REMOTE_PROJECT_PATH = '/var/www/simple-text-reader'
-    # REMOTE_HOST_SCRIPT_PATH = '/var/www/script-to-host-websites/host_website.py'
-    # REMOTE_HOST_SCRIPT_ARGS = 'simple-text-reader 5001'
-
-    # Hosting via Docker container
-    REMOTE_HOST = 'ext-srv-02'
-    REMOTE_HOST_SCRIPT_CMD_DOCKER_CONTAINER_NAME = 'website--simpletextreader'
-    REMOTE_PROJECT_PATH = f'/home/henryxrl/docker-library/hosts/{REMOTE_HOST}/{REMOTE_HOST_SCRIPT_CMD_DOCKER_CONTAINER_NAME}/simple-text-reader'
-    REMOTE_HOST_SCRIPT_CMD = f'docker exec \\"{REMOTE_HOST_SCRIPT_CMD_DOCKER_CONTAINER_NAME}\\" sh /purge-cache.sh'
+    DOCKER_IMAGE_NAME = 'simplereader'
 
     def __init__(self, version_str=None):
         self.version_manager = VersionManager()
@@ -186,10 +169,12 @@ class Builder:
         print(f'Current Version: {cur_version}')
         print(f'New Version: {self.version}')
 
-        # Update version in all files
-        self.version_manager.update_version_in_files(self.version)
+        # Building an artifact never changes release metadata in the checkout.
 
     def process_css_fonts(self, forceUpdate=False):
+        # Optional font maintenance has separate dependencies and network access.
+        from tqdm import tqdm
+        from splitfont_css2manifest import css2manifest, save_css
         css_map = [
             {'name': 'wenkai',   'css_url': 'client/fonts/LXGWWenKaiScreen/result.css'},
             {'name': 'kinghwa',  'css_url': 'client/fonts/KingHwa_OldSong/result.css'},
@@ -260,7 +245,7 @@ class Builder:
         print('Building extensions...')
 
         # Prepare dist directory
-        dist_dir_name = 'dist'
+        dist_dir_name = 'dist/extensions'
         dist_dir_root = self.root_dir / dist_dir_name
         if dist_dir_root.exists():
             rmtree(dist_dir_root)
@@ -271,18 +256,13 @@ class Builder:
             dist_dir = dist_dir_root / browser
             dist_dir.mkdir(parents=True, exist_ok=True)
 
-            # Update manifest.json
-            manifest_path = self.root_dir / \
-                f'client/manifests/{browser}/manifest.json'
-            with open(manifest_path, 'r+', encoding='utf-8') as f:
-                data = json.load(f)
-                data['version'] = self.version
-                f.seek(0)
-                json.dump(data, f, indent=4, ensure_ascii=False)
-                f.truncate()
-
-            # Copy files
-            copy2(manifest_path, dist_dir)
+            # Override the version only in generated artifacts.
+            manifest_path = self.root_dir / f'client/manifests/{browser}/manifest.json'
+            with manifest_path.open(encoding='utf-8') as f:
+                manifest = json.load(f)
+            manifest['version'] = self.version
+            (dist_dir / 'manifest.json').write_text(
+                json.dumps(manifest, indent=4, ensure_ascii=False) + '\n', encoding='utf-8')
             self._copy_extension_files(dist_dir)
 
             # Create zip
@@ -291,91 +271,15 @@ class Builder:
         print('Built extensions successfully!')
 
     def build_docker(self):
-        """Cross-platform Docker image build supporting multi-arch."""
-        if not self._check_docker():
-            print(
-                '[ERROR] Docker is not available or not running. Skipping Docker build.')
-            return False
-
-        # Only setup multi-arch on Linux (needed for cross-building)
-        system = platform.system()
-        if system == "Linux":
-            try:
-                print("Setting up multi-arch buildx builder for Linux...")
-                self._ensure_multiarch_buildx()
-            except Exception as e:
-                print(f"[ERROR] Failed to set up buildx builder: {e}")
-                return False
-
-        print('Building Docker image...')
-
+        """Build local images. Registry publishing is a separate, explicit task."""
         try:
-            # Build latest tag
-            print('Building Docker image with latest tag...')
             subprocess.run(
-                f"docker buildx build --platform linux/amd64,linux/arm64 "
-                f"-t {self.DOCKER_IMAGE_NAME}:latest --push .",
-                shell=True,
-                check=True,
-                cwd=self.root_dir
-            )
-
-            # Build version tag
-            print(f'Building Docker image with version {self.version}...')
-            subprocess.run(
-                f"docker buildx build --platform linux/amd64,linux/arm64 "
-                f"-t {self.DOCKER_IMAGE_NAME}:{self.version} --push .",
-                shell=True,
-                check=True,
-                cwd=self.root_dir
-            )
-
-            print('Built Docker image successfully!')
+                ['docker', 'build', '-t', f'{self.DOCKER_IMAGE_NAME}:latest',
+                 '-t', f'{self.DOCKER_IMAGE_NAME}:{self.version}', '.'],
+                check=True, cwd=self.root_dir)
             return True
-
-        except Exception as e:
-            print(f'[ERROR] Docker build failed: {str(e)}')
-            return False
-
-    def deploy_to_remote_server(self):
-        """Deploy to remote server"""
-        if not self._check_ssh():
-            print(
-                '[ERROR] SSH is not available or remote host is not accessible. Skipping deployment.')
-            return False
-
-        print('Deploying to remote server...')
-
-        # Deploy to remote server
-        # command = (
-        #     f'ssh {self.REMOTE_HOST} "'
-        #     f'cd {self.REMOTE_PROJECT_PATH} && '
-        #     'git pull origin main && '
-        #     f'python3 {self.REMOTE_HOST_SCRIPT_PATH} {self.REMOTE_HOST_SCRIPT_ARGS}'
-        #     '"'
-        # )
-        command = (
-            f'echo ssh into {self.REMOTE_HOST} && '
-            f'ssh {self.REMOTE_HOST} "'
-            f'echo cd into project && '
-            f'cd \\"{self.REMOTE_PROJECT_PATH}\\" && '
-            'echo git pull && '
-            'git pull origin main && '
-            f'echo check/start container \\"{self.REMOTE_HOST_SCRIPT_CMD_DOCKER_CONTAINER_NAME}\\" && '
-            f'(docker ps -q -f name=\\"{self.REMOTE_HOST_SCRIPT_CMD_DOCKER_CONTAINER_NAME}\\" || '
-            f'dctl \\"{self.REMOTE_HOST_SCRIPT_CMD_DOCKER_CONTAINER_NAME}\\") && '
-            'echo run purge script && '
-            f'{self.REMOTE_HOST_SCRIPT_CMD}'
-            '"'
-        )
-
-        try:
-            subprocess.run(command, shell=True, check=True)
-            print('Deployment completed successfully!')
-            return True
-
-        except Exception as e:
-            print(f'Deployment failed: {str(e)}')
+        except (OSError, subprocess.CalledProcessError) as error:
+            print(f'[ERROR] Docker build failed: {error}')
             return False
 
     def _copy_extension_files(self, dist_dir):
@@ -428,131 +332,31 @@ class Builder:
             readme.unlink()
 
     def _create_extension_zip(self, browser, dist_dir_name):
-        """Create zip file for extension"""
-        os.system(
-            f'cd {self.root_dir}/{dist_dir_name}/{browser} && '
-            f'zip -0 -r -FS ../{browser}.zip ./* '
-            f'--exclude "*.git*" --exclude "*.DS_Store" && '
-            f'cd ../..'
-        )
-
-    def _check_docker(self) -> bool:
-        """Check if Docker and Buildx are available and running."""
-        try:
-            # Check if Docker is available and running
-            result = subprocess.run(
-                ['docker', 'info'],
-                capture_output=True,
-                check=False
-            )
-            if result.returncode != 0:
-                print("Docker is not running or not installed.")
-                return False
-
-            # Check if Buildx is available
-            result = subprocess.run(
-                ['docker', 'buildx', 'version'],
-                capture_output=True,
-                check=False
-            )
-            if result.returncode != 0:
-                print("Docker Buildx is not available.")
-                return False
-
-            return True
-        except Exception as e:
-            print(f"Exception while checking Docker: {e}")
-            return False
-
-    def _ensure_multiarch_buildx(self):
-        """Ensure buildx is ready for multi-arch builds on Linux."""
-        builder_name = "multiarch_builder"
-
-        # Step 1: Install QEMU emulation for cross-arch builds
-        try:
-            subprocess.run(
-                "docker run --privileged --rm tonistiigi/binfmt --install all",
-                shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-        except subprocess.CalledProcessError as e:
-            print(
-                "[Warn] QEMU binfmt install may have failed or is already installed. Continuing...")
-
-        # Step 2: Create and activate buildx builder if not present
-        result = subprocess.run(
-            "docker buildx ls", shell=True, capture_output=True, text=True
-        )
-        if builder_name not in result.stdout:
-            subprocess.run(
-                f"docker buildx create --name {builder_name} --use",
-                shell=True, check=True
-            )
-        else:
-            subprocess.run(
-                f"docker buildx use {builder_name}",
-                shell=True, check=True
-            )
-
-        # Step 3: Bootstrap the builder
-        subprocess.run(
-            f"docker buildx inspect {builder_name} --bootstrap",
-            shell=True, check=True
-        )
-
-    def _check_ssh(self) -> bool:
-        """Check if SSH is available and remote host is accessible"""
-        try:
-            # Check if ssh and remote host are available
-            result = subprocess.run(
-                ['ssh', self.REMOTE_HOST, 'echo "SSH connection test"'],
-                capture_output=True,
-                check=False
-            )
-            return result.returncode == 0
-        except Exception:
-            return False
+        """Archive in Python so missing zip tools cannot silently pass."""
+        base = self.root_dir / dist_dir_name
+        return make_archive(str(base / browser), 'zip', root_dir=base / browser)
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Build tool for SimpleTextReader')
-    parser.add_argument('-v', '--version', type=str, default='',
-                        help='Version to build')
-    parser.add_argument('-d', '--docker', action='store_true',
-                        help='Build Docker image')
-    parser.add_argument('-e', '--extension', action='store_true',
-                        help='Build browser extensions')
-    parser.add_argument('-a', '--all', action='store_true',
-                        help='Build both Docker image and browser extensions')
-    parser.add_argument('-p', '--deploy', action='store_true',
-                        help='Deploy to remote server after building')
-    args = parser.parse_args()
-
-    # Initialize builder
-    builder = Builder(args.version)
-
-    # If no build type is specified, default to --all and --deploy
+def main(argv=None):
+    parser = argparse.ArgumentParser(description='Build local SimpleTextReader artifacts (never deploys).')
+    parser.add_argument('-v', '--version', default='', help='Version for generated artifacts only')
+    parser.add_argument('-d', '--docker', action='store_true', help='Build a local Docker image')
+    parser.add_argument('-e', '--extension', action='store_true', help='Build browser extensions')
+    parser.add_argument('-a', '--all', action='store_true', help='Build extensions and a local Docker image')
+    args = parser.parse_args(argv)
     if not (args.docker or args.extension or args.all):
-        args.all = True
-        args.deploy = True
-
-    # Perform requested build
-    if args.all:
-        builder.process_css_fonts(True)
+        if args.version:
+            parser.error('--version requires an explicit build target')
+        parser.print_help()
+        return 0
+    builder = Builder(args.version)
+    if args.extension or args.all:
         builder.build_extensions()
-        print('\n' + '-' * 50 + '\n')
-        builder.build_docker()
-    elif args.extension:
-        builder.build_extensions()
-    elif args.docker:
+    if args.docker or args.all:
         if not builder.build_docker():
-            sys.exit(1)
-
-    # Deploy to remote server if requested and build was performed
-    if args.deploy:
-        print('\n' + '-' * 50 + '\n')
-        builder.deploy_to_remote_server()
+            return 1
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

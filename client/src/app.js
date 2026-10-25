@@ -1,3 +1,4 @@
+import { PopupManager } from "./components/popup-manager.js";
 /**
  * @fileoverview Main application entry point
  * Initializes UI and sets up event listeners for file handling and user interactions
@@ -172,6 +173,7 @@ import {
      * Set up the dropzone text after all modules are initialized
      */
     setupDropzoneText();
+    await setupExtensionMessageListener();
 
     /**
      * Hide loading screen and don't show bookshelf trigger button
@@ -206,13 +208,6 @@ onReady(() => {
     //Listen for hash changes and remove the hashbang immediately
     $(window).on("hashchange popstate", removeHashbang);
     if (window.consoleTime) console.timeEnd("[time] Remove Hashbang");
-
-    /**
-     * Set up the extension message listener
-     */
-    if (window.consoleTime) console.time("[time][background] Setup Extension Message Listener");
-    setupExtensionMessageListener();
-    if (window.consoleTime) console.timeEnd("[time][background] Setup Extension Message Listener");
 
     if (window.consoleTime) console.timeEnd("[time] DOMContentLoaded Tasks");
 });
@@ -725,61 +720,38 @@ function base64ToArrayBuffer(base64) {
  * Handle file object from extension
  * Listen for the file details sent by the extension's background script
  */
-function setupExtensionMessageListener() {
-    const api = typeof chrome !== "undefined" ? chrome : typeof browser !== "undefined" ? browser : null;
-    if (!api?.runtime?.onMessage) {
-        // console.warn("Extension messaging API is not available.");
-        return;
-    }
-
-    /**
-     * Processes the message received from the extension
-     * @private
-     * @param {Object} message - The message from the extension
-     */
-    async function _processExtensionMessage(message) {
-        if (
-            !message?.action ||
-            message.action !== "loadFile" ||
-            !message.fileContent ||
-            !message.fileName ||
-            !message.fileType
-        ) {
-            return;
+async function setupExtensionMessageListener() {
+    const api = typeof browser !== "undefined" ? browser : typeof chrome !== "undefined" ? chrome : null;
+    const requestId = new URLSearchParams(location.search).get("extensionRequest");
+    if (!requestId || !api?.runtime) return;
+    const { consumePendingFile } = await import("./core/extension-handoff.js");
+    const promiseAPI = typeof browser !== "undefined" && api === browser;
+    const call = (owner, method, ...args) => new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("Extension request timed out")), 10000);
+        const success = value => { clearTimeout(timer); resolve(value); };
+        const failure = error => { clearTimeout(timer); reject(error); };
+        if (promiseAPI) Promise.resolve(owner[method](...args)).then(success, failure);
+        else {
+            try { owner[method](...args, result => api.runtime.lastError ? failure(new Error(api.runtime.lastError.message)) : success(result)); }
+            catch (error) { failure(error); }
         }
-
-        try {
-            // Show loading screen
-            showLoadingScreen();
-
-            // Decode the Base64 content back to binary
-            const arrayBuffer = base64ToArrayBuffer(message.fileContent);
-
-            // Create a File object from the ArrayBuffer
-            const fileObject = new File([arrayBuffer], message.fileName, {
-                type: message.fileType,
-            });
-
-            // Process the file
-            await FileHandler.handleMultipleFiles([fileObject]);
-        } catch (error) {
-            console.error("Error loading the file into the page:", error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    api.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        // Use Promise to handle asynchronous operations
-        _processExtensionMessage(message)
-            .then((result) => {
-                // console.log("Message handled successfully:", result);
-                sendResponse(result ?? { success: true });
-            })
-            .catch((error) => {
-                // console.error("Error handling message:", error);
-                sendResponse(error ?? { success: false, error: "Unknown error" });
-            });
-
-        return true; // Keep the message channel open for asynchronous responses
     });
+    const tab = await call(api.tabs, "getCurrent").catch(() => null);
+    const send = message => call(api.runtime, "sendMessage", { ...message, tabId: tab?.id });
+    const result = await consumePendingFile(requestId, send, async message => {
+        showLoadingScreen();
+        const file = new File([base64ToArrayBuffer(message.fileContent)], message.fileName, { type: message.fileType });
+        await FileHandler.handleSelectedFile([file]);
+    });
+    if (result.status === "failed") {
+        await resetUI();
+        document.documentElement.setAttribute("openedAsNoUI", "false");
+        hideLoadingScreen(false);
+        const retry = document.createElement("button");
+        retry.id = "extension-import-retry";
+        retry.textContent = CONFIG.CONST_UI.EXTENSION_HANDOFF_TEXT[CONFIG.RUNTIME_VARS.WEB_LANG === "zh" ? "zh" : "en"].retry;
+        retry.addEventListener("click", () => { retry.remove(); setupExtensionMessageListener().catch(console.error); }, { once: true });
+        CONFIG.DOM_ELEMENT.DROPZONE.appendChild(retry);
+        PopupManager.showNotification({ iconName: "ERROR", iconColor: "error", text: CONFIG.CONST_UI.EXTENSION_HANDOFF_TEXT[CONFIG.RUNTIME_VARS.WEB_LANG === "zh" ? "zh" : "en"].failed });
+    }
 }
