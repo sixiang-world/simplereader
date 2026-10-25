@@ -338,6 +338,8 @@ export function showShortenedTitle(titleID, delay = 2000) {
  * @returns {Promise<void>}
  */
 export async function setChapterTitleActive(titleID) {
+    const documentChunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
+    if (!(titleID in CONFIG.VARS.ALL_TITLES_IND)) return;
     // Set the selected title in the TOC as active
     const selectedTitle = CONFIG.DOM_ELEMENT.GET_TITLE(titleID);
     if (selectedTitle) {
@@ -368,6 +370,7 @@ export async function setChapterTitleActive(titleID) {
     // console.log("ToC Rendered Event Triggered:", e);
 
     // Check again for the title after rendering
+    if (documentChunks !== CONFIG.VARS.FILE_CONTENT_CHUNKS) return;
     const renderedTitle = CONFIG.DOM_ELEMENT.GET_TITLE(titleID);
     if (renderedTitle) {
         // console.log("Selected title found after rendering:", renderedTitle);
@@ -494,7 +497,11 @@ function getPercentageOfTitleInAllTitles(target) {
  */
 async function waitForTocRendered() {
     return new Promise((resolve) => {
-        cbReg.once("tocRendered", resolve);
+        let timer;
+        const done = () => { clearTimeout(timer); cbReg.rm(token); resolve(); };
+        const token = cbReg.once("tocRendered", done);
+        // Hidden/empty virtual lists need not emit; navigation must still finish.
+        timer = setTimeout(done, 250);
     });
 }
 

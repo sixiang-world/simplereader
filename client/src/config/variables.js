@@ -45,6 +45,11 @@ class AppVariables {
         this.FOOTNOTES = [];
         /** @type {number} Counter for processed footnotes */
         this.FOOTNOTE_PROCESSED_COUNTER = 0;
+        this.FOOTNOTE_MAP = {};
+        this.FRAGMENT_TO_LINE = {};
+        this.FILE_TO_LINE = {};
+        this.SPINE_RANGES = [];
+        this.IS_EPUB = false;
         /** @type {boolean} Whether mouse is inside TOC content */
         this.IS_MOUSE_INSIDE_TOC_CONTENT = false;
         /** @type {boolean} Whether TOC is scrolling */
@@ -131,10 +136,16 @@ class AppVariables {
         this.BOOK_AND_AUTHOR = {};
         this.FOOTNOTES = [];
         this.FOOTNOTE_PROCESSED_COUNTER = 0;
+        this.FOOTNOTE_MAP = {};
+        this.FRAGMENT_TO_LINE = {};
+        this.FILE_TO_LINE = {};
+        this.SPINE_RANGES = [];
+        this.IS_EPUB = false;
 
         // Reset pagination-related variables
         this.CURRENT_PAGE = 1;
         this.TOTAL_PAGES = 0;
+        this.PAGE_BREAKS = [];
 
         // Reset flow mode variables
         this.FLOW_CURRENT_LINE = 0;

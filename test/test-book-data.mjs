@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { VARS } from '../client/src/config/variables.js';
+import { snapshotProcessedBook, restoreProcessedBook, isProcessedBookComplete } from '../client/src/modules/file/book-data.js';
+VARS.FILENAME='book.epub';VARS.IS_EPUB=true;VARS.FILE_CONTENT_CHUNKS=[{content:'hi',spinePath:'OEBPS/a.xhtml'}];VARS.BOOK_AND_AUTHOR={bookName:'A'};
+VARS.PAGE_BREAKS=[0];VARS.TOTAL_PAGES=1;VARS.FOOTNOTE_MAP={'OEBPS/a.xhtml#n':'note'};VARS.FRAGMENT_TO_LINE={'OEBPS/a.xhtml#n':0};VARS.FILE_TO_LINE={'OEBPS/a.xhtml':0};VARS.SPINE_RANGES=[{path:'OEBPS/a.xhtml',start:0,end:1}];
+const saved=snapshotProcessedBook(VARS,{is_epub:true});assert.equal(isProcessedBookComplete(saved),true);
+VARS.reset();assert.deepEqual(VARS.FOOTNOTE_MAP,{});assert.deepEqual(VARS.FRAGMENT_TO_LINE,{});assert.deepEqual(VARS.SPINE_RANGES,[]);assert.deepEqual(VARS.PAGE_BREAKS,[]);
+restoreProcessedBook(VARS,saved);assert.equal(VARS.FOOTNOTE_MAP['OEBPS/a.xhtml#n'],'note');assert.equal(VARS.FILE_CONTENT_CHUNKS[0].spinePath,'OEBPS/a.xhtml');
+assert.equal(isProcessedBookComplete({...saved,fragmentToLine:undefined}),false);assert.equal(isProcessedBookComplete({processed:true,name:'broken'}),false);
+VARS.reset();assert.deepEqual(VARS.FOOTNOTE_MAP,{});assert.equal(VARS.IS_EPUB,false);
+console.log('BookData save/restore/reset/incomplete-cache contracts passed');
