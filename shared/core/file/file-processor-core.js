@@ -150,7 +150,9 @@ export class FileProcessorCore {
         const buffer = await chunk.arrayBuffer();
         const decoder = await FileProcessorCore.#getDecoder(encoding);
         const content = decoder.decode(new Uint8Array(buffer), { fatal: true });
-        let lines = content
+        // Logs use physical source lines, including indentation and empty
+        // lines. Novel normalization must not rewrite stack traces/log data.
+        const lines = logMode ? content.replace(/\r\n?/g, "\n").split("\n") : content
             .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF\u00AD]/g, "")
             .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
             .replace(/\r\n/g, "\n")
@@ -172,7 +174,7 @@ export class FileProcessorCore {
         /**
          * Dynamically detect title patterns from the first chunk
          */
-        if (isInitialChunk || forcePatternDetection) {
+        if (!logMode && (isInitialChunk || forcePatternDetection)) {
             let linesForPatternDetection = lines;
             if (forcePatternDetection && patternDetectionOptions.fileSize > patternDetectionOptions.initialChunkSize) {
                 const bufferForPatternDetection = buffer.slice(0, patternDetectionOptions.initialChunkSize);
@@ -230,7 +232,7 @@ export class FileProcessorCore {
          */
         const footnoteAnchorCounters = {}; // { [markerCode]: number }
         for (let i = 0; i < lines.length - sliceLineOffset; i++) {
-            const tempLine = lines[i].trim();
+            const tempLine = logMode ? lines[i] : lines[i].trim();
 
             /**
              * Log mode: skip title/footnote/optimize processing, store raw text

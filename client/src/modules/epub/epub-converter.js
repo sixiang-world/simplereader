@@ -10,6 +10,9 @@
 
 import { Logger } from "../../../../shared/utils/logger.js";
 import { CONST_PAGINATION } from "../../config/constants.js";
+import { resolveEpubHref } from "../../../../shared/core/file/epub-path.js";
+import { serializeEpubSvg } from "../../../../shared/core/file/epub-dom.js";
+import { epubLimits, guardedEpubArchive, checkEpubAbort, checkEpubDocument, epubLimit, rethrowEpubControlError } from "../../../../shared/core/file/epub-budget.js";
 
 /**
  * @class EpubConverter
@@ -22,11 +25,18 @@ export class EpubConverter {
      * Convert an EPUB File to SimpleTextReader content structure
      * @param {File} file - The EPUB file
      * @param {Function} [onProgress] - Callback(step, detail) for progress updates
-     * @returns {Promise<{source: Object, htmlLines: Array, titles: Array, titlesInd: Object, metadata: Object, spineBreaks: Array}>}
+     * @param {{signal?: AbortSignal, limits?: Object}} [options] - Cancellation and resource budgets
+     * @returns {Promise<{source: Object, htmlLines: Array, titles: Array, titlesInd: Object, metadata: Object, spineBreaks: Array, spineRanges: Array, fileToLine: Object, fragmentToLine: Object, footnoteMap: Object, missingFiles: Array}>}
      *   spineBreaks is shifted (+1 for non-zero breaks) when a synthetic
      *   title page is prepended, so values stay aligned with htmlLines.
+     *   spineRanges use decoded ZIP paths and [start, end) line ranges.
+     *   fragmentToLine and footnoteMap use canonical "ZIP/path#id" keys.
      */
-    static async convert(file, onProgress) {
+    static async convert(file, onProgress, options = {}) {
+        const { signal } = options;
+        const limits = epubLimits(options.limits);
+        checkEpubAbort(signal);
+        if (file.size > limits.maxFileBytes) throw epubLimit("compressed file exceeds budget");
         const reportProgress = (step, detail = "") => {
             if (typeof onProgress === "function") {
                 try {
@@ -46,7 +56,8 @@ export class EpubConverter {
         reportProgress("unzip");
         const buffer = await file.arrayBuffer();
         this.#logger.log(`File size: ${(buffer.byteLength / 1024).toFixed(0)}KB`);
-        const zip = await JSZip.loadAsync(buffer);
+        checkEpubAbort(signal);
+        const zip = guardedEpubArchive(await JSZip.loadAsync(buffer), limits, signal);
         this.#logger.log(`Unzipped: ${Object.keys(zip.files).length} files`);
 
         // 2. Parse container → find OPF path
@@ -70,12 +81,14 @@ export class EpubConverter {
         // 5. Process spine items in order
         this.#logger.log("Processing spine...");
         reportProgress("spine", `${spine.length} items`);
-        const { htmlLines, titles: spineTitles, spineBreaks, fileToLine, fragmentToLine, footnoteMap, missingFiles } = await this.#processSpine(
+        const { htmlLines, titles: spineTitles, spineBreaks, spineRanges, fileToLine, fragmentToLine, footnoteMap, missingFiles } = await this.#processSpine(
             zip,
             spine,
             manifest,
             opfPath,
-            (current, total) => reportProgress("spine-item", `${current}/${total}`)
+            (current, total) => reportProgress("spine-item", `${current}/${total}`),
+            limits,
+            signal
         );
         this.#logger.log(`Spine done: ${htmlLines.length} lines, ${spineTitles.length} titles, ${spineBreaks.length} spine breaks`);
 
@@ -88,7 +101,8 @@ export class EpubConverter {
             const seenLines = new Set();
             for (const entry of tocEntries) {
                 // parseToc has already resolved hrefs to zip-root absolute paths.
-                const [filePath, fragment] = entry.href.split("#");
+                const filePath = entry.path;
+                const fragment = entry.fragment;
                 // Prefer fragment-level mapping; fall back to file start
                 let lineNum;
                 if (fragment) {
@@ -139,6 +153,9 @@ export class EpubConverter {
             for (let i = 0; i < spineBreaks.length; i++) {
                 if (spineBreaks[i] > 0) spineBreaks[i] += 1;
             }
+            for (const key of Object.keys(fragmentToLine)) fragmentToLine[key] += 1;
+            for (const key of Object.keys(fileToLine)) fileToLine[key] += 1;
+            for (const range of spineRanges) { range.start += 1; range.end += 1; }
         }
 
         // 8. Synthetic end page. Text is supplied by CSS via the existing
@@ -183,6 +200,8 @@ export class EpubConverter {
             titlesInd,
             metadata,
             spineBreaks,
+            spineRanges,
+            fileToLine,
             fragmentToLine,
             footnoteMap,
             missingFiles,
@@ -204,11 +223,14 @@ export class EpubConverter {
 
         const xml = await containerFile.async("text");
         const doc = new DOMParser().parseFromString(xml, "application/xml");
+        zip.checkDocument(doc);
         // Use getElementsByTagNameNS to handle default namespace
         const rootfile = doc.getElementsByTagNameNS("*", "rootfile")[0];
         if (!rootfile) throw new Error("Invalid EPUB: no rootfile in container.xml");
 
-        return rootfile.getAttribute("full-path");
+        const path = resolveEpubHref(rootfile.getAttribute("full-path"), "")?.path;
+        if (!path) throw new Error("Invalid EPUB: invalid OPF URI");
+        return path;
     }
 
     /**
@@ -223,6 +245,7 @@ export class EpubConverter {
 
         const xml = await opfFile.async("text");
         const doc = new DOMParser().parseFromString(xml, "application/xml");
+        zip.checkDocument(doc);
 
         // --- Metadata ---
         // Use getElementsByTagNameNS with the DC namespace first, then fall back to
@@ -263,7 +286,7 @@ export class EpubConverter {
 
         // --- Manifest ---
         // Use getElementsByTagNameNS("*", ...) to handle namespaced OPF (default xmlns)
-        const manifest = {};
+        const manifest = Object.create(null);
         const manifestEl = doc.getElementsByTagNameNS("*", "manifest")[0];
         const manifestItems = manifestEl ? manifestEl.getElementsByTagNameNS("*", "item") : doc.getElementsByTagNameNS("*", "item");
         for (const item of manifestItems) {
@@ -331,6 +354,7 @@ export class EpubConverter {
             try {
                 return await this.#parseNavToc(zip, navEntry.href, opfPath);
             } catch (e) {
+                rethrowEpubControlError(e);
                 this.#logger.log("EPUB3 nav parse failed, trying NCX:", e);
             }
         }
@@ -341,6 +365,7 @@ export class EpubConverter {
             try {
                 return await this.#parseNcxToc(zip, ncxEntry.href, opfPath);
             } catch (e) {
+                rethrowEpubControlError(e);
                 this.#logger.log("NCX parse failed:", e);
             }
         }
@@ -358,6 +383,7 @@ export class EpubConverter {
 
         const html = await navFile.async("text");
         const doc = new DOMParser().parseFromString(html, "application/xhtml+xml");
+        zip.checkDocument(doc);
 
         // Find <nav epub:type="toc">. Namespace-aware CSS selectors are not
         // reliable in all DOM implementations (e.g. linkedom), so scan navs.
@@ -380,10 +406,8 @@ export class EpubConverter {
             const href = link.getAttribute("href");
             const label = link.textContent?.trim();
             if (href && label) {
-                const [pathPart, fragment] = href.split("#");
-                const resolvedPath = this.#resolveHref(pathPart, navPath);
-                const resolvedHref = fragment ? `${resolvedPath}#${fragment}` : resolvedPath;
-                entries.push({ label, href: resolvedHref });
+                const resolved = resolveEpubHref(href, navPath);
+                if (resolved) entries.push({ label, href: resolved.key, path: resolved.path, fragment: resolved.fragment });
             }
         }
 
@@ -400,6 +424,7 @@ export class EpubConverter {
 
         const xml = await ncxFile.async("text");
         const doc = new DOMParser().parseFromString(xml, "application/xml");
+        zip.checkDocument(doc);
 
         // Use getElementsByTagNameNS to handle default namespace (xmlns="http://www.daisy.org/z3986/2005/ncx/")
         const entries = [];
@@ -411,14 +436,8 @@ export class EpubConverter {
                 const label = labelEl.textContent?.trim();
                 const src = contentEl.getAttribute("src");
                 if (label && src) {
-                    const [pathPart, fragment] = src.split("#");
-                    // NCX content/@src is relative to the NCX file itself, not the
-                    // OPF. Using opfPath here only works when both live in the same
-                    // directory; subdirectory NCX (e.g. OEBPS/nav/toc.ncx) would
-                    // resolve to wrong paths and drop TOC entries.
-                    const resolvedPath = this.#resolveHref(pathPart, ncxPath);
-                    const resolvedHref = fragment ? `${resolvedPath}#${fragment}` : resolvedPath;
-                    entries.push({ label, href: resolvedHref });
+                    const resolved = resolveEpubHref(src, ncxPath);
+                    if (resolved) entries.push({ label, href: resolved.key, path: resolved.path, fragment: resolved.fragment });
                 }
             }
         }
@@ -440,10 +459,9 @@ export class EpubConverter {
      * @param {string} xhtml - The XHTML source
      * @returns {Promise<Object<string,string>>}
      */
-    static async #buildImageRegistry(zip, manifest, opfPath, filePath, xhtml, globalCache = null) {
-        const registry = {};
+    static async #buildImageRegistry(zip, manifest, opfPath, filePath, doc, globalCache = null) {
+        const registry = Object.create(null);
         try {
-            const doc = new DOMParser().parseFromString(xhtml, "application/xhtml+xml");
             const imgs = doc.querySelectorAll("img");
             for (const img of imgs) {
                 const src = img.getAttribute("src");
@@ -483,10 +501,12 @@ export class EpubConverter {
                     registry[src] = dataUrl;
                     if (globalCache) globalCache[abs] = dataUrl;
                 } catch (e) {
+                    rethrowEpubControlError(e);
                     this.#logger.warn(`[epub] Failed to extract image: ${abs}`);
                 }
             }
         } catch (e) {
+            rethrowEpubControlError(e);
             this.#logger.warn("[epub] buildImageRegistry failed:", e.message);
         }
         return registry;
@@ -505,8 +525,7 @@ export class EpubConverter {
             if (!svgNode.getAttribute("xmlns")) {
                 svgNode.setAttribute("xmlns", "http://www.w3.org/2000/svg");
             }
-            const serializer = new XMLSerializer();
-            let svgString = serializer.serializeToString(svgNode);
+            let svgString = serializeEpubSvg(svgNode);
             svgString = svgString.replace(/^<\?xml[^>]*\?>\s*/, "");
             const bytes = new TextEncoder().encode(svgString);
             if (bytes.length > maxBytes) return null;
@@ -670,16 +689,17 @@ export class EpubConverter {
      * @returns {Promise<{htmlLines: Array, titles: Array, spineBreaks: Array, fileToLine: Object, fragmentToLine: Object, footnoteMap: Object}>}
      */
 
-    static async #processSpine(zip, spine, manifest, opfPath, onItemProgress) {
+    static async #processSpine(zip, spine, manifest, opfPath, onItemProgress, limits, signal) {
         const htmlLines = [];
         const titles = [];
         // Cross-spine image cache: absPath → data URL. Prevents repeated
         // base64 encoding of the same image referenced by multiple chapters.
-        const globalImageCache = {};
+        const globalImageCache = Object.create(null);
         const spineBreaks = [0]; // First page always starts at 0
-        const fileToLine = {};   // {filePath: startLineNumber}
-        const fragmentToLine = {}; // {filePath#id: lineNumber}
-        const footnoteMap = {};   // {footnoteId: htmlContent}
+        const spineRanges = [];
+        const fileToLine = Object.create(null);   // {filePath: startLineNumber}
+        const fragmentToLine = Object.create(null); // {filePath#id: lineNumber}
+        const footnoteMap = Object.create(null);   // {footnoteId: htmlContent}
         const missingFiles = [];
         let lineNumber = 0;
         this.#logger.log(`Processing ${spine.length} spine items...`);
@@ -719,19 +739,28 @@ export class EpubConverter {
             // Map the normalized file path to its starting line number for NCX matching
             fileToLine[effectivePath] = lineNumber;
 
+            checkEpubAbort(signal);
             const xhtml = await file.async("text");
+            const doc = this.#parseXhtml(xhtml);
+            checkEpubDocument(doc, limits, signal);
             const t1 = performance.now();
             // Pre-resolve image resources referenced by this spine file so the
             // (synchronous) HTML walker can inline them as data: URLs.
             // globalImageCache is shared across spine items so the same image
             // referenced by multiple chapters is base64-encoded only once.
-            const imageRegistry = await this.#buildImageRegistry(zip, manifest, opfPath, effectivePath, xhtml, globalImageCache);
-            const result = this.#processXhtml(xhtml, lineNumber, effectivePath, fragmentToLine, imageRegistry, footnoteMap);
+            const imageRegistry = await this.#buildImageRegistry(zip, manifest, opfPath, effectivePath, doc, globalImageCache);
+            const result = this.#processXhtml(doc, lineNumber, effectivePath, fragmentToLine, imageRegistry, footnoteMap);
             const elapsed = (performance.now() - t1).toFixed(1);
 
-            htmlLines.push(...result.elements);
-            titles.push(...result.titles);
+            if (htmlLines.length + result.elements.length > limits.maxLines) throw epubLimit("too many content lines");
+            const start = lineNumber;
+            for (const element of result.elements) {
+                element.spinePath = effectivePath;
+                htmlLines.push(element);
+            }
+            for (const title of result.titles) titles.push(title);
             lineNumber += result.elements.length;
+            spineRanges.push({ path: effectivePath, start, end: lineNumber });
 
             if (result.elements.length > 0 || result.titles.length > 0) {
                 this.#logger.log(`Spine [${idx}] ${effectivePath}: ${result.elements.length} els, ${result.titles.length} titles (${elapsed}ms)`);
@@ -745,7 +774,8 @@ export class EpubConverter {
             }
             // Yield to the event loop between spine items so the progress UI can
             // repaint and the tab stays responsive during long conversions.
-            await Promise.resolve();
+            await new Promise(resolve => setTimeout(resolve, 0));
+            checkEpubAbort(signal);
         }
 
         // Non-fatal: surface missing files as a warning but keep the successfully
@@ -755,22 +785,15 @@ export class EpubConverter {
             this.#logger.warn(`EPUB missing spine file(s): ${missingFiles.join(", ")}`);
         }
 
-        return { htmlLines, titles, spineBreaks, fileToLine, fragmentToLine, footnoteMap, missingFiles };
+        return { htmlLines, titles, spineBreaks, spineRanges, fileToLine, fragmentToLine, footnoteMap, missingFiles };
     }
 
     /**
-     * Process a single XHTML file into structure objects
+     * Parse a spine document once for resource discovery and block processing.
      * @param {string} xhtml - The XHTML content
-     * @param {number} lineOffset - Starting line number
-     * @param {string} [filePath] - Path of the XHTML file within the EPUB
-     * @param {Object} [fragmentToLine] - Map to populate with file#id → lineNumber
-     * @param {Object} [footnoteMap] - Map to populate with footnoteId → htmlContent
-     * @returns {{elements: Array, titles: Array}}
+     * @returns {Document}
      */
-    static #processXhtml(xhtml, lineOffset, filePath, fragmentToLine, imageRegistry = null, footnoteMap = null) {
-        const elements = [];
-        const titles = [];
-
+    static #parseXhtml(xhtml) {
         // Parse as XHTML, fallback to HTML if it fails
         let doc;
         try {
@@ -784,6 +807,13 @@ export class EpubConverter {
             doc = new DOMParser().parseFromString(xhtml, "text/html");
         }
 
+        return doc;
+    }
+
+    static #processXhtml(doc, lineOffset, filePath, fragmentToLine, imageRegistry = null, footnoteMap = null) {
+        const elements = [];
+        const titles = [];
+
         // Get the body content
         const body = doc.querySelector("body");
         if (!body) return { elements: [], titles: [] };
@@ -794,6 +824,25 @@ export class EpubConverter {
         for (const node of walker) {
             const tag = node.tagName?.toLowerCase();
             const textContent = node.textContent?.trim();
+            const epubType = node.getAttribute("epub:type") || node.getAttribute("type") || "";
+            if (/\b(footnote|endnote)\b/.test(epubType) && footnoteMap && node.id) {
+                footnoteMap[`${filePath}#${node.id}`] = this.#extractInlineHtml(node, imageRegistry);
+                continue;
+            }
+            // Register all nested anchors at their rendered block's final line.
+            if (!["script", "style"].includes(tag) && fragmentToLine && filePath) {
+                const line = lineOffset + elements.length;
+                if (node.id) fragmentToLine[`${filePath}#${node.id}`] = line;
+                for (const anchor of node.querySelectorAll("[id]")) {
+                    fragmentToLine[`${filePath}#${anchor.id}`] = line;
+                }
+                // Flattened section/div wrappers retain their anchor at the
+                // first rendered descendant, rather than losing it entirely.
+                for (let parent = node.parentElement; parent && parent !== body; parent = parent.parentElement) {
+                    const key = `${filePath}#${parent.id}`;
+                    if (parent.id && fragmentToLine[key] === undefined) fragmentToLine[key] = line;
+                }
+            }
 
             // Standalone images: emit an image block even though the
             // element has no text content (must run before the empty
@@ -819,14 +868,6 @@ export class EpubConverter {
                         fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
                     }
                 }
-                continue;
-            }
-
-            // EPUB footnotes: extract <aside epub:type="footnote"> content
-            // into footnoteMap (keyed by id) and skip from body output.
-            const epubType = node.getAttribute("epub:type") || node.getAttribute("type") || "";
-            if (epubType === "footnote" && footnoteMap && node.id) {
-                footnoteMap[node.id] = this.#extractInlineHtml(node, imageRegistry);
                 continue;
             }
 
@@ -1032,11 +1073,6 @@ export class EpubConverter {
      * @returns {Element[]}
      */
     static #createBlockWalker(container) {
-        const blockTags = new Set(["p", "div", "h1", "h2", "h3", "h4", "h5", "h6",
-            "blockquote", "ul", "ol", "li", "table", "tr", "td", "th",
-            "dl", "dt", "dd", "figure", "figcaption", "pre", "hr", "br",
-            "section", "article", "header", "footer", "nav", "aside"]);
-
         const result = [];
         const skipChildren = new Set();
 
@@ -1047,6 +1083,12 @@ export class EpubConverter {
 
             // Skip non-content containers
             if (["script", "style"].includes(tag)) continue;
+
+            const semanticType = child.getAttribute("epub:type") || child.getAttribute("type") || "";
+            if (/\b(footnote|endnote)\b/.test(semanticType)) {
+                result.push(child);
+                continue;
+            }
 
             // Keep lists as whole blocks (processed as a "list" line type)
             if (tag === "ul" || tag === "ol") {
@@ -1080,7 +1122,7 @@ export class EpubConverter {
             if (["section", "article", "header", "footer", "nav", "aside", "div", "picture"].includes(tag)) {
                 const subItems = this.#createBlockWalker(child);
                 if (subItems.length > 0) {
-                    result.push(...subItems);
+                    for (const item of subItems) result.push(item);
                 } else {
                     result.push(child);
                 }
@@ -1251,7 +1293,7 @@ export class EpubConverter {
             // EPUB noteref links: mark as footnote so the reader's footnote
             // popup system (a[rel='footnote']) can pick them up.
             const linkType = el.getAttribute("epub:type") || el.getAttribute("type") || "";
-            if (linkType === "noteref") {
+            if (/\bnoteref\b/.test(linkType)) {
                 attrs += ' rel="footnote"';
             }
         }
@@ -1307,30 +1349,6 @@ export class EpubConverter {
      * @returns {string} Resolved path relative to zip root
      */
     static #resolveHref(href, basePath) {
-        // Reject dangerous hrefs early
-        if (!this.#isAllowedHref(href)) return "";
-
-        // Strip fragment identifiers
-        const cleanHref = href.split("#")[0];
-        if (!cleanHref) return basePath;
-
-        // If already absolute (starts with /), use as-is (minus leading /)
-        if (cleanHref.startsWith("/")) return cleanHref.substring(1);
-
-        // Resolve relative to basePath's directory
-        const baseDir = basePath.includes("/") ? basePath.substring(0, basePath.lastIndexOf("/")) : "";
-        if (!baseDir) return cleanHref;
-
-        // Simple path resolution
-        const parts = (baseDir + "/" + cleanHref).split("/");
-        const resolved = [];
-        for (const part of parts) {
-            if (part === "..") {
-                resolved.pop();
-            } else if (part !== "." && part !== "") {
-                resolved.push(part);
-            }
-        }
-        return resolved.join("/");
+        return resolveEpubHref(href, basePath)?.path || "";
     }
 }

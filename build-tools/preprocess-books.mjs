@@ -32,6 +32,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { paginateEpub } from "../shared/core/file/epub-pagination.js";
+import { TextProcessorCore } from "../shared/core/text/text-processor-core.js";
 
 // Polyfill globalThis.JSZip for the existing EpubConverter, which
 // expects it as a browser global. We import the npm package and
@@ -298,6 +300,13 @@ async function processEpubFile(filePath) {
     const file = new File([fileBuffer], fileName, { type: "application/epub+zip" });
 
     const result = await EpubConverter.convert(file);
+    const sample = result.htmlLines.slice(0, 10).map(line => line.content || "").join(" ").replace(/<[^>]*>/g, "");
+    const isEastern = TextProcessorCore.getLanguage(`${result.metadata?.title || ""} ${sample}`);
+    const pageBreaks = paginateEpub(result, {
+        ...CONST_PAGINATION,
+        IS_EASTERN_LAN: isEastern,
+        BOOK_AND_AUTHOR: { bookName: result.metadata?.title || fileName, author: result.metadata?.author || "" },
+    });
 
     return {
         metadata: {
@@ -307,14 +316,18 @@ async function processEpubFile(filePath) {
         processedLines: result.htmlLines,
         titles: result.titles,
         titles_ind: result.titlesInd,
+        fileToLine: result.fileToLine,
+        fragmentToLine: result.fragmentToLine,
+        footnoteMap: result.footnoteMap,
+        spineRanges: result.spineRanges,
         footnotes: [],
-        page_breaks: result.pageBreaks || [0],
-        total_pages: (result.pageBreaks || [0]).length,
+        page_breaks: pageBreaks,
+        total_pages: pageBreaks.length,
         source: {
             filename: fileName,
             encoding: "utf-8",
             size_bytes: fileBuffer.length,
-            is_eastern_lan: true, // EPUB content is detected per-spine in the converter
+            is_eastern_lan: isEastern,
         },
     };
 }
