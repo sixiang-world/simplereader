@@ -125,12 +125,27 @@ await withBrowserTest(async ({ browser, baseURL, productionURL }) => {
             C.VARS.ALL_TITLES = [['Chapter', 0, 'Chapter', false]]; C.VARS.ALL_TITLES_IND = { 0: 0 };
             reader.showCurrentPageContent();
             search.showDialog(); document.querySelector('.search-txt').value = 'needle'; document.querySelector('.search-down').click();
-            await new Promise(resolve => setTimeout(resolve, 150));
-            const element = document.querySelector('#line1'), before = element?.querySelectorAll('mark').length;
+            // Wait deterministically for the cross-page navigation + highlight:
+            // the search worker round trip varies by machine/Chrome version
+            // (observed ~230 ms on Windows Chrome vs <150 ms on the CI
+            // alpine Chromium), so a fixed sleep flakes.
+            const waitFor = async (predicate, timeoutMs) => {
+                const t0 = performance.now();
+                while (performance.now() - t0 < timeoutMs) {
+                    if (predicate()) return true;
+                    await new Promise(resolve => setTimeout(resolve, 25));
+                }
+                return predicate();
+            };
+            const reached = await waitFor(
+                () => (document.querySelector('#line1')?.querySelectorAll('mark').length ?? 0) >= 2,
+                5000,
+            );
+            const element = document.querySelector('#line1'), before = reached ? element.querySelectorAll('mark').length : element?.querySelectorAll('mark').length;
             search.clearHighlight();
             const after = element?.querySelectorAll('mark').length;
             document.querySelector('.search-txt').value = 'png'; document.querySelector('.search-down').click();
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await waitFor(() => Boolean(element?.querySelector('img')), 5000);
             const src = element?.querySelector('img')?.getAttribute('src');
             search.close();
             return { before, after, src };
