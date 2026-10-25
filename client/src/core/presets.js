@@ -8,9 +8,8 @@
  *     at boot time, before applySettings() runs
  *   - Presets can be saved/loaded/deleted via this API
  *
- * This module is a STUB — it defines the public API surface and the
- * storage format, but does NOT yet wire into settings.js or the URL
- * parser. When the feature is implemented:
+ * settings.loadSettings consumes these presets before individual URL
+ * overrides. The public storage API can also be used by future UI controls:
  *
  *   1. settings.js loadSettings() should call `applyPresetFromURL()`
  *      AFTER parseURLSettings() runs, so URL `?key=value` overrides
@@ -96,7 +95,7 @@ const FACTORY_DEFAULTS = {
  */
 export function getDefaultPreset(name) {
     if (typeof name !== "string" || name.length === 0) return null;
-    return FACTORY_DEFAULTS[name] ? { ...FACTORY_DEFAULTS[name] } : null;
+    return Object.hasOwn(FACTORY_DEFAULTS, name) ? { ...FACTORY_DEFAULTS[name] } : null;
 }
 
 /**
@@ -153,7 +152,8 @@ function persistPresets(presets) {
  * @returns {Object<string, string>|null} The preset's settings, or null if not found.
  */
 export function getPreset(name) {
-    return loadAllPresets()[name] ?? null;
+    const presets = loadAllPresets();
+    return Object.hasOwn(presets, name) ? presets[name] : null;
 }
 
 /**
@@ -164,7 +164,7 @@ export function getPreset(name) {
  */
 export function savePreset(name, settings) {
     const presets = loadAllPresets();
-    presets[name] = settings;
+    Object.defineProperty(presets, name, { value: settings, enumerable: true, configurable: true, writable: true });
     persistPresets(presets);
 }
 
@@ -175,7 +175,7 @@ export function savePreset(name, settings) {
  */
 export function deletePreset(name) {
     const presets = loadAllPresets();
-    if (!(name in presets)) return false;
+    if (!Object.hasOwn(presets, name)) return false;
     delete presets[name];
     persistPresets(presets);
     return true;
@@ -259,7 +259,7 @@ export function resolvePresetFromURL(urlParams) {
 
     // Try as a user-saved preset name first.
     const userPresets = loadAllPresets();
-    if (raw in userPresets) return raw;
+    if (Object.hasOwn(userPresets, raw)) return raw;
 
     // Try as a factory-default preset name (e.g. "Infinite Scroll").
     if (getDefaultPreset(raw)) return raw;

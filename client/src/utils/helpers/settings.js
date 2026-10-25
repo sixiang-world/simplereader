@@ -529,9 +529,9 @@ export function createFontSelectorItem(id) {
     }
 
     // Get valid font info for all groups
-    const app_fonts_info = getValidFontInfo(filterFontsByStatus(CONFIG.CONST_FONT.APP_FONTS, "loaded"), true);
+    const app_fonts_info = getValidFontInfo(filterFontsByStatus(CONFIG.CONST_FONT.APP_FONTS, ["loaded", "loading"]), true);
     const system_fonts_info = getValidFontInfo(CONFIG.CONST_FONT.SYSTEM_FONTS, true);
-    const remote_fonts_info = getValidFontInfo(filterFontsByStatus(CONFIG.CONST_FONT.REMOTE_FONTS, "loaded"), true);
+    const remote_fonts_info = getValidFontInfo(filterFontsByStatus(CONFIG.CONST_FONT.REMOTE_FONTS, ["loaded", "loading"]), true);
     const custom_fonts_info = getValidCustomFontInfo(CONFIG.VARS.CUSTOM_FONTS);
 
     // Generate font group order
@@ -539,9 +539,8 @@ export function createFontSelectorItem(id) {
 
     // Check if each group has fonts
     const hasAppFonts = app_fonts_info.every((arr) => arr.length > 0);
-    if (!hasAppFonts) {
-        throw new Error("No app fonts found");
-    }
+    // Optional web fonts may still be loading (or unavailable offline).
+    // Keep system/custom families usable instead of aborting the settings UI.
     const hasSystemFonts = system_fonts_info.every((arr) => arr.length > 0);
     const hasRemoteFonts = remote_fonts_info.every((arr) => arr.length > 0);
     const hasCustomFonts = custom_fonts_info.every((arr) => arr.length > 0);

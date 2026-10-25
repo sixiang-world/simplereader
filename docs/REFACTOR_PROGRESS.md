@@ -11,3 +11,4 @@
 - T06 装载合约已完成：统一BookData快照/恢复/reset，持久化脚注与章节索引，converter缓存升4；统一mount，转换先于分页/保存/首次渲染，保存等待完成，TXT finally销毁Worker，取消旧load不污染新书。独立快照构建、29个Node文件与真实Chromium新导入/重开/切书取消回归通过。隐藏TOC等待有界，不再永久挂起。
 - 存储一致性任务（T02/T03 DB/T07/T08/T09）已完成：语言元数据不擦缓存；读取快照/写入/删除跨store原子且以commit应答；6块以上事务修复与旧块清理；错误/timeout/dispose收敛、versionchange释放；转换失败保留原始File。字体等待load再注册/回收URL，书架启停清理监听。独立快照构建、Node suite与真实Chromium分块/故障回滚/原书保护/字体/根与子目录Worker往返通过。
 - 阅读器任务（T11定位/T13及T19部分）已完成：canonical跨章/本章链接、纯文字脚注定位，TOC旧RAF与通知listener释放，flow文档身份与几何二分，await导航后文本节点高亮/完整清理，regex在可终止Worker中运行。独立快照构建/30个Node文件/10项真实UI浏览器回归/BookData装载回归通过；生产子路径搜索Worker验证通过。flow仍为累积DOM，未未经基准引入裁剪。
+- 设置/启动任务（T15/T16/T17/T18）已完成：统一schema解析与纯状态过渡、同值timestamp推进、拉取错误判别、顺序推送GET合并、canonical语言（含最早启动阶段）、运行时T2S、once及preset边界；字体不阻塞核心启动/合帧通知/加载中选择器降级。独立快照32个Node文件及真实Chromium设置、慢字体、刷新语言、生产根/子路径启动通过。首次快照发现启动仍读UILang的遗漏，已补回归并修复后复验。无CAS的并发同步仍有明确限制（docs/config-sync-contract.md），不宣称无损。

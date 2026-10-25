@@ -25,6 +25,7 @@ import { initReader } from "./modules/reader/reader.js";
 import { FileHandler } from "./modules/file/file-handler.js";
 import { SidebarSplitView } from "./components/sidebar-splitview.js";
 import { registerT2SHook } from "./core/t2s.js";
+import { createFrameScheduler, startBackgroundTask, withFontDeadline } from "./core/background-tasks.js";
 import {
     isVariableDefined,
     removeHashbang,
@@ -69,6 +70,7 @@ import {
      * Polyfill for requestIdleCallback because Safari does not support it
      */
     requestIdleCallbackPolyfill();
+    initializeFontStatus();
 
     /**
      * Fetch version data in the background (non-blocking)
@@ -121,14 +123,6 @@ import {
     if (window.consoleTime) console.timeEnd("[time] Check No-UI Mode");
 
     /**
-     * Load fonts in the background
-     * This is quite fast since we don't use split fonts.
-     */
-    if (window.consoleTime) console.time("[time][background] Load Fonts");
-    await loadFontsInBackground();
-    if (window.consoleTime) console.timeEnd("[time][background] Load Fonts");
-
-    /**
      * Initialize reader, settings, bookshelf and fontpool
      */
     if (window.consoleTime) console.time("[time] Initialize All Modules");
@@ -142,9 +136,12 @@ import {
     if (window.consoleTime) console.timeEnd("[time][background] Initialize Settings");
 
     // Register the T2S (Traditional→Simplified Chinese) hook.
-    // The hook reads its mode from localStorage on every file:afterProcess
-    // invocation, so it's safe to register once at boot.
-    registerT2SHook();
+    // Read the effective runtime settings, including memory-only URL/preset
+    // overrides, on every invocation instead of reading stale persistence.
+    registerT2SHook(() => ({
+        lite: CONFIG.CONST_CONFIG.T2S_LITE,
+        pro: CONFIG.CONST_CONFIG.T2S_PRO,
+    }));
 
     // Config sync is MANUAL (on-demand): pull/push are triggered by the
     // user via the token panel buttons (settings.syncPull / settings.syncPush).
@@ -162,6 +159,12 @@ import {
             if (window.consoleTime) console.timeEnd("[time][background] Initialize Fontpool");
         }),
     ]);
+
+    // All font/cover listeners are now registered. Fonts must never delay
+    // reader/settings/bookshelf readiness; fallback CSS fonts remain usable.
+    window.backgroundFontsPromise = startBackgroundTask(loadFontsInBackground, (error) => {
+        console.warn("[font] Background loading failed:", error);
+    });
 
     if (window.consoleTime) console.timeEnd("[time] Initialize All Modules");
 
@@ -214,10 +217,8 @@ onReady(() => {
     if (window.consoleTime) console.timeEnd("[time] DOMContentLoaded Tasks");
 });
 
-/**
- * Load fonts in the background
- */
-async function loadFontsInBackground() {
+/** Publish synchronous metadata before settings builds its font selectors. */
+function initializeFontStatus() {
     // Define fonts
     window.localFonts = CONFIG.CONST_FONT.APP_FONTS.filter((font) => !font.isSplitFont).map((font) => font.en);
     window.localCSSFonts = CONFIG.CONST_FONT.APP_FONTS.filter((font) => font.isSplitFont).map((font) => font.en);
@@ -232,6 +233,18 @@ async function loadFontsInBackground() {
 
     // Initialize all fonts as "loading"
     allFonts.forEach((font) => (window.FONT_STATUS[font] = "loading"));
+}
+
+/**
+ * Load fonts in the background
+ */
+async function loadFontsInBackground() {
+    const notifyFontChange = createFrameScheduler(() => {
+        cbReg.go("updateAllBookCovers").catch((error) => console.warn("[font] Cover refresh failed:", error));
+        cbReg.go("updateFontBaselineOffsets").catch((error) => console.warn("[font] Baseline refresh failed:", error));
+    });
+    const allSingleFonts = [...window.localFonts, ...window.remoteFonts];
+    const allCSSFonts = [...window.localCSSFonts, ...window.remoteCSSFonts];
 
     // Get all split font CSS file paths
     const splitFontCSSFiles = [
@@ -246,7 +259,7 @@ async function loadFontsInBackground() {
             splitFontCSSFiles.map(async (href, index) => {
                 const font = allCSSFonts[index];
                 try {
-                    const res = await fetch(href);
+                    const res = await fetch(href, { signal: AbortSignal.timeout(10000) });
                     if (res.ok) {
                         createStylesheet(href);
                         window.FONT_STATUS[font] = "loaded";
@@ -268,7 +281,7 @@ async function loadFontsInBackground() {
                 if (window.consoleTime) console.time(`[time][background] Load Font "${font}"`);
 
                 try {
-                    await document.fonts.load(`12px ${font}`);
+                    await withFontDeadline(document.fonts.load(`12px ${font}`));
                     window.FONT_STATUS[font] = "loaded";
                     _finalizeSingleFontLoading(font);
                 } catch (e) {
@@ -292,9 +305,7 @@ async function loadFontsInBackground() {
 
     // Now wait for full loading confirmation
     console.log("Final font status:", window.FONT_STATUS);
-    requestAnimationFrame(() => {
-        cbReg.go("updateAllBookCovers");
-    });
+    notifyFontChange();
 
     /**
      * Finalizes font loading status and updates the UI accordingly.
@@ -307,7 +318,6 @@ async function loadFontsInBackground() {
                 // Reset data-status attributes
                 el.setAttribute("data-status", "");
                 el.removeAttribute("data-status");
-                el.offsetHeight; // Forces reflow (if needed)
 
                 // If it's an <li>, check for .option-actions and remove loading-button
                 if (el.matches("li[rel]")) {
@@ -325,9 +335,7 @@ async function loadFontsInBackground() {
             // }
 
             // Trigger custom event
-            requestAnimationFrame(() => {
-                cbReg.go("updateAllBookCovers");
-            });
+            notifyFontChange();
         }
 
         // console.log(`"${font}" is fully loaded`);

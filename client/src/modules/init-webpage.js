@@ -76,7 +76,8 @@ function setupLanguageSettings() {
     /**
      * Get the user's preferred language from local storage or use the browser's language
      */
-    const user_LANG = localStorage.getItem("UILang") || browser_LANG;
+    const preference = localStorage.getItem("ui_language") ?? localStorage.getItem("UILang");
+    const user_LANG = ["zh", "en"].includes(preference) ? preference : browser_LANG;
     const webLANG = respectUserLangSetting ? user_LANG : browser_LANG;
 
     /**

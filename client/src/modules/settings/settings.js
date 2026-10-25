@@ -56,11 +56,8 @@ import {
     FACTORY_DEFAULT_MARKER,
 } from "../../core/presets.js";
 import {
-    pullOnBoot,
-    pushConfig,
-    mergeSyncedConfig,
-    getFieldTimestamps,
-    setFieldTimestamps,
+    pullConfigResult,
+    pushMergedConfig,
     isSyncEnabled,
     getSyncToken,
     setSyncToken,
@@ -68,6 +65,8 @@ import {
     buildPushPayload,
     recordLocalChange,
 } from "../../core/config-sync.js";
+import { normalizeSettingValue, normalizeSettings, readStoredSetting } from "../../core/setting-values.js";
+import { applyPulledSettings } from "../../core/settings-state.js";
 import { refreshShareButtonLabels } from "../../utils/label-refresh.js";
 import {
     setRangeValue,
@@ -949,6 +948,11 @@ class SettingsMenu {
         actionRow.appendChild(status);
 
         inner.appendChild(actionRow);
+        const syncLimit = document.createElement("small");
+        syncLimit.textContent = isZh
+            ? "多设备请依次拉取、修改、推送；同时推送仍可能覆盖更改。"
+            : "Pull, edit and push one device at a time; simultaneous pushes can overwrite changes.";
+        inner.appendChild(syncLimit);
 
         wrapper.appendChild(inner);
 
@@ -1391,18 +1395,8 @@ const settings = {
      *  Checkbox types are automatically converted to boolean.
      */
     loadSettingWithFallback(key, key_alt = null) {
-        let val = null;
-        if (key_alt !== null && key_alt !== undefined) {
-            val = localStorage.getItem(key_alt);
-        }
-        if (val === null || val === undefined) {
-            val = localStorage.getItem(key);
-        }
-        if (val === null || val === undefined) {
-            val = this.defaults[key];
-        }
-        if (this.types[key] === "checkbox") val = toBool(val, false);
-        return val;
+        const def = this.schemaMap[key];
+        return readStoredSetting(localStorage, def, key_alt);
     },
 
     /**
@@ -1453,9 +1447,8 @@ const settings = {
         if (value === undefined || value === null || value === sanitizedUnit) {
             value = this.defaults[key];
         }
-        if (def.persist) {
-            localStorage.setItem(key, value);
-        }
+        value = normalizeSettingValue(def, value) ?? this.defaults[key];
+        if (def.persist) localStorage.setItem(key, value);
         return value;
     },
 
@@ -1521,7 +1514,7 @@ const settings = {
             }
         } else if (presetName) {
             // Apply named preset as a shallow merge over current values.
-            this.values = applyPreset(this.values, presetName);
+            this.values = { ...this.values, ...normalizeSettings(SETTINGS_SCHEMA, applyPreset(this.values, presetName)) };
         }
 
         // URL parameter override: schema-driven, properly typed, memory-only.
@@ -1698,31 +1691,20 @@ const settings = {
      * @public
      */
     applySyncPull(syncData) {
-        if (!syncData || typeof syncData !== "object") return [];
-        if (!this.values) return [];
+        // protectedKeys are consumed by the pure state transition; no DOM imports there.
+        return applyPulledSettings(this, syncData, SETTINGS_SCHEMA);
+    },
 
-        const schemaKeys = new Set(SETTINGS_SCHEMA.map((s) => s.key));
-        const localTs = getFieldTimestamps();
-        const protectedKeys = this._userInteractedKeys || new Set();
-
-        const result = mergeSyncedConfig(
-            this.values,
-            syncData,
-            schemaKeys,
-            localTs,
-            protectedKeys
-        );
-
-        if (result.changedKeys.length > 0) {
-            this.values = result.values;
-            this.persistSyncedKeys(result.changedKeys);
-            this.applySettings();
-            // Sync the settings-panel form controls (select/range/color/checkbox)
-            // so they reflect the newly merged values without a page reload.
-            this.syncValuesToForm(result.changedKeys);
-            setFieldTimestamps(result.timestamps);
-        }
-        return result.changedKeys;
+    /** Update both preference semantics and the currently resolved UI language. */
+    applyLanguagePreference(preference) {
+        this.respectUserLangSetting = preference !== "auto";
+        this._resolved_ui_language = preference === "auto"
+            ? (CONFIG.VARS.IS_BOOK_OPENED ? (CONFIG.VARS.IS_EASTERN_LAN ? "zh" : "en") : this.browser_LANG)
+            : preference;
+        localStorage.setItem("respectUserLangSetting", String(this.respectUserLangSetting));
+        document.documentElement.setAttribute("respectUserLangSetting", String(this.respectUserLangSetting));
+        this.setLanguage(this._resolved_ui_language, false);
+        CONFIG.RUNTIME_VARS.WEB_LANG = this._resolved_ui_language;
     },
 
     /**
@@ -1736,9 +1718,10 @@ const settings = {
     async syncPull() {
         if (!isSyncEnabled()) return { ok: false, changedKeys: [] };
         try {
-            const syncData = await pullOnBoot();
-            if (!syncData) return { ok: true, changedKeys: [] };
-            const changedKeys = this.applySyncPull(syncData);
+            const result = await pullConfigResult();
+            if (result.status === "error") return { ok: false, changedKeys: [] };
+            if (result.status === "missing") return { ok: true, changedKeys: [] };
+            const changedKeys = this.applySyncPull(result.data);
             return { ok: true, changedKeys };
         } catch (e) {
             console.warn("[settings] syncPull failed:", e.message);
@@ -1757,7 +1740,7 @@ const settings = {
         if (!isSyncEnabled()) return { ok: false };
         try {
             const payload = buildPushPayload(this.values);
-            const ok = await pushConfig(payload);
+            const ok = await pushMergedConfig(payload, { schema: SETTINGS_SCHEMA });
             return { ok };
         } catch (e) {
             console.warn("[settings] syncPush failed:", e.message);
@@ -1906,6 +1889,16 @@ const settings = {
         // Hide footnotes
         cbReg.go("footnotes:hide");
 
+        for (const def of SETTINGS_SCHEMA) {
+            if (def.hidden && typeof def.getValue === "function" && def.inputRef) {
+                const source = SETTINGS_SCHEMA.find((item) => item.label === def.inputRef);
+                if (source) this.values[def.key] = def.getValue.call(this, { val: () => this.values[source.key] });
+            }
+            if (def.mutualExclusiveWith && this.values[def.key] === true) {
+                this.values[def.mutualExclusiveWith] = false;
+            }
+        }
+
         // Helper: applies schema-based settings, can be filtered by type or key
         const applySchema = (filter) => {
             for (const def of SETTINGS_SCHEMA) {
@@ -1959,7 +1952,9 @@ const settings = {
             // this.values.ui_language is still "auto" but we want CSS to receive
             // the resolved "zh"/"en" code). Falls back to the schema value when no
             // URL override is active.
-            CONFIG.RUNTIME_VARS.STYLE.ui_LANG = this._resolved_ui_language ?? this.values.ui_language;
+            CONFIG.RUNTIME_VARS.STYLE.ui_LANG = this.values.ui_language === "auto"
+                ? (CONFIG.VARS.IS_BOOK_OPENED ? (CONFIG.VARS.IS_EASTERN_LAN ? "zh" : "en") : this.browser_LANG)
+                : this.values.ui_language;
         }
 
         // Apply all settings except ui_language

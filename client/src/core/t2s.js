@@ -78,7 +78,14 @@ const SETTING_KEY_AUTO_DETECT = "t2s_auto_detect";
  * @returns {{ lite: boolean, pro: boolean }}
  * @private
  */
+let _settingsProvider = null;
+
 function _readSettings() {
+    if (_settingsProvider) {
+        const effective = _settingsProvider();
+        const lite = effective.lite === true;
+        return { lite, pro: !lite && effective.pro === true };
+    }
     let lite = true;   // default: lite on
     let pro = false;
     try {
@@ -343,7 +350,8 @@ let _hookToken = null;
  *
  * @public
  */
-export function registerT2SHook() {
+export function registerT2SHook(settingsProvider = null) {
+    _settingsProvider = settingsProvider;
     if (_hookToken) {
         hooks.unregister(_hookToken);
         _hookToken = null;
@@ -359,6 +367,7 @@ export function registerT2SHook() {
  * @public
  */
 export function unregisterT2SHook() {
+    _settingsProvider = null;
     if (_hookToken) {
         hooks.unregister(_hookToken);
         _hookToken = null;

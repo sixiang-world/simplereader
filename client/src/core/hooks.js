@@ -183,6 +183,9 @@ class HookRegistry {
         // Iterate over a snapshot so once-hooks can safely mutate the list.
         const snapshot = list.slice();
         for (const entry of snapshot) {
+            // Consume before awaiting: an aborted hook and concurrent run must
+            // not invoke a once-only callback again.
+            if (entry.once && !this.unregister(entry.token)) continue;
             try {
                 const result = await entry.fn(ctx);
                 if (result === false || result === null || result === undefined) {
@@ -203,9 +206,6 @@ class HookRegistry {
             } catch (err) {
                 console.error(`[hooks] Hook "${name}" threw:`, err);
                 // Continue with the previous context.
-            }
-            if (entry.once) {
-                this.unregister(entry.token);
             }
         }
         return ctx;

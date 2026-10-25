@@ -55,9 +55,9 @@
  * == Conflict resolution ==
  *
  * Field-level last-write-wins by timestamp. Concurrent edits to
- * DIFFERENT keys on multiple devices are preserved (both survive the
- * merge). Concurrent edits to the SAME key resolve to the newer
- * timestamp.
+ * DIFFERENT keys survive a sequential read/merge/write push. Simultaneous
+ * writers remain subject to the KV store's whole-document last-write wins.
+ * During local merges, the newer timestamp wins for the SAME key.
  *
  * == Protected keys ==
  *
@@ -75,6 +75,8 @@
  *
  * @module client/src/core/config-sync
  */
+
+import { normalizeSettingValue } from "./setting-values.js";
 
 // ── Constants ───────────────────────────────────────────────────────────
 
@@ -209,9 +211,8 @@ export function getFieldTimestamps() {
         const raw = localStorage.getItem(STORAGE_KEY_FIELD_TS);
         if (!raw) return {};
         const parsed = JSON.parse(raw);
-        return (parsed && typeof parsed === "object" && !Array.isArray(parsed))
-            ? parsed
-            : {};
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+        return Object.fromEntries(Object.entries(parsed).filter(([, timestamp]) => Number.isFinite(timestamp) && timestamp >= 0));
     } catch (_e) {
         return {};
     }
@@ -286,6 +287,7 @@ function _parseSyncData(text) {
         console.warn("[config-sync] Stored value is not a plain object");
         return null;
     }
+    if (parsed._meta?.v !== undefined && parsed._meta.v !== SYNC_SCHEMA_VERSION) return null;
     // Already v2?
     if (parsed._meta && parsed._meta.v === SYNC_SCHEMA_VERSION) {
         return parsed;
@@ -332,43 +334,74 @@ export function buildPushPayload(values) {
  * @public
  */
 export async function pullOnBoot(opts = {}) {
+    const result = await pullConfigResult(opts);
+    return result.status === "ok" ? result.data : null;
+}
+
+/** Fetch a manual pull with explicit missing/error outcomes and a bounded deadline. */
+export async function pullConfigResult(opts = {}) {
     const token = getSyncToken();
-    if (!token) return null;
-
-    const endpoint = opts.endpoint ?? DEFAULT_ENDPOINT;
-    const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
-
-    if (typeof fetchImpl !== "function") {
-        console.warn("[config-sync] pullOnBoot: fetch is not available");
-        return null;
-    }
-
-    const url = _buildUrl(token, endpoint);
+    if (!token) return { status: "missing", data: null };
     try {
-        const res = await fetchImpl(url, {
-            method: "GET",
-            credentials: "omit",
-            redirect: "follow",
-        });
-
-        if (res.status === 404) return null;
-        if (!res.ok) {
-            console.warn(`[config-sync] pullOnBoot: HTTP ${res.status} ${res.statusText}`);
-            return null;
-        }
-
-        const text = await res.text();
-        const syncData = _parseSyncData(text);
-        if (syncData) {
-            try {
-                localStorage.setItem(STORAGE_KEY_LAST_PULL, String(Date.now()));
-            } catch (_e) { /* ignore */ }
-        }
-        return syncData;
-    } catch (e) {
-        console.warn("[config-sync] pullOnBoot: network error:", e.message);
-        return null;
+        return await withRequestDeadline(async (signal) => {
+            const response = await (opts.fetchImpl ?? globalThis.fetch)(_buildUrl(token, opts.endpoint), {
+                method: "GET", credentials: "omit", redirect: "follow", signal,
+            });
+            if (response.status === 404) return { status: "missing", data: null };
+            if (!response.ok) return { status: "error", error: `HTTP ${response.status}` };
+            const text = await response.text();
+            if (text.length > 1024 * 1024) return { status: "error", error: "Sync data exceeds 1 MiB" };
+            const data = _parseSyncData(text);
+            if (!data) return { status: "error", error: "Invalid sync data" };
+            try { localStorage.setItem(STORAGE_KEY_LAST_PULL, String(Date.now())); } catch (_) { /* optional metadata */ }
+            return { status: "ok", data };
+        }, opts.timeoutMs);
+    } catch (error) {
+        return { status: "error", error: error.message };
     }
+}
+
+async function withRequestDeadline(operation, timeoutMs = 10000) {
+    const controller = new AbortController();
+    let timer;
+    try {
+        return await Promise.race([
+            operation(controller.signal),
+            new Promise((_, reject) => {
+                timer = setTimeout(() => { controller.abort(); reject(new Error("Sync request timed out")); }, timeoutMs);
+            }),
+        ]);
+    } finally { clearTimeout(timer); }
+}
+
+/**
+ * Read/merge/write protects sequential stale-device pushes. The current KV
+ * service has no CAS/ETag protocol: simultaneous writers can still lose updates.
+ * Never write when the preceding GET fails or the token changes in flight.
+ */
+export async function pushMergedConfig(payload, opts = {}) {
+    const token = getSyncToken();
+    if (!token) return false;
+    const remote = await pullConfigResult(opts);
+    if (remote.status === "error" || getSyncToken() !== token) return false;
+    const merged = { _meta: { v: SYNC_SCHEMA_VERSION, pushedAt: Date.now() } };
+    const definitions = opts.schema ? new Map(opts.schema.map((def) => [def.key, def])) : null;
+    for (const snapshot of [remote.data, payload]) {
+        for (const [key, entry] of Object.entries(snapshot || {})) {
+            if (key === "_meta" || !entry || typeof entry !== "object" || !Number.isFinite(entry.ts) || entry.ts < 0) continue;
+            if (entry.v == null || !["string", "boolean", "number"].includes(typeof entry.v)) continue;
+            let value = entry.v;
+            if (definitions) {
+                const def = definitions.get(key);
+                if (!def || (def.hidden && def.getValue)) continue;
+                value = normalizeSettingValue(def, value, { source: "sync" });
+                if (value === undefined) continue;
+            }
+            const previous = Object.hasOwn(merged, key) ? merged[key] : null;
+            if (!previous || entry.ts >= previous.ts) Object.defineProperty(merged, key, { value: { v: value, ts: entry.ts }, enumerable: true, configurable: true, writable: true });
+        }
+    }
+    return pushConfig(merged, opts);
 }
 
 // ── Push ────────────────────────────────────────────────────────────────
@@ -403,13 +436,13 @@ export async function pushConfig(payload, opts = {}) {
 
     for (let attempt = 1; attempt <= MAX_PUSH_RETRIES; attempt++) {
         try {
-            const res = await fetchImpl(url, {
+            const res = await withRequestDeadline((signal) => fetchImpl(url, {
                 method: "POST",
                 headers: { "Content-Type": "text/plain;charset=UTF-8" },
                 body,
                 credentials: "omit",
-                redirect: "follow",
-            });
+                redirect: "follow", signal,
+            }), opts.timeoutMs);
 
             if (res.ok) {
                 try {
@@ -550,7 +583,7 @@ export function mergeSyncedConfig(currentValues, syncData, allowedKeys = null, l
         if (key === "_meta") continue;
 
         // Filter unknown keys.
-        if (allowedKeys instanceof Set && allowedKeys.size > 0 && !allowedKeys.has(key)) {
+        if (allowedKeys instanceof Set && !allowedKeys.has(key)) {
             continue;
         }
 
@@ -564,6 +597,7 @@ export function mergeSyncedConfig(currentValues, syncData, allowedKeys = null, l
         if (entry && typeof entry === "object" && "v" in entry && "ts" in entry) {
             remoteValue = entry.v;
             remoteTs = typeof entry.ts === "number" ? entry.ts : 0;
+            if (!Number.isFinite(remoteTs) || remoteTs < 0) continue;
         } else {
             // Unexpected format — skip.
             continue;
