@@ -1,19 +1,19 @@
 # Repository Guidelines
 
-> SimpleTextReader（易笺）— 基于 Vite 的浏览器端 TXT/EPUB 阅读器。当前版本 **v2.3.0**。
-> 本文件是代码库的权威架构索引，由源码审查生成。`CLAUDE.md` 是指向本文件的软链接。
+> SimpleTextReader（易笺）— 基于 Vite 的浏览器端 TXT/EPUB 阅读器。当前版本 **v2.4.0**。
+> 本文件是代码库的权威架构索引，由源码审查生成并随代码事实更新（最近校订：2026-10-26）。`CLAUDE.md` 是指向本文件的软链接。
 
 ---
 
 ## 0. 审查修复后的开发约定
 
 - Node 22+、pnpm 9.12.0、Python 3；`pnpm run validate` 统一执行lint、基础与增量JS语义检查、build、Node、Chromium、Python回归。浏览器可用 `CHROMIUM_EXECUTABLE_PATH` 指定。`test:extension` 是独立的真实扩展验收，企业策略阻塞时不能称通过。
-- `settings.js` 保留公开状态facade；菜单DOM在 `settings-menu.js`，值校验与同步状态过渡在 `core/setting-values.js` / `core/settings-state.js`。
-- `bookshelf.js` 保留UI/public facade；`bookshelf-db.js` 持有数据/元数据迁移，`book-data.js` 定义保存恢复合约。不要在列表render里读取全书/做迁移。
-- `shared/config/file-types.js` / `shared/utils/file-name.js` 是无DOM边界；EPUB路径、预算、分页、DOM适配在 `shared/core/file/epub-*.js`。旧TextProcessor默认配置仍兼容client，不能声称共享层已完全无依赖。
+- `settings.js` 保留公开状态facade；菜单DOM在 `settings-menu.js`，值校验与同步状态过渡在 `client/src/core/setting-values.js` / `client/src/core/settings-state.js`（位于 `core/`，**不在** `modules/settings/` 下）。
+- `bookshelf.js` 保留UI/public facade；`bookshelf-db.js` 持有数据/元数据迁移，`modules/file/book-data.js` 定义保存恢复合约。不要在列表render里读取全书/做迁移。
+- `shared/config/file-types.js` / `shared/utils/file-name.js` 是无DOM边界；EPUB路径、预算、分页、DOM适配在 `shared/core/file/epub-*.js`。旧TextProcessor默认配置仍兼容client（`shared/core/text/text-processor-core.js` 仍反向 import client 配置，解除工作见 `docs/ISSUE-LEDGER.md` D02/D03），不能声称共享层已完全无依赖。
 - 渲染器通过 `reader-title-navigation` 向容器派发导航；不要重新引入renderer→reader导入环。搜索regex在可终止Worker运行。
-- 多store写以事务commit为成功；Worker请求必须有ID、错误/超时/取消、明确dispose所有权。保留原始File，不以删除书籍“恢复”转换错误。
-- 实施记录/限制见 `docs/REFACTOR_PROGRESS.md`、`docs/PERFORMANCE_BASELINE.md`、`docs/config-sync-contract.md`。不引入无必要框架或一次重写分页算法。
+- 多store写以事务commit为成功；Worker请求必须有ID、错误/超时/取消、明确dispose所有权。保留原始File，不以删除书籍"恢复"转换错误。
+- 任务去向与开放项以 `docs/ISSUE-LEDGER.md` 为准；实施记录/限制见 `docs/REFACTOR_PROGRESS.md`、`docs/PERFORMANCE_BASELINE.md`、`docs/config-sync-contract.md`。不引入无必要框架或一次重写分页算法。
 - 远端与分支以 `git remote -v` / `git branch -r` 为准；下文§7历史拓扑不能代替实时Git事实。当前origin为GitHub `sixiang-world/simplereader`。
 
 ---
@@ -32,22 +32,36 @@
 ├── edgeone.json            # EdgeOne 部署配置（缓存头、构建命令）
 ├── client/                 # 前端源码（ES modules）
 │   ├── src/                # 核心逻辑（见 §3 模块参考）
-│   ├── lib/                # 第三方库（classic <script> 加载，见 §4.5）
+│   ├── lib/                # 第三方库（classic <script> 加载，见 §4.1）
 │   ├── fonts/              # 字体文件（woff2）
 │   ├── images/             # 静态图片
 │   └── manifests/          # Chrome / Firefox / PWA manifest
 ├── shared/                 # 客户端与（历史）服务端共享的纯 JS（见 §3.6）
 ├── build-tools/            # Python 构建脚本 + 字体子集 + 预分页（见 §5）
 ├── test/                   # Node 原生 .mjs 测试套件（自动发现 `test/test-*.mjs`，见 §6）
-├── docs/                   # 架构文档（如 config-sync-fix-plan.md）
+├── docs/                   # 架构文档与台账（见 §1.2 文档地图）
 ├── books/                  # 本地书籍库（构建时预分页为 dist/books/*.json）
-├── archive/                # 归档代码（archive/server、archive/debug），不在主代码路径
+├── archive/                # 归档（archive/server、archive/debug、archive/docs），不在主代码路径
 └── workflows/              # CI 工作流（如存在）
 ```
 
 ### 1.1 关于 `server/`
 
 v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态前端**，通过 Caddy（Docker）或 EdgeOne 部署 `dist/`。历史的服务端 API、Prisma ORM 不再使用。
+
+### 1.2 文档地图
+
+| 文档 | 角色 |
+|------|------|
+| `docs/ISSUE-LEDGER.md` | **遗留问题台账**（T/B/C/D/E 项最终去向与开放项）——任务去向以此为准 |
+| `docs/REFACTOR_PROGRESS.md` | 审查修复实施过程记录（历史流水） |
+| `docs/config-sync-contract.md` | 手动配置同步契约、失败语义与无 CAS 并发限制 |
+| `docs/PERFORMANCE_BASELINE.md` | 性能实测基线、量化结论与未承诺项 |
+| `docs/EPUB-IMAGE-RENDERING-PLAN.md` | EPUB 图片还原方案（Phase 1-4 已完成，历史方案） |
+| `docs/EXTENSION_TESTING.md` | 扩展真实验收步骤与企业策略限制 |
+| `docs/DOCKER_BUILD.md` | Docker 可复现构建（代理 CA、TLS 校验） |
+| `docs/vendor-inventory.md` | 第三方 vendor 文件身份/来源核实记录 |
+| `archive/docs/config-sync-fix-plan.md` | **已过时失效**（2026-10-26 归档）：历史同步修复计划，勿执行 |
 
 ---
 
@@ -60,7 +74,7 @@ v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态
 | `pnpm run build` | 生产构建 → `dist/`（含构建时预分页 books + postbuild 拷贝 lib/worker/shared） |
 | `pnpm run preview` | 本地预览生产构建 |
 | `pnpm run typecheck` | `tsc --noEmit -p jsconfig.json` + `jsconfig.checked.json`（JSDoc 基础 + 增量真实 checkJs） |
-| `pnpm run test` | 独立运行自动发现的 `test/test-*.mjs`（38 个文件，Node 原生 assert，无测试框架） |
+| `pnpm run test` | 独立运行自动发现的 `test/test-*.mjs`（39 个文件，Node 原生 assert，无测试框架） |
 | `pnpm run lint` / `lint:fix` | ESLint 9（`eslint.config.js`）。当前基线 0 error / 184 warning（D01 后，vendor/扩展全局已声明，未来 no-undef 即真缺陷）；新修改模块不得新增警告 |
 | `pnpm run format` / `format:check` | Prettier（`.prettierrc.json`） |
 | `pnpm run test:browser` | 真实浏览器回归（需先 `build`；`CHROMIUM_EXECUTABLE_PATH` 可指定浏览器）。Chromium 主门禁 13 个文件；`browser-firefox-smoke.mjs` 在有 Firefox 构建时执行真实 Web 冒烟，缺失时显式打印 UNVERIFIED 跳过 |
@@ -106,7 +120,7 @@ v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态
 | `variables.js` | `AppVariables` 类实例化 `RUNTIME_VARS`（运行时状态：ALL_BOOKS_INFO、FILE_CONTENT_CHUNKS、ALL_TITLES、STYLE.* 等） |
 | `variables-dom.js` | `DOM_ELEMENT`（关键 DOM 元素引用）、`RUNTIME_CONFIG`、`VARS`（初始化状态标志） |
 | `icons.js` | SVG 图标定义 |
-| `schema/settings-schema.js` | `SETTINGS_SCHEMA`（42 项设置定义）+ `MENU_SCHEMA`（标签页/分组布局），见 §9 |
+| `schema/settings-schema.js` | `SETTINGS_SCHEMA`（41 项设置定义）+ `MENU_SCHEMA`（标签页/分组布局），见 §9 |
 
 `CONFIG` 顶层命名空间：`CONST_CONFIG`、`CONST_UI`、`CONST_FONT`、`RUNTIME_VARS`（含 `.VARS`、`.STYLE`、`.WEB_LANG`）、`RUNTIME_CONFIG`、`DOM_ELEMENT`。
 
@@ -118,8 +132,10 @@ v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态
 |------|------|
 | `hooks.js` | `HookRegistry` — 类型化、有序、async 感知的**值转换管道**。与 cbReg 不同：hooks 显式区分 transform（须返回值）与 intercept（可中止），管道遇 intercept 短路。保留钩子名：`file:beforeProcess`、`file:afterProcess`、`reader:beforeRender`、`reader:afterRender`。**T2S 已注册 `file:afterProcess`**。 |
 | `config-sync.js` | 多设备配置同步（手动模式，见 §8） |
+| `setting-values.js` | 设置值校验（schema 值合法性/边界），纯函数、无 DOM |
+| `settings-state.js` | 同步/设置状态纯过渡（不依赖 DOM），供 settings facade 消费 |
 | `presets.js` | 排版预设系统：schema 默认值与 Infinite Scroll 预设，localStorage `reader_presets` 存储，URL `?scheme=0/1/Name` 切换。API：`savePreset/loadPreset/deletePreset/applyPreset/resolvePresetFromURL` |
-| `t2s.js` | 繁→简转换：`t2s_lite`（本地 JSON 映射表 ~2928 对）与 `t2s_pro`（OpenCC Wasm，懒加载）两模式互斥。注册 `file:afterProcess` hook，转换 bookData 的 metadata/processedLines/titles/footnotes |
+| `t2s.js` | 繁→简转换：`t2s_lite`（本地 JSON 映射表 ~2928 对）与 `t2s_pro`（OpenCC Wasm，懒加载）两模式互斥。注册 `file:afterProcess` hook，转换 bookData 的 metadata/processedLines/titles/footnotes（含图注/alt 文本） |
 | `t2s-opencc.js` | OpenCC 集成（`client/lib/opencc/full.js` 本地化，避免 CDN 被跟踪防护拦截） |
 | `t2s-map.json` | 繁简映射表 |
 
@@ -128,12 +144,12 @@ v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态
 | 子目录 | 关键文件 | 职责 |
 |--------|----------|------|
 | `reader/` | `reader.js`、`flow-reader.js`、`search.js`、`go-line.js`、`footnotes.js` | 阅读核心：分页渲染、目录(TOC)、翻页、流式/无限滚动、全文搜索(F)、跳转(G)、脚注 |
-| `file/` | `file-handler.js`、`file-processor.js`、`file-processor-worker.js` | 文件处理：编码检测(jschardet)、TXT/EPUB 解析、分页计算（Worker 后台执行） |
-| `epub/` | `epub-converter.js` | EPUB→TXT 结构转换（JSZip + DOMParser，OPF 清单 + XHTML 章节，**不用 epub.js**） |
-| `bookshelf/` | `bookshelf.js`（UI/public facade）、`bookshelf-db.js`（数据/元数据迁移）、`book-data.js`（保存恢复合约） | 书架视图：浏览、分类、组织书籍；列表 render 只读轻量元数据，不做迁移/全书读取 |
+| `file/` | `file-handler.js`、`file-processor.js`、`file-processor-worker.js`、`book-data.js` | 文件处理：编码检测(jschardet)、TXT/EPUB 解析、分页计算（Worker 后台执行）；`book-data.js` 是保存/恢复/reset 合约 |
+| `epub/` | `epub-converter.js` | EPUB→TXT 结构转换（JSZip + DOMParser，OPF 清单 + XHTML 章节，**不用 epub.js**）；含真实封面、嵌套 TOC、元数据提取与图片预算/blob 优化（见 §13） |
+| `bookshelf/` | `bookshelf.js`（UI/public facade）、`bookshelf-db.js`（数据/元数据迁移） | 书架视图：浏览、分类、组织书籍；列表 render 只读轻量元数据，不做迁移/全书读取 |
 | `database/` | `db-manager.js`、`db-worker.js` | IndexedDB 抽象 + 后台 Worker（批量导入/查询不阻塞 UI） |
 | `font/` | `fontpool.js` | 自定义字体管理（最多 3 个，拖入加载） |
-| `settings/` | `settings.js`（公开状态 facade）、`settings-menu.js`（菜单 DOM）、`core/setting-values.js`（值校验）、`core/settings-state.js`（同步状态过渡）、`font-baseline.js` | 设置系统（见 §9）；`font-baseline.js` 处理字体基线偏移 |
+| `settings/` | `settings.js`（公开状态 facade）、`settings-menu.js`（菜单 DOM）、`font-baseline.js` | 设置系统（见 §9）；`font-baseline.js` 处理字体基线偏移 |
 | `text/` | `text-processor.js`、`text-processor-dom.js` | 文本解析：标题/作者/章节检测、广告过滤、脚注配对 |
 | `init-webpage.js` | — | 网页初始化配置与渲染 |
 
@@ -148,11 +164,11 @@ v2 重构后服务端已归档至 `archive/server/`。当前镜像**仅含静态
 | 子目录 | 关键文件 | 职责 |
 |--------|----------|------|
 | `core/callback/` | `callback-registry.js` | `cbReg` — 通用 pub/sub 事件总线（async、优先级、once、命名空间、trace）。别名：`add`/`go`/`rm`/`once`/`ls`。**与 hooks.js 区分：cbReg 是通知（fire-and-forget），hooks 是值转换管道** |
-| `core/file/` | `file-processor-core.js` | 文件处理基础逻辑（解析、校验、元数据） |
+| `core/file/` | `file-processor-core.js`、`epub-budget.js`、`epub-dom.js`、`epub-pagination.js`、`epub-path.js` | 文件处理基础逻辑（解析、校验、元数据）；EPUB 解压/节点/深度/行数/图片预算、DOM 适配、分页与资源路径 |
 | `core/text/` | `text-processor-core.js`、`pagination-calculator.js`、`title-pattern-detector.js`、`bracket-processor.js`、`regex-rules.js` | 文本处理算法：分页计算、标题模式检测、括号平衡、正则规则 |
 | `adapters/` | `jschardet.js`、`text-decoder.js` | 环境适配：jschardet（浏览器用 window.jschardet / Node 用 npm 包）、TextDecoder 统一接口 |
-| `config/` | `shared-config.js` | 跨环境共享常量 |
-| `utils/` | `logger.js` | 统一日志（debug/info/warn/error，含调用栈，按模块开关） |
+| `config/` | `shared-config.js`、`file-types.js` | 跨环境共享常量、文件类型/扩展名判定（无 DOM） |
+| `utils/` | `logger.js`、`file-name.js` | 统一日志（debug/info/warn/error，含调用栈，按模块开关）、文件名纯工具 |
 
 ### 3.7 工具层（`client/src/utils/`）
 
@@ -191,7 +207,7 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 
 | 文件 | 职责 |
 |------|------|
-| `variables.css` | **CSS 变量 + i18n 文本中心**（1367 行，四段式结构见 §10.3）；`@font-face` 字体定义 |
+| `variables.css` | **CSS 变量 + i18n 文本中心**（1419 行，四段式结构见 §10.3）；`@font-face` 字体定义 |
 | `main.css` | 主样式 |
 | `settings.css` | 设置面板专用样式 |
 | `reader.css` / `flow-mode.css` / `reader-splitview.css` | 阅读器/流式模式/分隔视图 |
@@ -214,11 +230,11 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 
 ## 6. 测试套件（`test/`）
 
-**自动发现的 Node 测试文件**，Node 原生 `assert`（无框架），`pnpm run test` 串联运行。主要覆盖：
+**自动发现的 Node 测试文件**（39 个 `test-*.mjs`），Node 原生 `assert`（无框架），`pnpm run test` 串联运行。主要覆盖：
 
 | 测试文件 | 覆盖 |
 |----------|------|
-| `test-config-sync.mjs` | config-sync 全部函数（pull/push/merge/token/ts/debounce/retry） |
+| `test-config-sync.mjs` | config-sync 全部函数（pull/push/merge/token/ts/debounce/retry）+ protocol boundary 并发边界 |
 | `test-settings-export.mjs` | settings 导出、手动同步入口、保护键、表单同步、令牌 UI 持久化、app.js 不自动同步 |
 | `test-settings-schema.mjs` / `test-menu-schema-consistency.mjs` | Schema 字段、布局一致性 |
 | `test-css-i18n-completeness.mjs` | variables.css i18n 四段式完整性（_zh/_en 配对、伪元素） |
@@ -238,10 +254,11 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 | `test-worker-requests.mjs` | Worker 请求 ID/超时/取消/销毁故障矩阵 |
 | `test-settings-state-regressions.mjs` / `test-background-tasks.mjs` | 设置状态过渡、后台任务边界 |
 | `test-reader-ui-regressions.mjs` / `test-seal-rendering.mjs` / `test-extension-handoff.mjs` | 阅读 UI、藏书章渲染、扩展 claim/ACK 交接 |
+| `test-processed-book-save.mjs` | updateProcessedBook 保存回归（匿名模式 putBook 静默、旧数据 bookfiles 缺 bookProcessed） |
 
-浏览器回归（11 个 `browser-*.mjs`，`pnpm run test:browser`）：smoke、security、bookshelf-safety、book-loading、file-worker、storage、settings、reader-ui、performance、module-boundaries、handoff。Python：`test/test_build_tooling.py`（6 用例，validate 内运行）；`test/docker-smoke.py` 需已构建镜像单独跑。遗留问题与任务去向见 `docs/ISSUE-LEDGER.md`。
+浏览器回归（14 个 `browser-*.mjs`，`pnpm run test:browser`；Chromium 主门禁 13 个 + Firefox 条件冒烟 1 个）：smoke、security、bookshelf-safety、book-loading、file-worker、storage-regressions、settings-regressions、reader-ui-regressions、performance、module-boundaries、handoff、color-picker-lifecycle、storage-multitab、firefox-smoke（有 Firefox 构建时执行真实 Web 冒烟，缺失时显式打印 UNVERIFIED 跳过）。Python：`test/test_build_tooling.py`（6 用例，validate 内运行）；`test/docker-smoke.py` 需已构建镜像单独跑。遗留问题与任务去向见 `docs/ISSUE-LEDGER.md`。
 
-> **重要**：`test-settings-export.mjs` 是**架构契约测试**，用源码静态检查（正则）验证关键架构约束（因 settings.js 依赖 DOM 无法直接 import）。修改同步/设置架构后须同步更新此测试。
+> **重要**：`test-settings-export.mjs` 与 `test-processed-book-save.mjs` 是**架构契约/源码静态检查测试**（正则读源码而非 import，因相关模块依赖 DOM/Worker）。修改同步/设置/书架存储架构后须同步更新对应测试。
 
 ---
 
@@ -281,25 +298,34 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 **v2.0.1+ 重构后为手动模式**——不再有 boot 自动 pull、60s 周期轮询、saveSettings 自动 push、online 事件自动补推。pull/push 是用户通过设置面板"拉取"/"推送"按钮显式触发的独立请求动作。
 
 ```
-用户点"拉取" → pullOnBoot() → applySyncPull(syncData) → mergeSyncedConfig → changedKeys → persistSyncedKeys + applySettings + syncValuesToForm
-用户点"推送" → buildPushPayload(values) → pushConfig() → 成功/失败反馈
+用户点"拉取" → settings.syncPull() → pullConfigResult()（区分 ok/missing/error）
+             → applySyncPull(syncData) → mergeSyncedConfig → changedKeys
+             → persistSyncedKeys + applySettings + syncValuesToForm
+用户点"推送" → settings.syncPush() → buildPushPayload(values)
+             → pushMergedConfig(payload, {schema})：GET 远端 → 按字段 ts 合并较新值 → POST
+             → 成功/失败反馈（✓/✗）
 ```
 
 ### 8.2 关键 API
 
 | 函数/方法 | 位置 | 作用 |
 |-----------|------|------|
-| `pullOnBoot(opts)` | config-sync.js | 拉取远端配置，返回 v2 syncData 或 null |
-| `pushConfig(payload, opts)` | config-sync.js | 推送 payload，3 次指数退避重试，返回 boolean |
+| `pullConfigResult(opts)` | config-sync.js | 拉取并返回 `ok`/`missing`/`error` 判别结果（404=missing 不算失败）；UI 拉取入口用 |
+| `pullOnBoot(opts)` | config-sync.js | 兼容旧接口，返回 data/null |
+| `pushMergedConfig(payload, opts)` | config-sync.js | **UI 推送入口**：读-合并-写（GET 远端按字段 ts 合并较新值再 POST；读失败/令牌变化不写） |
+| `pushConfig(payload, opts)` | config-sync.js | 低层推送，3 次指数退避重试；无读合并保证，为兼容保留 |
 | `mergeSyncedConfig(...)` | config-sync.js | 字段级 LWW 合并（按 ts），支持 protectedKeys/allowedKeys 过滤 |
 | `buildPushPayload(values)` | config-sync.js | 构建 v2 格式 payload（带字段 ts） |
 | `recordLocalChange(key)` | config-sync.js | 记录本地变更的时间戳 |
 | `getSyncToken/setSyncToken/validateSyncToken` | config-sync.js | 令牌管理（ASCII 字母数字下划线，4-64 位，**禁用连字符 `-`**） |
-| `settings.syncPull()` | settings.js | 手动拉取动作：pull → applySyncPull → 返回 {ok, changedKeys} |
-| `settings.syncPush()` | settings.js | 手动推送动作：buildPushPayload → pushConfig → 返回 {ok} |
+| `getLastPushedAt/getLastPulledAt` | config-sync.js | 上次推送/拉取时间（已存 localStorage，**UI 尚未接线显示**） |
+| `settings.syncPull()` | settings.js | 手动拉取动作：pullConfigResult → applySyncPull → 返回 {ok, changedKeys} |
+| `settings.syncPush()` | settings.js | 手动推送动作：buildPushPayload → pushMergedConfig → 返回 {ok} |
 | `settings.applySyncPull(syncData)` | settings.js | 处理拉取返回：merge + persist + applySettings + **syncValuesToForm**（刷新表单） |
 | `settings.syncValuesToForm(keys)` | settings.js | 把 values 回填到设置面板表单控件 |
 | `settings.refreshSyncTokenUI()` | settings.js | 从 localStorage 重读令牌并重置 token 区 UI（丢弃未保存输入） |
+
+> **已知偏差**：同步面板按钮/状态文案目前以 `isZh` 三元硬编码中英文（`settings-menu.js`），未走 §10.3 四段式 i18n，待迁移。
 
 ### 8.3 数据格式（v2）
 
@@ -311,7 +337,7 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 ```
 字段级 LWW：每个键带 `ts`，`ts` 大者胜。v1 旧数据（无 ts）自动迁移为 `ts:0`。
 
-> 完整修复计划见 `docs/config-sync-fix-plan.md`。
+> 失败语义与无 CAS 并发限制（同时推送仍可能丢更新）见 `docs/config-sync-contract.md`。历史修复计划 `archive/docs/config-sync-fix-plan.md` **已过时失效**，仅作归档。
 
 ---
 
@@ -321,7 +347,7 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 
 | 层级 | 文件 | 职责 |
 |------|------|------|
-| 数据 Schema | `config/schema/settings-schema.js` → `SETTINGS_SCHEMA` | 42 项设置的数据定义（key/type/tab/label/bind/default/persist 等） |
+| 数据 Schema | `config/schema/settings-schema.js` → `SETTINGS_SCHEMA` | 41 项设置的数据定义（key/type/tab/label/bind/default/persist 等） |
 | 布局 Schema | 同文件 → `MENU_SCHEMA` | 6 个标签页（`content-style`/`theme`/`reader`/`general`/`shortcuts`/`about`）的分组与排序 |
 | UI 渲染 | `modules/settings/settings.js` → `SettingsMenu` 类 | 按 Schema 渲染 DOM；`settings` 单例管理状态 |
 
@@ -352,7 +378,7 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 
 ### 10.1 配置驱动原则
 
-添加功能前先在配置层定义（`config/`），再让 UI 层消费。禁止在 UI 层硬编码用户可见文本。
+添加功能前先在配置层定义（`config/`），再让 UI 层消费。禁止在 UI 层硬编码用户可见文本（已知偏差：同步面板状态文案，见 §8.2）。
 
 ### 10.2 cbReg vs hooks
 
@@ -361,27 +387,27 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 
 ### 10.3 CSS 变量驱动的 i18n（四段式）
 
-`variables.css`（1367 行）不使用 i18n 库，全部用户文本通过 CSS 自定义属性 + 伪元素实现。**四段式结构**：
+`variables.css`（1419 行）不使用 i18n 库，全部用户文本通过 CSS 自定义属性 + 伪元素实现。**四段式结构**（行号为当前近似边界）：
 
 ```css
-/* 段 1: :root 基础定义（约 14-645 行）—— 同时定义 _zh 和 _en 变体 */
+/* 段 1: :root 基础定义（约 14-669 行）—— 同时定义 _zh 和 _en 变体 */
 :root {
   --ui_some_label: "";
   --ui_some_label_zh: "中文";
   --ui_some_label_en: "English";
 }
 
-/* 段 2: [data-lang="zh"] 中文覆盖（约 646-817 行） */
+/* 段 2: [data-lang="zh"] 中文覆盖（约 670-849 行） */
 [data-lang="zh"] {
   --ui_some_label: var(--ui_some_label_zh);
 }
 
-/* 段 3: [data-lang="en"] 英文覆盖（约 818-1043 行） */
+/* 段 3: [data-lang="en"] 英文覆盖（约 850-1029 行） */
 [data-lang="en"] {
   --ui_some_label: var(--ui_some_label_en);
 }
 
-/* 段 4: 伪元素渲染规则（约 1044-1367 行） */
+/* 段 4: 伪元素渲染规则（约 1030-1419 行） */
 #settingLabel-setting_some_key::before {
   content: var(--ui_some_label);
 }
@@ -409,7 +435,7 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 | 通信 | 直接调用 | `chrome.runtime.sendMessage` / `onMessage` |
 | 文件 | File API | contentScript → activate.js → index.html |
 
-> 注：当前 config-sync.js 直接用 `localStorage`，扩展环境兼容性待验证（见 fix-plan S 系列）。
+> 注：config-sync.js 直接用 `localStorage`（令牌、字段时间戳、上次同步时间），扩展环境（chrome.storage.local）兼容性待验证，暂无对应实施任务。
 
 ---
 
@@ -454,8 +480,10 @@ manifest 在 `client/manifests/{Chrome,Firefox,PWA}/manifest.json`。
 
 - **解析**：JSZip + DOMParser 解压解析（OPF 清单 + XHTML 章节），**不用 epub.js**
 - **目标**：EPUB → TXT 纯文本结构，保留章节标题与段落
-- **入口**：`modules/epub/epub-converter.js`
-- **已知问题**：大型书籍分页计算需优化
+- **入口**：`modules/epub/epub-converter.js`；路径/预算/DOM 适配在 `shared/core/file/epub-*.js`
+- **v2.4.0 能力**：真实封面（EPUB3 `properties="cover-image"` / EPUB2 meta cover，canvas 生成兜底）、nav/NCX 嵌套 TOC 层级、出版方/日期/分类/简介元数据、大图（>2MB）渲染期转 blob URL 切书释放、图注/alt 文本参与 T2S 与全文搜索
+- **预算与取消**：解压流/节点/深度/行数/图片（maxImages=2000）预算，超限显式失败；转换可取消
+- **已知问题**：大书慢的瓶颈在 TXT 处理阶段 `processChunkStatic` 超线性（50k 行 ≈172s，5× 输入≈126× 耗时；解码/分页 <5ms 可忽略）——见 `docs/PERFORMANCE_BASELINE.md` 与 `docs/ISSUE-LEDGER.md` C03；分页算法保留不重写
 
 ---
 

@@ -147,7 +147,7 @@ import {
     // Config sync is MANUAL (on-demand): pull/push are triggered by the
     // user via the token panel buttons (settings.syncPull / settings.syncPush).
     // There is no boot-time auto-pull, no periodic polling, and no auto-push
-    // on settings change. See docs/config-sync-fix-plan.md §零.
+    // on settings change. See docs/config-sync-contract.md.
 
     // Parallel execution of initBookshelf & initFontpool
     if (window.consoleTime) console.time("[time][background] Initialize Bookshelf");

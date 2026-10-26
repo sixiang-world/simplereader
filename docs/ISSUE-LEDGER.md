@@ -68,7 +68,7 @@ reparent-map。基线 d7d4e5d（上游原哈希）为审查起点。
 | D04 | vendor 未确认版本核实（tippy、jschardet、hyperlist） | 已核实（保持未确认状态） | 全部 vendor 文件 sha256+字节数已登记（文件身份锚点）；jschardet 与 npm 全部已发布 dist（2.3.0–3.1.4）逐一比对不匹配（独立构建，最近属 3.1.x）；tippy 上游构件本网络不可达（unpkg/jsdelivr 返回错误桩，后续网络可达时重试）；hyperlist npm 无压缩构件（本地为独立 8KB 压缩版）。区分"文件身份"与"来源验证"，不虚称已验证。CI/部署镜像/CLI 版本固定见 E01。提交 49b9af4 |
 | E01 | CNB 流水线加固（token 不落 URL、生产执行端校验、标签随发布、镜像固定） | 已修复 | token 经一次性内联 credential helper（git credential fill 验证过 git 会在 helper 后追加操作参数，正确习语为 `}; f`）；生产入口执行端强制 CNB_BRANCH==main（本地模拟 dev→exit 78 / main→通过）；常规同步仅当前分支、标签仅"发布同步"手动任务；部署镜像固定 v1.7.3（digest 注释）、alpine/git v2.54.0；dist/BUILD_INFO.json 记录源码 SHA/版本。三层离线校验（YAML/语义/Schema）通过；真实 dev 流水线验证：本会话全部推送的 GitHub 镜像同步成功（镜像 HEAD 与 CNB 一致）。提交 379211c |
 | E02 | EdgeOne 预发真实验收 | 部分完成（受外部条件阻塞） | 前置已就绪：E01 流水线三层校验通过、dev 每次推送触发预发部署、GitHub 镜像同步全部成功。**未完成**：预发 URL 的 HTTP 实测（Worker 响应类型/缓存头/版本升级路径/安全头）需要 EdgeOne 控制台或带 API token 的 CLI，本机无 token，保留为需控制台访问的后续验收 |
-| E03 | 发布候选整合 | 就绪待授权 | 前提已变化：2026-10-25 历史恢复后 main 与 dev 无分叉（main 为 dev 祖先，`main...dev`=0/0），无需合并——E03 原描述的分叉已不存在。后续发布流程（§14）：版本号三文件 + CHANGELOG 单独 commit → tag → 快进 main → 双远程推送（需用户确认）→ CNB 生产按钮（E01 已含执行端校验）。本轮全部开发提交已在 dev（49a2773→0bf6921），候选默认 2.3.1；**不越过生产授权边界自行发版** |
+| E03 | 发布候选整合 | 就绪待授权 | 前提已变化：2026-10-25 历史恢复后 main 与 dev 无分叉（main 为 dev 祖先，`main...dev`=0/0），无需合并——E03 原描述的分叉已不存在。后续发布流程（§14）：版本号三文件 + CHANGELOG 单独 commit → tag → 快进 main → 双远程推送（需用户确认）→ CNB 生产按钮（E01 已含执行端校验）。本轮全部开发提交已在 dev（49a2773→0bf6921）；其后 2.3.1（440544b）与 2.4.0（ea3e141）版本号/changelog 提交也已落在 dev，当前候选默认 2.4.0；**不越过生产授权边界自行发版** |
 | E04 | 生产发布、冒烟、回滚演练 | 待开发 | 需生产授权；回滚路径先在预发演练 |
 | E05 | 持续维护节奏 | 待开发 | 首次发布后生效 |
 
