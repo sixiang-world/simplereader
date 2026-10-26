@@ -166,7 +166,7 @@ async function doSearch(down = true) {
                 const step = down ? offset + 1 : -offset - 1;
                 const lineNumber = ((searchStartLine + step) % totalLines + totalLines) % totalLines;
                 const chunk = chunks[lineNumber];
-                if (!chunk || (typeof chunk === "object" && ["image", "seal"].includes(chunk.type))) continue;
+                if (!chunk || (typeof chunk === "object" && chunk.type === "seal")) continue;
                 // A template is inert: parsing book HTML here cannot request
                 // resources or execute handlers. Only visible text is searched.
                 let text;
@@ -175,6 +175,12 @@ async function doSearch(down = true) {
                 } else {
                     template.innerHTML = typeof chunk === "object" ? chunk.content || "" : chunk;
                     text = template.content.textContent || "";
+                    // Include img alt/title text for EPUB image blocks
+                    if (typeof chunk === "object" && chunk.type === "image") {
+                        for (const img of template.content.querySelectorAll("img[alt]")) {
+                            text += " " + (img.getAttribute("alt") || "");
+                        }
+                    }
                 }
                 lines.push({ lineNumber, text });
             }

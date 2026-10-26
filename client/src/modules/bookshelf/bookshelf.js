@@ -389,8 +389,11 @@ export const bookshelf = {
         const canvasWidth = getSizePrecise(CONFIG.RUNTIME_VARS.STYLE.ui_bookCoverWidth);
         const canvasHeight = getSizePrecise(CONFIG.RUNTIME_VARS.STYLE.ui_bookCoverHeight);
         const currentBookNameAndAuthor = TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.name));
+        const hasRealCover = Boolean(bookInfo.coverDataUrl);
         let htmlTag = "";
-        if (CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS) {
+        if (hasRealCover) {
+            htmlTag = "img";
+        } else if (CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS) {
             htmlTag = "canvas";
         } else {
             htmlTag = "div";
@@ -427,16 +430,23 @@ export const bookshelf = {
         book.find(".cover-hidden-text.filename").text(bookInfo.name);
         book.find(".cover-hidden-text.bookName").text(currentBookNameAndAuthor.bookName);
         book.find(".cover-hidden-text.author").text(currentBookNameAndAuthor.author);
-        const coverSettings = this._getCoverSettings({
-            width: canvasWidth,
-            height: canvasHeight,
-            bookNameAndAuthor: currentBookNameAndAuthor,
-        });
-        const container = book.find(".cover-canvas")[0];
-        if (CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS) {
-            this._coverGenerator.generate(coverSettings, container.getContext("2d"));
+        if (hasRealCover) {
+            const img = book.find(".cover-canvas")[0];
+            img.src = bookInfo.coverDataUrl;
+            img.alt = currentBookNameAndAuthor.bookName;
+            img.style.objectFit = "cover";
         } else {
-            this._coverGenerator.generate(coverSettings, container);
+            const coverSettings = this._getCoverSettings({
+                width: canvasWidth,
+                height: canvasHeight,
+                bookNameAndAuthor: currentBookNameAndAuthor,
+            });
+            const container = book.find(".cover-canvas")[0];
+            if (CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS) {
+                this._coverGenerator.generate(coverSettings, container.getContext("2d"));
+            } else {
+                this._coverGenerator.generate(coverSettings, container);
+            }
         }
         if (currentBookNameAndAuthor.author === "") {
             book.find(".cover-container").css("box-shadow", "var(--ui_bookshadow_noAuthor)");
@@ -564,6 +574,30 @@ export const bookshelf = {
                         ? convertUTCTimestampToLocalString(bookInfo.lastOpenedTimestamp)
                         : `<span class="bookinfo-menu-item-text bookinfo-menu-item-text_unknown"></span>`;
 
+                // Extended EPUB metadata (publisher/date/description/subjects)
+                const meta = bookInfo.epubMeta;
+                const metaHtml = meta ? `
+                    ${meta.publisher ? `
+                    <div class="bookinfo-menu_item">
+                        <span class="bookinfo-menu-item-text bookinfo-menu-item-text_publisher"></span>
+                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_publisher"></div>
+                    </div>` : ""}
+                    ${meta.date ? `
+                    <div class="bookinfo-menu_item">
+                        <span class="bookinfo-menu-item-text bookinfo-menu-item-text_date"></span>
+                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_date"></div>
+                    </div>` : ""}
+                    ${meta.subjects && meta.subjects.length > 0 ? `
+                    <div class="bookinfo-menu_item">
+                        <span class="bookinfo-menu-item-text bookinfo-menu-item-text_subjects"></span>
+                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_subjects"></div>
+                    </div>` : ""}
+                    ${meta.description ? `
+                    <div class="bookinfo-menu_item">
+                        <span class="bookinfo-menu-item-text bookinfo-menu-item-text_description"></span>
+                        <div class="bookinfo-menu-item-info bookinfo-menu-item-info_description"></div>
+                    </div>` : ""}` : "";
+
                 // Create popup menu
                 const bookInfoMenu = `
                 <div class="bookinfo-menu" id="bookinfo-menu-${idx}">
@@ -586,6 +620,7 @@ export const bookshelf = {
                             bookInfo.size
                         )}</div>
                     </div>
+                    ${metaHtml}
                     <div class="bookinfo-menu_item">
                         <span class="bookinfo-menu-item-text bookinfo-menu-item-text_lastopened"></span>
                         <div class="bookinfo-menu-item-info bookinfo-menu-item-info_timestamp"></div>
@@ -602,6 +637,13 @@ export const bookshelf = {
                 const timestampInfo = menuContent.find(".bookinfo-menu-item-info_timestamp");
                 if (bookInfo.lastOpenedTimestamp) timestampInfo.text(tempBookLastOpenedTimestamp);
                 else timestampInfo.html('<span class="bookinfo-menu-item-text bookinfo-menu-item-text_unknown"></span>');
+                // Fill extended EPUB metadata
+                if (meta) {
+                    if (meta.publisher) menuContent.find(".bookinfo-menu-item-info_publisher").text(meta.publisher);
+                    if (meta.date) menuContent.find(".bookinfo-menu-item-info_date").text(meta.date);
+                    if (meta.subjects && meta.subjects.length > 0) menuContent.find(".bookinfo-menu-item-info_subjects").text(meta.subjects.join(", "));
+                    if (meta.description) menuContent.find(".bookinfo-menu-item-info_description").text(meta.description);
+                }
                 book.find(".info-container").append(menuContent);
                 book.find(`#bookinfo-menu-${idx} .bookinfo-menu-item-info`).each(function () {
                     this.scrollTop = 0;
@@ -651,6 +693,9 @@ export const bookshelf = {
         }
 
         Array.prototype.slice.call(document.getElementsByClassName("book")).forEach((book) => {
+            // Skip books with real cover images (img.cover-canvas) — they don't use canvas generation
+            const coverEl = book.getElementsByClassName("cover-canvas")[0];
+            if (coverEl && coverEl.tagName === "IMG") return;
             const book_filename = book.getAttribute("data-filename");
             const bookNameAndAuthor =
                 $(book).data("bookNameAndAuthor") ??
@@ -664,7 +709,7 @@ export const bookshelf = {
             if (CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS) {
                 book_cover = book.getElementsByTagName("canvas")[0].getContext("2d");
             } else {
-                book_cover = book.getElementsByClassName("cover-canvas")[0];
+                book_cover = coverEl;
             }
             this._coverGenerator.generate(coverSettings, book_cover);
         });

@@ -1,6 +1,31 @@
 {
-    "version": "2.3.1",
+    "version": "2.4.0",
     "changelog": {
+        "2.4.0": {
+            "date": "2026-10-26",
+            "changes": {
+                "zh": [
+                    "**EPUB 真实封面** — 识别 EPUB3 properties=\"cover-image\" 与 EPUB2 meta cover，书架直接显示书籍封面图（canvas 生成兜底）",
+                    "**EPUB 目录嵌套层级** — nav/NCX 嵌套深度保留，目录面板支持多级缩进显示，章节层级一目了然",
+                    "**EPUB 元数据展示** — 书架详情菜单展示出版方、出版日期、分类、简介",
+                    "**大图内存优化** — 超过 2MB 的图片在渲染时自动转 blob URL，降低内存占用，切换书籍时自动释放",
+                    "**T2S 转换图片文本** — 图注（figcaption）与 alt 文本参与繁简转换，不再整体跳过",
+                    "**搜索匹配图片文本** — 全文搜索支持匹配图片 alt 与图注文本",
+                    "**修复嵌套图注丢失** — 嵌套 figure 中的 figcaption 不再被丢弃",
+                    "**测试** — 新增 5 项单元测试（EPUB3 封面、封面提取、TOC 层级、无封面场景）"
+                ],
+                "en": [
+                    "**EPUB real cover** — recognizes EPUB3 properties=\"cover-image\" and EPUB2 meta cover; bookshelf displays actual book cover (canvas fallback preserved)",
+                    "**EPUB nested TOC levels** — nav/NCX nesting depth preserved; TOC panel shows multi-level indentation",
+                    "**EPUB metadata display** — bookshelf info menu shows publisher, date, subjects, description",
+                    "**Large image memory optimization** — images over 2MB automatically converted to blob URLs at render time, released on book switch",
+                    "**T2S converts image text** — figcaption and alt text participate in traditional-to-simplified conversion",
+                    "**Search matches image text** — full-text search covers img alt and figcaption text",
+                    "**Fix nested figcaption loss** — figcaption in nested figures is no longer dropped",
+                    "**Tests** — 5 new unit tests (EPUB3 cover, cover extraction, TOC levels, no-cover scenario)"
+                ]
+            }
+        },
         "2.2.0": {
             "date": "2026-09-02",
             "changes": {

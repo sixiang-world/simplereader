@@ -506,6 +506,18 @@
     --ui_bookInfo_lastopened: "";
     --ui_bookInfo_lastopened_zh: "上次阅读";
     --ui_bookInfo_lastopened_en: "Last Read";
+    --ui_bookInfo_publisher: "";
+    --ui_bookInfo_publisher_zh: "出版方";
+    --ui_bookInfo_publisher_en: "Publisher";
+    --ui_bookInfo_date: "";
+    --ui_bookInfo_date_zh: "出版日期";
+    --ui_bookInfo_date_en: "Date";
+    --ui_bookInfo_subjects: "";
+    --ui_bookInfo_subjects_zh: "分类";
+    --ui_bookInfo_subjects_en: "Subjects";
+    --ui_bookInfo_description: "";
+    --ui_bookInfo_description_zh: "简介";
+    --ui_bookInfo_description_en: "Description";
 
     /* Passage variables */
     --toc_fontSize: 1.2em;
@@ -775,6 +787,10 @@
     --ui_bookInfo_filename: var(--ui_bookInfo_filename_zh);
     --ui_bookInfo_filesize: var(--ui_bookInfo_filesize_zh);
     --ui_bookInfo_lastopened: var(--ui_bookInfo_lastopened_zh);
+    --ui_bookInfo_publisher: var(--ui_bookInfo_publisher_zh);
+    --ui_bookInfo_date: var(--ui_bookInfo_date_zh);
+    --ui_bookInfo_subjects: var(--ui_bookInfo_subjects_zh);
+    --ui_bookInfo_description: var(--ui_bookInfo_description_zh);
     --ui_tooltip_bookshelf_scrollTop: var(--ui_tooltip_bookshelf_scrollTop_zh);
     --ui_tooltip_bookshelf_scrollBottom: var(--ui_tooltip_bookshelf_scrollBottom_zh);
     --ui_tooltip_goToBookshelf: var(--ui_tooltip_goToBookshelf_zh);
@@ -951,6 +967,10 @@
     --ui_bookInfo_filename: var(--ui_bookInfo_filename_en);
     --ui_bookInfo_filesize: var(--ui_bookInfo_filesize_en);
     --ui_bookInfo_lastopened: var(--ui_bookInfo_lastopened_en);
+    --ui_bookInfo_publisher: var(--ui_bookInfo_publisher_en);
+    --ui_bookInfo_date: var(--ui_bookInfo_date_en);
+    --ui_bookInfo_subjects: var(--ui_bookInfo_subjects_en);
+    --ui_bookInfo_description: var(--ui_bookInfo_description_en);
     --ui_tooltip_bookshelf_scrollTop: var(--ui_tooltip_bookshelf_scrollTop_en);
     --ui_tooltip_bookshelf_scrollBottom: var(--ui_tooltip_bookshelf_scrollBottom_en);
     --ui_tooltip_goToBookshelf: var(--ui_tooltip_goToBookshelf_en);
@@ -1345,6 +1365,18 @@
 }
 .bookinfo-menu-item-text_lastopened::before {
     content: var(--ui_bookInfo_lastopened);
+}
+.bookinfo-menu-item-text_publisher::before {
+    content: var(--ui_bookInfo_publisher);
+}
+.bookinfo-menu-item-text_date::before {
+    content: var(--ui_bookInfo_date);
+}
+.bookinfo-menu-item-text_subjects::before {
+    content: var(--ui_bookInfo_subjects);
+}
+.bookinfo-menu-item-text_description::before {
+    content: var(--ui_bookInfo_description);
 }
 .almostDone_text::before {
     content: var(--ui_bookAlmostDone);

@@ -131,7 +131,7 @@ EPUB zip → 预构建 imageRegistry (src→dataURL) → 同步 walker 内联 �
   - ✅ 缺失图片降级为 `<span class="epub-image-missing">[图片缺失：alt]</span>` 虚线框占位（epub-converter.js #renderInlineImage）
   - ✅ 覆盖独立图、段落内嵌图、figure 图三种场景
   - ✅ sanitize 白名单增加 epub-image-missing class
-  - ⏳ 超大图片（>2MB base64）blob URL 方案：后续迭代评估（当前 globalCache 去重已缓解体积膨胀）
+  - ✅ 超大图片（>2MB base64）blob URL 方案：已实现（render-time 转 blob URL，`TextProcessorDOM.revokeBlobUrls()` 清理）
 
 - [x] **T8. 测试补充**
   - ✅ `test/test-epub-images.mjs`：25 个用例（Phase1 19 + Phase2 6）
@@ -244,9 +244,9 @@ if (tag === "img") {
 
 | 限制 | 说明 | 优先级 |
 |------|------|--------|
-| 嵌套 figure 内层 figcaption 丢失 | figure 用 querySelectorAll 提取所有 img，但 figcaption 仅从直接子节点提取 | 低（罕见结构） |
-| T2S 不转换 figcaption/alt 繁体字 | image 块被整体跳过，避免 base64 处理浪费；繁体字保留 | 低（可后续仅提取文本转换） |
-| 搜索不匹配 alt/figcaption 文本 | image 块被整体跳过，避免 base64 误报 | 低（可后续建非 base64 文本索引） |
+| ~~嵌套 figure 内层 figcaption 丢失~~ | ✅ 已修复：querySelectorAll 任意深度查找 figcaption | — |
+| ~~T2S 不转换 figcaption/alt 繁体字~~ | ✅ 已修复：`_convertImageBlockText` 提取 figcaption/alt 文本转换，跳过 base64 | — |
+| ~~搜索不匹配 alt/figcaption 文本~~ | ✅ 已修复：搜索不再跳过 image 块，提取 alt 文本参与匹配 | — |
 | 图片前不断页优化 | 图片可能跨页截断 | P1（T6） |
 | 缺失图片无占位 | 虚线框 + alt 占位（T7） | ✅ 已实现 |
 | 内联 SVG 元素不支持 | 仅支持 `<img src="*.svg">` 文件引用 | P3（T12） |
@@ -282,3 +282,20 @@ if (tag === "img") {
 - [x] 缺失图片有占位提示（T7，已实现）
 - [ ] 中英文界面验证
 - [ ] 真实浏览器端到端验证（大图内存、IndexedDB 上限）
+
+---
+
+## 八、v2.3.x 增强（2026-10-26）
+
+在 Phase 1–4 基础上新增以下 EPUB 集成能力：
+
+| 功能 | 说明 | 涉及文件 |
+|------|------|----------|
+| EPUB3 `properties="cover-image"` | 除 EPUB2 `<meta name="cover">` 外识别 EPUB3 封面声明 | `epub-converter.js` `#parseOpf` |
+| 书架真实封面 | 封面提取为 data URL，书架 `<img>` 显示（canvas 生成兜底） | `epub-converter.js` `#extractCoverDataUrl`、`bookshelf.js` `genBookItem`、`bookshelf-db.js` |
+| TOC 嵌套层级 | nav/NCX 嵌套深度作为 titles 第 5 元素，目录面板 CSS 缩进 | `epub-converter.js` `#parseNavToc`/`#parseNcxToc`、`reader.js` `processTOC`、`reader.css` |
+| 超大图片 blob URL | >2MB data URL 在渲染时转 blob URL，`revokeBlobUrls()` 清理 | `text-processor-dom.js` `#optimizeLargeImages` |
+| 元数据展示 | publisher/date/subjects/description 在书架详情菜单展示 | `file-handler.js`、`bookshelf.js`、`bookshelf-db.js`、`variables.css` |
+| 嵌套 figcaption | `querySelectorAll` 查找任意深度 figcaption | `epub-converter.js` `#extractImageBlock` |
+| T2S 图片文本 | figcaption/alt 文本参与繁简转换（跳过 base64） | `t2s.js` `_convertImageBlockText` |
+| 搜索 alt/figcaption | 搜索不再跳过 image 块，alt 文本参与匹配 | `search.js` |

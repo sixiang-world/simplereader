@@ -72,6 +72,10 @@ export class EpubConverter {
         const { metadata, manifest, spine } = await this.#parseOpf(zip, opfPath);
         this.#logger.log(`Spine: ${spine.length} items, Manifest: ${Object.keys(manifest).length} items`);
 
+        // 3.5 Extract cover image as data URL (if declared)
+        const coverDataUrl = await this.#extractCoverDataUrl(zip, metadata.coverHref, manifest, opfPath);
+        if (coverDataUrl) this.#logger.log(`Cover image extracted (${coverDataUrl.length} chars)`);
+
         // 4. Parse TOC (EPUB3 nav or EPUB2 NCX)
         this.#logger.log("Parsing TOC...");
         reportProgress("toc");
@@ -113,7 +117,7 @@ export class EpubConverter {
                 }
                 if (lineNum !== undefined && !seenLines.has(lineNum)) {
                     seenLines.add(lineNum);
-                    titles.push([entry.label, lineNum, entry.label, false]);
+                    titles.push([entry.label, lineNum, entry.label, false, entry.level ?? 0]);
                 }
             }
             // Also include auto-detected <h1-h6> titles that weren't in NCX
@@ -199,6 +203,7 @@ export class EpubConverter {
             titles,
             titlesInd,
             metadata,
+            coverDataUrl: coverDataUrl || null,
             spineBreaks,
             spineRanges,
             fileToLine,
@@ -313,6 +318,16 @@ export class EpubConverter {
             }
         }
 
+        // EPUB3 cover image: <item properties="cover-image" .../>
+        if (!metadata.coverHref) {
+            for (const item of Object.values(manifest)) {
+                if (item.properties && item.properties.split(/\s+/).includes("cover-image")) {
+                    metadata.coverHref = this.#resolveHref(item.href, opfPath);
+                    break;
+                }
+            }
+        }
+
         // --- Spine ---
         const spine = [];
         const spineEl = doc.getElementsByTagNameNS("*", "spine")[0];
@@ -401,13 +416,27 @@ export class EpubConverter {
         if (!navEl) return [];
 
         const entries = [];
+        // Compute nesting depth by walking up the DOM tree counting
+        // ancestor <ol>/<ul> elements inside the nav.
         const links = navEl.querySelectorAll("a, span");
         for (const link of links) {
             const href = link.getAttribute("href");
             const label = link.textContent?.trim();
             if (href && label) {
                 const resolved = resolveEpubHref(href, navPath);
-                if (resolved) entries.push({ label, href: resolved.key, path: resolved.path, fragment: resolved.fragment });
+                if (resolved) {
+                    let olDepth = 0;
+                    let parent = link.parentElement;
+                    while (parent && parent !== navEl) {
+                        const tag = parent.tagName?.toLowerCase();
+                        if (tag === "ol" || tag === "ul") olDepth++;
+                        parent = parent.parentElement;
+                    }
+                    // The outermost <ol>/<ul> is the list container, not a
+                    // nesting level — subtract 1 so top-level entries are 0.
+                    const level = Math.max(0, olDepth - 1);
+                    entries.push({ label, href: resolved.key, path: resolved.path, fragment: resolved.fragment, level });
+                }
             }
         }
 
@@ -437,7 +466,16 @@ export class EpubConverter {
                 const src = contentEl.getAttribute("src");
                 if (label && src) {
                     const resolved = resolveEpubHref(src, ncxPath);
-                    if (resolved) entries.push({ label, href: resolved.key, path: resolved.path, fragment: resolved.fragment });
+                    if (resolved) {
+                        // Compute nesting depth by counting ancestor navPoint elements
+                        let level = 0;
+                        let parent = point.parentElement;
+                        while (parent) {
+                            if (parent.tagName?.toLowerCase() === "navpoint") level++;
+                            parent = parent.parentElement;
+                        }
+                        entries.push({ label, href: resolved.key, path: resolved.path, fragment: resolved.fragment, level });
+                    }
                 }
             }
         }
@@ -559,11 +597,11 @@ export class EpubConverter {
             for (const img of node.querySelectorAll("img")) {
                 imgHtml += this.#renderInlineImage(img, imageRegistry) || "";
             }
-            for (const child of node.childNodes) {
-                if (child.nodeType !== Node.ELEMENT_NODE) continue;
-                if (child.tagName?.toLowerCase() === "figcaption") {
-                    captionHtml = this.#extractInlineHtml(child, imageRegistry);
-                }
+            // Use querySelectorAll to capture figcaption at any nesting depth
+            // (e.g. <figure><figure><figcaption>...</figcaption></figure></figure>).
+            for (const cap of node.querySelectorAll("figcaption")) {
+                captionHtml = this.#extractInlineHtml(cap, imageRegistry);
+                break; // Take the first figcaption
             }
             if (!imgHtml) return null;
             const caption = captionHtml ? `<figcaption>${captionHtml}</figcaption>` : "";
@@ -656,6 +694,32 @@ export class EpubConverter {
             svg: "image/svg+xml",
         };
         return map[ext] || null;
+    }
+
+    /**
+     * Extract the cover image from the EPUB zip as a data URL.
+     * Returns null when no cover is declared or the image cannot be read.
+     * @param {JSZip} zip
+     * @param {string} coverHref - Zip-absolute path of the cover image
+     * @param {Object} manifest - EPUB manifest (for MIME lookup)
+     * @param {string} opfPath - OPF file path (for MIME lookup)
+     * @returns {Promise<string|null>}
+     */
+    static async #extractCoverDataUrl(zip, coverHref, manifest, opfPath) {
+        if (!coverHref) return null;
+        try {
+            const file = zip.file(coverHref);
+            if (!file) return null;
+            let mime = this.#lookupManifestMediaType(manifest, opfPath, coverHref);
+            if (!mime) mime = this.#guessImageMime(coverHref);
+            if (!mime || !mime.startsWith("image/")) return null;
+            const b64 = await file.async("base64");
+            return `data:${mime};base64,${b64}`;
+        } catch (e) {
+            rethrowEpubControlError(e);
+            this.#logger.warn(`[epub] Failed to extract cover image: ${coverHref}`);
+            return null;
+        }
     }
 
     /**
@@ -901,7 +965,7 @@ export class EpubConverter {
                         elementType: "t",
                         source: "epub",
                     });
-                    titles.push([textContent, lineNumber, textContent, false]);
+                    titles.push([textContent, lineNumber, textContent, false, 0]);
                 } else {
                     // h2-h6 → heading
                     elements.push({
@@ -913,7 +977,7 @@ export class EpubConverter {
                         elementType: "h",
                         source: "epub",
                     });
-                    titles.push([textContent, lineNumber, textContent, false]);
+                    titles.push([textContent, lineNumber, textContent, false, level - 1]);
                 }
                 if (fragmentToLine && filePath && node.id) {
                     fragmentToLine[`${filePath}#${node.id}`] = lineNumber;

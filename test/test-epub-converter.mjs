@@ -114,6 +114,83 @@ await asyncTest("extracts full metadata including cover href", async () => {
     assert.equal(result.metadata.coverHref, "OEBPS/cover.jpg");
 });
 
+console.log("\nEPUB converter — EPUB3 cover-image property\n");
+
+await asyncTest("detects EPUB3 properties=cover-image when no meta name=cover", async () => {
+    const zip = new JSZip();
+    zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+    zip.file("META-INF/container.xml", `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`);
+    zip.file("OEBPS/ch1.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch1</title></head>
+<body><h1>Chapter</h1><p>Text.</p></body></html>`);
+    zip.file("OEBPS/cover.png", "fake-png-bytes");
+    zip.file("OEBPS/content.opf", `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>EPUB3 Cover Test</dc:title>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="cover-img" href="cover.png" media-type="image/png" properties="cover-image"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>`);
+    const epubPath = path.join(tmpDir, "epub3-cover.epub");
+    const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    fs.writeFileSync(epubPath, buffer);
+
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    assert.equal(result.metadata.coverHref, "OEBPS/cover.png");
+    assert.ok(result.coverDataUrl, "coverDataUrl should be extracted");
+    assert.ok(result.coverDataUrl.startsWith("data:image/png;base64,"), "coverDataUrl should be a PNG data URL");
+});
+
+await asyncTest("extracts coverDataUrl for EPUB2 meta name=cover", async () => {
+    const epubPath = await buildEpub("epub2-cover.epub", [
+        ["ch1.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch1</title></head>
+<body><h1>Chapter</h1><p>Text.</p></body></html>`],
+    ]);
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    assert.equal(result.metadata.coverHref, "OEBPS/cover.jpg");
+    assert.ok(result.coverDataUrl, "coverDataUrl should be extracted");
+    assert.ok(result.coverDataUrl.startsWith("data:image/jpeg;base64,"), "coverDataUrl should be a JPEG data URL");
+});
+
+await asyncTest("coverDataUrl is null when no cover declared", async () => {
+    const zip = new JSZip();
+    zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+    zip.file("META-INF/container.xml", `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`);
+    zip.file("OEBPS/ch1.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch1</title></head>
+<body><p>Text.</p></body></html>`);
+    zip.file("OEBPS/content.opf", `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>No Cover</dc:title>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>`);
+    const epubPath = path.join(tmpDir, "no-cover.epub");
+    const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    fs.writeFileSync(epubPath, buffer);
+
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    assert.equal(result.metadata.coverHref, undefined);
+    assert.equal(result.coverDataUrl, null);
+});
+
 console.log("\nEPUB converter — structure preservation\n");
 
 await asyncTest("preserves inline HTML, lists, blockquotes, pre, tables", async () => {
@@ -252,6 +329,113 @@ await asyncTest("NCX TOC hrefs resolve against NCX path, not OPF path", async ()
     const result = await EpubConverter.convert(fileFromPath(epubPath));
     const tocEntry = result.titles.find(([label]) => label === "Chapter 1");
     assert.ok(tocEntry, "NCX entry from subdirectory should be mapped, not dropped");
+});
+
+console.log("\nEPUB converter — TOC nesting levels\n");
+
+await asyncTest("EPUB3 nav preserves nesting depth as 5th title element", async () => {
+    const zip = new JSZip();
+    zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+    zip.file("META-INF/container.xml", `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`);
+    zip.file("OEBPS/ch1.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch1</title></head>
+<body><h1>Chapter 1</h1><p>Text.</p></body></html>`);
+    zip.file("OEBPS/ch2.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch2</title></head>
+<body><h2>Section 2.1</h2><p>Text.</p></body></html>`);
+    zip.file("OEBPS/nav.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head><title>Nav</title></head>
+<body>
+<nav epub:type="toc">
+  <ol>
+    <li><a href="ch1.xhtml">Chapter 1</a>
+      <ol>
+        <li><a href="ch2.xhtml">Section 2.1</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+</body></html>`);
+    zip.file("OEBPS/content.opf", `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>TOC Level Test</dc:title>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/><itemref idref="ch2"/></spine>
+</package>`);
+    const epubPath = path.join(tmpDir, "toc-level.epub");
+    const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    fs.writeFileSync(epubPath, buffer);
+
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const ch1 = result.titles.find(([label]) => label === "Chapter 1");
+    const ch2 = result.titles.find(([label]) => label === "Section 2.1");
+    assert.ok(ch1, "Chapter 1 should be in titles");
+    assert.ok(ch2, "Section 2.1 should be in titles");
+    assert.equal(ch1[4], 0, "Chapter 1 should be level 0");
+    assert.equal(ch2[4], 1, "Section 2.1 should be level 1 (nested in ol)");
+});
+
+await asyncTest("EPUB2 NCX preserves navPoint nesting depth", async () => {
+    const zip = new JSZip();
+    zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+    zip.file("META-INF/container.xml", `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`);
+    zip.file("OEBPS/ch1.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch1</title></head>
+<body><h1>Chapter 1</h1><p>Text.</p></body></html>`);
+    zip.file("OEBPS/ch2.xhtml", `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch2</title></head>
+<body><h2>Section 2.1</h2><p>Text.</p></body></html>`);
+    zip.file("OEBPS/toc.ncx", `<?xml version="1.0"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <navMap>
+    <navPoint id="np1">
+      <navLabel><text>Chapter 1</text></navLabel>
+      <content src="ch1.xhtml"/>
+      <navPoint id="np2">
+        <navLabel><text>Section 2.1</text></navLabel>
+        <content src="ch2.xhtml"/>
+      </navPoint>
+    </navPoint>
+  </navMap>
+</ncx>`);
+    zip.file("OEBPS/content.opf", `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>NCX Level Test</dc:title>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/><itemref idref="ch2"/></spine>
+</package>`);
+    const epubPath = path.join(tmpDir, "ncx-level.epub");
+    const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+    fs.writeFileSync(epubPath, buffer);
+
+    const result = await EpubConverter.convert(fileFromPath(epubPath));
+    const ch1 = result.titles.find(([label]) => label === "Chapter 1");
+    const ch2 = result.titles.find(([label]) => label === "Section 2.1");
+    assert.ok(ch1, "Chapter 1 should be in titles");
+    assert.ok(ch2, "Section 2.1 should be in titles");
+    assert.equal(ch1[4], 0, "Chapter 1 should be level 0");
+    assert.equal(ch2[4], 1, "Section 2.1 should be level 1 (nested navPoint)");
 });
 
 console.log("\nEPUB converter — div-wrapped block structure\n");

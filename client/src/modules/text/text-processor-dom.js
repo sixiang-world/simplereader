@@ -14,6 +14,56 @@
  * @description Class for creating DOM elements from text processing structures.
  */
 export class TextProcessorDOM {
+    /** @type {Set<string>} Tracked blob URLs for cleanup */
+    static #blobUrls = new Set();
+
+    /** Threshold in bytes above which data URLs are converted to blob URLs (~2MB) */
+    static #BLOB_URL_THRESHOLD = 2 * 1024 * 1024;
+
+    /**
+     * Revoke all tracked blob URLs and clear the tracking set.
+     * Call when closing a book or resetting the reader.
+     * @public
+     */
+    static revokeBlobUrls() {
+        for (const url of this.#blobUrls) {
+            URL.revokeObjectURL(url);
+        }
+        this.#blobUrls.clear();
+    }
+
+    /**
+     * Convert large data: URLs in <img> elements to blob: URLs for better
+     * memory performance. The sanitize layer has already validated the data
+     * URLs, so this is a safe post-processing step. Blob URLs are tracked
+     * for later cleanup via revokeBlobUrls().
+     * @param {Element} root - DOM element containing <img> tags
+     * @private
+     */
+    static #optimizeLargeImages(root) {
+        if (typeof URL === "undefined" || typeof URL.createObjectURL !== "function") return;
+        for (const img of root.querySelectorAll("img[src^='data:image/']")) {
+            const src = img.getAttribute("src");
+            if (!src || src.length < this.#BLOB_URL_THRESHOLD) continue;
+            try {
+                // Parse the data URL to extract MIME and base64 payload
+                const match = src.match(/^data:(image\/[a-z+]+);base64,(.+)$/i);
+                if (!match) continue;
+                const mime = match[1];
+                const b64 = match[2];
+                const binary = atob(b64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const blob = new Blob([bytes], { type: mime });
+                const blobUrl = URL.createObjectURL(blob);
+                this.#blobUrls.add(blobUrl);
+                img.setAttribute("src", blobUrl);
+            } catch {
+                // Keep the original data URL if conversion fails
+            }
+        }
+    }
+
     /**
      * Create DOM element from structure
      * @param {Object} structure - The structure object containing type, tag, content, lineNumber, elementType, dropCap, and className.
@@ -142,6 +192,7 @@ export class TextProcessorDOM {
                         tempP.textContent = content;
                     }
                 }
+                if (source === "epub") this.#optimizeLargeImages(tempP);
                 return [setLineNum(tempP), elementType];
             }
 
@@ -154,6 +205,7 @@ export class TextProcessorDOM {
                 tempFigure.setAttribute("data-source", "epub");
                 tempFigure.className = "epub-image-block";
                 tempFigure.innerHTML = this.#sanitizeHtml(content);
+                this.#optimizeLargeImages(tempFigure);
                 return [setLineNum(tempFigure), elementType];
             }
 
@@ -162,6 +214,7 @@ export class TextProcessorDOM {
                 tempDiv.id = `line${lineNumber}`;
                 tempDiv.setAttribute("data-source", "epub");
                 tempDiv.innerHTML = this.#sanitizeHtml(content);
+                this.#optimizeLargeImages(tempDiv);
                 return [setLineNum(tempDiv), elementType];
             }
 
@@ -170,6 +223,7 @@ export class TextProcessorDOM {
                 tempBlockquote.id = `line${lineNumber}`;
                 tempBlockquote.setAttribute("data-source", "epub");
                 tempBlockquote.innerHTML = this.#sanitizeHtml(content);
+                this.#optimizeLargeImages(tempBlockquote);
                 return [setLineNum(tempBlockquote), elementType];
             }
 
@@ -186,6 +240,7 @@ export class TextProcessorDOM {
                 tempTable.id = `line${lineNumber}`;
                 tempTable.setAttribute("data-source", "epub");
                 tempTable.innerHTML = this.#sanitizeHtml(content);
+                this.#optimizeLargeImages(tempTable);
                 return [setLineNum(tempTable), elementType];
             }
 

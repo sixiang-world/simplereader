@@ -181,6 +181,48 @@ export function containsTraditional(text) {
 }
 
 /**
+ * Convert only the human-readable text in an image block HTML string
+ * (figcaption text and img alt/title attributes), leaving base64 data
+ * URLs untouched. This avoids the cost of running the converter over
+ * large base64 payloads while still converting user-visible text.
+ *
+ * @param {string} html - Image block HTML (e.g. `<figure>...<figcaption>...</figcaption></figure>`)
+ * @param {(s: string) => string | Promise<string>} convertFn - Converter.
+ * @returns {Promise<string>} HTML with converted text.
+ * @private
+ */
+async function _convertImageBlockText(html, convertFn) {
+    if (!html) return html;
+    // Convert figcaption text content
+    html = await _replaceAsync(html, /(<figcaption[^>]*>)([\s\S]*?)(<\/figcaption>)/gi,
+        async (_m, open, inner, close) => open + (await convertFn(inner)) + close);
+    // Convert alt and title attribute values
+    html = await _replaceAsync(html, /\b(alt|title)="([^"]*)"/gi,
+        async (_m, attr, val) => `${attr}="${await convertFn(val)}"`);
+    return html;
+}
+
+/**
+ * Async-aware String.replace with a callback that returns a Promise.
+ * @param {string} str
+ * @param {RegExp} regex
+ * @param {(match: string, ...groups: string[]) => Promise<string>} replacer
+ * @returns {Promise<string>}
+ * @private
+ */
+async function _replaceAsync(str, regex, replacer) {
+    const parts = [];
+    let lastIndex = 0;
+    for (const match of str.matchAll(regex)) {
+        parts.push(str.slice(lastIndex, match.index));
+        parts.push(await replacer(...match));
+        lastIndex = match.index + match[0].length;
+    }
+    parts.push(str.slice(lastIndex));
+    return parts.join("");
+}
+
+/**
  * Walk a bookData object and apply a string-converter to all text fields.
  *
  * This is the workhorse for the `file:afterProcess` hook. It mutates
@@ -216,10 +258,14 @@ async function _walkAndConvert(bookData, convertFn) {
             if (typeof line === "string") {
                 bookData.processedLines[i] = await convertFn(line);
             } else if (line && typeof line === "object") {
-                // Image blocks contain base64 data URLs and HTML structure;
-                // converting them is unnecessary (ASCII base64 is unaffected)
-                // and wastes CPU. Skip entirely.
-                if (line.type === "image") continue;
+                // Image blocks: convert only the human-readable text
+                // (figcaption text, alt attributes) and skip base64 data URLs.
+                if (line.type === "image") {
+                    if (typeof line.content === "string") {
+                        line.content = await _convertImageBlockText(line.content, convertFn);
+                    }
+                    continue;
+                }
                 if (typeof line.content === "string") {
                     line.content = await convertFn(line.content);
                 }

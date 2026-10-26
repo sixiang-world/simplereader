@@ -138,6 +138,9 @@
     height: var(--ui_bookCoverHeight);
     border-radius: 3px 5px 5px 3px;
 }
+.bookshelf .book .cover-container img.cover-canvas {
+    object-fit: cover;
+}
 .cover-hidden-text {
     display: none;
     position: absolute;

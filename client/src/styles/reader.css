@@ -363,6 +363,11 @@ h6 {
 .chapter-title-container > .toc-text {
     position: static;
 }
+.chapter-title-container.toc-level-1 { padding-left: 1.2em; }
+.chapter-title-container.toc-level-2 { padding-left: 2.4em; }
+.chapter-title-container.toc-level-3 { padding-left: 3.6em; }
+.chapter-title-container.toc-level-4 { padding-left: 4.8em; }
+.chapter-title-container.toc-level-5 { padding-left: 6em; }
 .toc-bullet {
     /* position: absolute; */
     background-color: var(--fontInfoColor);

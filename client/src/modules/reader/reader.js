@@ -168,14 +168,8 @@ export const reader = {
 
                 if (CONFIG.VARS.ALL_TITLES && CONFIG.VARS.ALL_TITLES.length > 0) {
                     this.latestTitleIndex = i;
-                    const [title, lineNum, shortTitle, isCustomOnly] = CONFIG.VARS.ALL_TITLES[i];
+                    const [title, lineNum, shortTitle, isCustomOnly, tocLevel] = CONFIG.VARS.ALL_TITLES[i];
                     this.latestLineNum = lineNum;
-                    // console.log(`[${i}/${CONFIG.VARS.ALL_TITLES.length}] ${lineNum} - ${title}`);
-
-                    // Check if the title is already present in the DOM to prevent duplicates
-                    // if (CONFIG.DOM_ELEMENT.GET_TITLE(lineNum)) {
-                    //     return;
-                    // }
 
                     // To preserve toc-active class after scrolling
                     const isCurrentTitleActive = lineNum === CONFIG.VARS.ACTIVE_TITLE;
@@ -183,6 +177,9 @@ export const reader = {
 
                     titleContainer.classList.add("chapter-title-container");
                     titleContainer.classList.add(isCustomOnly ? "title-custom" : "title-base");
+                    if (tocLevel && tocLevel > 0) {
+                        titleContainer.classList.add(`toc-level-${Math.min(tocLevel, 5)}`);
+                    }
                     if (isCurrentTitleActive) {
                         titleContainer.classList.add(activeTitleToken.trim());
                     }

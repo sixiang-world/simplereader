@@ -92,6 +92,8 @@ export class FileHandler {
             seal_left: CONFIG.RUNTIME_VARS.STYLE.seal_left,
             is_epub: CONFIG.VARS.IS_EPUB,
             ...(CONFIG.VARS.IS_EPUB ? { converted: true, epubConverterVersion: CONFIG.CONST_FILE.EPUB_CONVERTER_VERSION } : {}),
+            ...(CONFIG.VARS.EPUB_COVER_DATA_URL ? { coverDataUrl: CONFIG.VARS.EPUB_COVER_DATA_URL } : {}),
+            ...(CONFIG.VARS.EPUB_META ? { epubMeta: CONFIG.VARS.EPUB_META } : {}),
             ...extra,
         });
     }
@@ -960,6 +962,14 @@ export class FileHandler {
                 authorRE: author,
             };
             CONFIG.VARS.FILENAME = file.name;
+            // Store extended EPUB metadata for bookshelf info display
+            CONFIG.VARS.EPUB_META = {
+                publisher: convertResult.metadata.publisher || "",
+                date: convertResult.metadata.date || "",
+                description: convertResult.metadata.description || "",
+                subjects: convertResult.metadata.subjects || [],
+                language: convertResult.metadata.language || "",
+            };
             // Detect language from actual content, not just title/author
             const contentSample = convertResult.htmlLines
                 .filter(l => l.elementType === "p" || l.elementType === "h")
@@ -989,6 +999,7 @@ export class FileHandler {
             CONFIG.VARS.FRAGMENT_TO_LINE = convertResult.fragmentToLine || {};
             CONFIG.VARS.FILE_TO_LINE = convertResult.fileToLine || {};
             CONFIG.VARS.SPINE_RANGES = convertResult.spineRanges || [];
+            CONFIG.VARS.EPUB_COVER_DATA_URL = convertResult.coverDataUrl || null;
 
             // Transform before pagination, persistence, and the first render.
             await FileHandler.#applyFileAfterProcessHook();

@@ -25,6 +25,7 @@ import { reader } from "../../modules/reader/reader.js";
 import { PopupManager } from "../../components/popup-manager.js";
 import { isVariableDefined, toBool } from "../base.js";
 import { setTitle } from "./reader.js";
+import { TextProcessorDOM } from "../../modules/text/text-processor-dom.js";
 
 // ===============================
 // Loading Screen Related Variables
@@ -419,6 +420,8 @@ export function resetVars() {
     CONFIG.DOM_ELEMENT.PROGRESS_TITLE.innerHTML = "";
     CONFIG.DOM_ELEMENT.PROGRESS_CONTENT.innerHTML = "";
     CONFIG.DOM_ELEMENT.FOOTNOTE_CONTAINER.innerHTML = "";
+
+    TextProcessorDOM.revokeBlobUrls();
 }
 
 // ===============================

@@ -154,6 +154,8 @@ export class BookshelfDB extends DBManager {
                             ...existingBook,
                             processed: true,
                             pageBreakOnTitle: CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE ?? true,
+                            ...(processedData.coverDataUrl ? { coverDataUrl: processedData.coverDataUrl } : {}),
+                            ...(processedData.epubMeta ? { epubMeta: processedData.epubMeta } : {}),
                         }),
                         [this.#objectStoreNames.bookProcessed]: () => ({
                             ...existingProcessedBook,
@@ -257,7 +259,8 @@ export class BookshelfDB extends DBManager {
             useCursor: true,
             transform: record => ({ name: record.name, size: record.data?.size ?? record.data?.byteLength ?? 0,
                 isEastern: record.isEastern, isFromLocal: record.isFromLocal ?? false,
-                isOnServer: record.isOnServer ?? false }),
+                isOnServer: record.isOnServer ?? false, coverDataUrl: record.coverDataUrl || null,
+                epubMeta: record.epubMeta || null }),
         });
         for (const row of rows) {
             if (typeof row.isEastern === "boolean") continue;

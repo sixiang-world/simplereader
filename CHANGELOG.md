@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.4.0] — 2026-10-26
+
+### 新增
+- **EPUB 真实封面** — 识别 EPUB3 `properties="cover-image"` 与 EPUB2 `meta cover`，书架直接显示书籍封面图（canvas 生成兜底）
+- **EPUB 目录嵌套层级** — nav/NCX 嵌套深度保留为 titles 第 5 元素，目录面板多级缩进
+- **EPUB 元数据展示** — 书架详情菜单展示出版方、出版日期、分类、简介（中英文 i18n）
+- **大图内存优化** — >2MB data URL 渲染时自动转 blob URL，`resetVars` 时自动释放
+
+### 修复
+- 嵌套 figure 内层 figcaption 丢失 — `querySelectorAll` 查找任意深度
+- T2S 不转换图片 figcaption/alt 文本 — 新增 `_convertImageBlockText` 提取文本转换
+- 搜索不匹配图片 alt/figcaption — 搜索不再跳过 image 块
+
+### 测试
+- 新增 5 项单元测试（EPUB3 封面、封面提取、无封面场景、TOC 层级 nav/NCX）
+
+---
+
 ## [2.3.1] — 2026-10-25
 
 ### 修复（安全）
