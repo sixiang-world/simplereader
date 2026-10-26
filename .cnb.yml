@@ -33,18 +33,21 @@
 # 以 . 开头的 key 不会被识别为分支名，用作可复用片段（YAML 锚点）。
 
 # ===== 公共配置：Node 构建环境 =====
-# volumes 缓存 pnpm store：install 从 ~1.6m 降至秒级（首次构建后）
+# docker.build 按 build-tools/ci/Dockerfile 内容哈希动态构建构建环境镜像，
+# 平台自动缓存并推送到本项目制品库，后续构建直接复用（首次构建后）。
+# python3 + chromium 预装进镜像，install 不再每次 apk add（曾 ~1m8s / 804MiB）。
+# volumes 缓存 pnpm store（节点级 copy-on-write），依赖安装只剩链接开销。
 .node-env: &node-env
   docker:
-    image: node:22-alpine
+    build: build-tools/ci/Dockerfile
     volumes:
       - /root/.local/share/pnpm/store
 
 # ===== 公共构建阶段 =====
+# 系统依赖已在构建环境镜像内，此阶段只准备 pnpm 并装 Node 依赖
 .install: &install
   name: install
   script: |
-    apk add --no-cache python3 chromium
     corepack enable
     corepack prepare pnpm@9.12.0 --activate
     pnpm install --frozen-lockfile
