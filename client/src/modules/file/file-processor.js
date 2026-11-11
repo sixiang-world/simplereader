@@ -13,13 +13,8 @@
 import * as CONFIG from "../../config/index.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 import { FileProcessorCore } from "../../../../shared/core/file/file-processor-core.js";
-import { CoverAnimation } from "../../components/cover-animation.js";
-import { getFootnotes } from "../reader/footnotes.js";
 import {
     randomFloatFromInterval,
-    addFootnotesToDOM,
-    getBookCoverCanvas,
-    pairAnchorsAndFootnotes,
 } from "../../utils/base.js";
 import { createWorker } from "../../utils/helpers/worker.js";
 import { WorkerRequests } from "../../utils/helpers/worker-requests.js";
@@ -40,7 +35,6 @@ export class FileProcessor extends FileProcessorCore {
         super(file.size, isEastern, encoding);
 
         this.file = file;
-        this.initialChunk = this.file.slice(0, this.initialChunkSize);
         this.worker = createWorker("client/src/modules/file/file-processor-worker.js", import.meta.url);
         this.requests = new WorkerRequests(this.worker);
         this.signal = options.signal;
@@ -87,114 +81,27 @@ export class FileProcessor extends FileProcessorCore {
         this.seal_left = randomFloatFromInterval(0, 1);
     }
 
-    /**
-     * Process initial chunk
-     * @returns {Promise<void>}
-     * @public
-     */
-    async processInitialChunk() {
-        // Log mode: skip title page and end page generation
-        if (this.logMode) {
-            this.title_page_line_number_offset = 0;
-            return await this.#processInitialChunk({
-                titlePageLines: null,
-                titlePageTitles: null,
-                endPageLines: null,
-                endPageTitles: null,
-            });
-        }
-
-        // Generate title page
-        const titlePageResult = await this.#generateTitlePage();
-        let endPageResult = null;
-
-        if (this.file.size <= this.initialChunkSize) {
-            // Generate end page
-            endPageResult = await this.#generateEndPage();
-        }
-
-        return await this.#processInitialChunk({
-            titlePageLines: titlePageResult.lines,
-            titlePageTitles: titlePageResult.titles,
-            endPageLines: endPageResult?.lines ?? null,
-            endPageTitles: endPageResult?.titles ?? null,
+    /** Parse the complete file in one cancellable worker request. */
+    async processBook() {
+        const titlePage = this.logMode ? null : await this.#generateTitlePage();
+        return this.#processContent({
+            titlePageLines: titlePage?.lines ?? null,
+            titlePageTitles: titlePage?.titles ?? null,
+            // The shared core computes the actual final line after parsing.
+            endPageLines: titlePage ? [] : null,
+            endPageTitles: titlePage ? [[CONFIG.RUNTIME_VARS.STYLE.ui_endPage, 0, CONFIG.RUNTIME_VARS.STYLE.ui_endPage, false]] : null,
         });
     }
 
     /**
-     * Process remaining content
-     * @returns {Promise<void>}
-     * @public
-     */
-    async processRemainingContent() {
-        // Log mode: skip title/end page generation
-        if (this.logMode) {
-            return await this.#processRemainingContent({
-                titlePageLines: null,
-                titlePageTitles: null,
-                endPageLines: null,
-                endPageTitles: null,
-            });
-        }
-
-        // Generate title page and end page
-        const titlePageResult = await this.#generateTitlePage();
-        const endPageResult = await this.#generateEndPage();
-
-        return await this.#processRemainingContent({
-            titlePageLines: titlePageResult.lines,
-            titlePageTitles: titlePageResult.titles,
-            endPageLines: endPageResult.lines,
-            endPageTitles: endPageResult.titles,
-        });
-    }
-
-    /**
-     * Process initial chunk (first 1MB)
+     * Process complete content in background
      * @param {Object} extraContent - Additional content for processing
      * @returns {Promise<{lines: Array<string>, titles: Array<Array<number>>, footnotes: Array<Array<string>>, footnoteCounter: number, pageBreaks: Array<number>}>}
      * @private
      */
-    async #processInitialChunk(extraContent) {
-        const options = {
-            chunk: this.initialChunk,
-            sliceLineOffset: this.initialChunkLineOffset,
-        };
-
-        return await this.#processContent("processInitialChunk", options, extraContent);
-    }
-
-    /**
-     * Process remaining content in background
-     * @param {Object} extraContent - Additional content for processing
-     * @returns {Promise<{lines: Array<string>, titles: Array<Array<number>>, footnotes: Array<Array<string>>, footnoteCounter: number, pageBreaks: Array<number>}>}
-     * @private
-     */
-    async #processRemainingContent(extraContent) {
-        if (this.file.size <= this.initialChunkSize) {
-            this.isProcessingComplete = true;
-            return;
-        }
-
-        const options = {
+    async #processContent(extraContent) {
+        const result = await this.#sendWorkerMessage("processBook", {
             file: this.file,
-            chunkStart: 0,
-        };
-
-        return await this.#processContent("processRemainingContent", options, extraContent);
-    }
-
-    /**
-     * Process content (initial chunk or remaining content) in background
-     * @param {string} operation - The operation to perform ("processInitialChunk" or "processRemainingContent")
-     * @param {Object} options - Additional options for the operation
-     * @param {Object} extraContent - Additional content for processing
-     * @returns {Promise<{lines: Array<string>, titles: Array<Array<number>>, footnotes: Array<Array<string>>, footnoteCounter: number, pageBreaks: Array<number>}>}
-     * @private
-     */
-    async #processContent(operation, options, extraContent) {
-        const result = await this.#sendWorkerMessage(operation, {
-            ...options,
             extraContent,
             title_page_line_number_offset: this.title_page_line_number_offset,
             pageBreakOnTitle: CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE,
@@ -209,20 +116,7 @@ export class FileProcessor extends FileProcessorCore {
         this.footnoteCounter = result.footnoteCounter;
         this.pageBreaks = result.pageBreaks;
 
-        // [Deprecated] Add footnotes to DOM
-        // addFootnotesToDOM(this.footnotes, CONFIG.DOM_ELEMENT.FOOTNOTE_CONTAINER);
-        // [New] Set the lookup function for the current chunk/footnotes
-        const pairedFootnotes = pairAnchorsAndFootnotes(this.footnotes);
-        getFootnotes().setFootnoteLookup((markerCode, index) => {
-            // console.log("LOOKUP:", markerCode, index, pairedFootnotes[markerCode][index], pairedFootnotes[markerCode]);
-            // console.log("footnotes: ", this.footnotes);
-            index = Number(index);
-            return pairedFootnotes[markerCode]?.[index] || CONFIG.CONST_FOOTNOTE.NOTFOUND;
-        });
-
-        if (operation === "processRemainingContent") {
-            this.isProcessingComplete = true;
-        }
+        this.isProcessingComplete = true;
 
         return result;
     }
@@ -246,29 +140,6 @@ export class FileProcessor extends FileProcessorCore {
     }
 
     /**
-     * Generate end page
-     * @returns {Promise<{lines: Array<string>, titles: Array<Array<number>>}>}
-     * @private
-     */
-    async #generateEndPage() {
-        const { endPageLine } = await this.#sendWorkerMessage("generateEndPage", {
-            totalLines: this.processedLines.length,
-        });
-
-        return {
-            lines: [endPageLine],
-            titles: [
-                [
-                    CONFIG.RUNTIME_VARS.STYLE.ui_endPage,
-                    this.processedLines.length - 1,
-                    CONFIG.RUNTIME_VARS.STYLE.ui_endPage,
-                    false,
-                ],
-            ],
-        };
-    }
-
-    /**
      * Set progress callback
      * @param {Function} callback
      * @public
@@ -285,29 +156,17 @@ export class FileProcessor extends FileProcessorCore {
      * @private
      */
     async #sendWorkerMessage(operation, data = {}) {
-        let animation = null;
-        try {
-            const { type: _type, id: _id, ...result } = await this.requests.request({
-                operation,
-                encoding: this.encoding,
-                isEasternLan: this.isEasternLan,
-                metadata: this.bookMetadata,
-                ...data,
-            }, {
-                signal: this.signal,
-                timeoutMs: this.timeoutMs,
-                progress: ({ percentage }) => {
-                    const canvas = getBookCoverCanvas(this.file.name);
-                    if (!canvas) return;
-                    animation ||= CoverAnimation.create(canvas);
-                    animation.start(percentage);
-                },
-            });
-            return result;
-        } finally {
-            animation?.stop();
-            animation?.reset();
-        }
+        const { type: _type, id: _id, ...result } = await this.requests.request({
+            operation,
+            encoding: this.encoding,
+            isEasternLan: this.isEasternLan,
+            metadata: this.bookMetadata,
+            ...data,
+        }, {
+            signal: this.signal,
+            timeoutMs: this.timeoutMs,
+        });
+        return result;
     }
 
     /**

@@ -12,9 +12,7 @@ The `modules/` directory contains the core application logic, organized into spe
 
 **Examples**:
 
-- `cover-animation.js`: Provides animated loading effects for book covers during processing and loading operations, with support for different animation types like radar and progress bars.
 
-- `cover-generator-canvas.js` and `cover-generator-dom.js`: A utility for generating and visualizing book cover designs.
 
 - `custom-color-picker.js`: A customizable color picker component.
 

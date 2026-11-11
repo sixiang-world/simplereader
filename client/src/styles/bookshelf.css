@@ -141,6 +141,30 @@
 .bookshelf .book .cover-container img.cover-canvas {
     object-fit: cover;
 }
+.bookshelf .cover-fallback {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
+    gap: 0.5em;
+    padding: 12%;
+    background: linear-gradient(var(--mainColor_inactive) 70%, var(--mainColor_active) 70%);
+    color: var(--bgColor);
+    overflow-wrap: anywhere;
+    font-family: var(--fontFamily_title);
+}
+.bookshelf .cover-fallback span,
+.bookshelf .cover-fallback small {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+}
+.bookshelf .cover-fallback span {
+    -webkit-line-clamp: 4;
+}
+.bookshelf .cover-fallback small {
+    -webkit-line-clamp: 2;
+}
 .cover-hidden-text {
     display: none;
     position: absolute;

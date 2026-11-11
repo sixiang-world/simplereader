@@ -17,7 +17,6 @@ import CSSVars from "../../lib/css-global-variables.js";
  * @property {boolean} noBookshelf - Whether bookshelf feature is disabled
  * @property {boolean} noFontpool - Whether fontpool feature is disabled
  * @property {boolean} noSettings - Whether settings feature is disabled
- * @property {boolean} noFastOpen - Whether fast open of books is disabled
  * @property {boolean} pageBreakMode - Whether page break on title is disabled
  * @property {boolean} alwaysProcess - Whether to always process books upon opening
  * @property {boolean} printDatabase - Whether to print database
@@ -27,7 +26,6 @@ const urlParams = new URLSearchParams(window.location.search);
 const noBookshelf = urlParams.has("no-bookshelf");
 const noFontpool = urlParams.has("no-custom-fonts");
 const noSettings = urlParams.has("no-settings");
-const noFastOpen = urlParams.has("no-fast-open");
 const pageBreakMode = urlParams.has("no-pagebreak-on-title");
 const alwaysProcess = urlParams.has("always-process");
 const printDatabase = urlParams.has("print-db");
@@ -35,7 +33,6 @@ const upgradeDB = urlParams.has("upgrade-db");
 console.log("Enable bookshelf:", !noBookshelf);
 console.log("Enable custom fonts:", !noFontpool);
 console.log("Enable settings:", !noSettings);
-console.log("Enable fast open of books:", !noFastOpen);
 console.log("Enable page break on title:", !pageBreakMode);
 console.log("Always process books upon opening:", alwaysProcess);
 console.log("Print database:", printDatabase);
@@ -47,7 +44,6 @@ console.log("Upgrade database:", upgradeDB);
  * @property {boolean} ENABLE_BOOKSHELF - Whether bookshelf feature is enabled
  * @property {boolean} ENABLE_FONTPOOL - Whether fontpool feature is enabled
  * @property {boolean} ENABLE_SETTINGS - Whether settings feature is enabled
- * @property {boolean} ENABLE_FAST_OPEN - Whether fast open of books is enabled
  * @property {boolean} PAGE_BREAK_ON_TITLE - Whether page break on title is enabled
  * @property {boolean} ALWAYS_PROCESS - Whether to always process
  * @property {boolean} PRINT_DATABASE - Whether to print database
@@ -57,7 +53,6 @@ export const RUNTIME_CONFIG = {
     ENABLE_BOOKSHELF: !noBookshelf,
     ENABLE_FONTPOOL: !noFontpool,
     ENABLE_SETTINGS: !noSettings,
-    ENABLE_FAST_OPEN: !noFastOpen,
     PAGE_BREAK_ON_TITLE: !pageBreakMode,
     ALWAYS_PROCESS: alwaysProcess,
     PRINT_DATABASE: printDatabase,

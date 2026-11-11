@@ -25,6 +25,7 @@ class AppVariables {
         // File-related variables
         /** @type {string} Current filename */
         this.FILENAME = "";
+        this.BOOK_ID = "";
         /** @type {Array} File content chunks */
         this.FILE_CONTENT_CHUNKS = [];
         /** @type {boolean} Whether the content is in East Asian language */
@@ -125,6 +126,7 @@ class AppVariables {
     reset() {
         // Reset file-related variables
         this.FILENAME = "";
+        this.BOOK_ID = "";
         this.FILE_CONTENT_CHUNKS = [];
         this.IS_EASTERN_LAN = true;
         this.ENCODING = "utf-8";

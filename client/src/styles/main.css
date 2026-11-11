@@ -647,14 +647,6 @@ To Offset the anchor link to clear fixed header
     margin-bottom: 0 !important;
 }
 
-/* iPad cursor overrides */
-[class*="ipad-cursor"] {
-    overflow: visible !important;
-    overflow-y: visible !important;
-    -ms-overflow-style: auto !important;
-    scrollbar-width: auto !important;
-}
-
 /* Custom tooltip styles */
 .tippy-box[data-theme~="custom-tooltip"] {
     background-color: var(--fontInfoColor_title);

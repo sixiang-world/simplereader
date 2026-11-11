@@ -36,7 +36,6 @@ export default [
         Swal: "readonly",
         tippy: "readonly",
         position: "readonly",
-        IPadCursor: "readonly",
         HyperList: "readonly",
         JSZip: "readonly",
         jschardet: "readonly",

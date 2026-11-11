@@ -25,7 +25,6 @@ RUN --mount=type=secret,id=registry_ca \
 COPY index.html version.json help.json ./
 COPY client/ ./client/
 COPY shared/ ./shared/
-COPY books/ ./books/
 
 # Build static bundle → /app/dist
 RUN pnpm run build
@@ -38,11 +37,6 @@ WORKDIR /srv
 
 # Copy built artifacts from the builder stage
 COPY --from=builder /app/dist/ /srv/
-
-# Optional: project's static root historically also exposed books/ for the
-# reader's local-library file storage. Keep the volume mount point.
-RUN mkdir -p /srv/books
-VOLUME ["/srv/books"]
 
 # Caddy serves /srv on :80 (see CMD). v2 is a static frontend only — the
 # old server's :8866 port no longer exists, so only :80 is exposed.

@@ -1,3 +1,5 @@
+> 历史兼容文档（2026-11-11）：当前 Web 主线已退役 textdb 同步和扩展发行。以下内容保留作旧版本排查，不是当前发布承诺。
+
 # Extension handoff validation
 
 `pnpm exec playwright-core install chromium` followed by `npm run test:extension`

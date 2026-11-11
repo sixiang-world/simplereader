@@ -245,27 +245,11 @@ test("mutualExclusiveWith references point to existing keys", () => {
     }
 });
 
-test("mutualExclusiveWith is bidirectional for T2S", () => {
-    const t2sLite = SETTINGS_SCHEMA.find((e) => e.key === "t2s_lite");
-    const t2sPro = SETTINGS_SCHEMA.find((e) => e.key === "t2s_pro");
-    assert.ok(t2sLite, "t2s_lite not found in schema");
-    assert.ok(t2sPro, "t2s_pro not found in schema");
-    assert.equal(t2sLite.mutualExclusiveWith, "t2s_pro");
-    assert.equal(t2sPro.mutualExclusiveWith, "t2s_lite");
-});
-
-test("T2S entries are checkbox type", () => {
-    const t2sLite = SETTINGS_SCHEMA.find((e) => e.key === "t2s_lite");
-    const t2sPro = SETTINGS_SCHEMA.find((e) => e.key === "t2s_pro");
-    assert.equal(t2sLite.type, "checkbox");
-    assert.equal(t2sPro.type, "checkbox");
-});
-
-test("T2S entries have onApply callbacks", () => {
-    const t2sLite = SETTINGS_SCHEMA.find((e) => e.key === "t2s_lite");
-    const t2sPro = SETTINGS_SCHEMA.find((e) => e.key === "t2s_pro");
-    assert.equal(typeof t2sLite.onApply, "function");
-    assert.equal(typeof t2sPro.onApply, "function");
+test("T2S exposes one boolean preference", () => {
+    const options = SETTINGS_SCHEMA.filter(e => e.key.startsWith("t2s_"));
+    assert.equal(options.length, 1);
+    assert.equal(options[0].key, "t2s_enabled");
+    assert.equal(options[0].type, "checkbox");
 });
 
 console.log("\nconfig/schema/settings-schema.js — key naming conventions\n");

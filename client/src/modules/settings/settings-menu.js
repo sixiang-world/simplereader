@@ -6,7 +6,6 @@ import { getDropdownSelector } from "../../components/dropdown-selector.js";
 import { getColorPicker } from "../../components/custom-color-picker.js";
 import { PopupManager } from "../../components/popup-manager.js";
 import { handleGlobalWheel, fetchVersionData } from "../../utils/base.js";
-import { isSyncEnabled, getSyncToken, setSyncToken, validateSyncToken } from "../../core/config-sync.js";
 import { createRangeItem, createColorItem, createSelectorItem, createFontSelectorItem, createCheckboxItem, createSeparatorItem, createSeparatorItemWithText, findFontIndex, handleSettingsClose } from "../../utils/helpers/settings.js";
 import { updateVersionData } from "../../utils/helpers/ui.js";
 import { SETTINGS_SCHEMA, MENU_SCHEMA } from "../../config/schema/settings-schema.js";
@@ -150,10 +149,6 @@ export class SettingsMenu {
         if (shareInput) {
             shareInput.value = this.settingsObj.generateConfigURL();
         }
-
-        // Refresh the sync-token panel so it reflects the persisted token
-        // (discards any unsaved edits left in the input from a prior session).
-        this.settingsObj.refreshSyncTokenUI();
 
         // Add global wheel event handler
         // Disable page scrolling when settings menu is open
@@ -468,8 +463,8 @@ export class SettingsMenu {
                     tab.appendChild(this.#createShareURLItem());
                     continue;
                 }
-                if (itemId === "__config_sync_token") {
-                    tab.appendChild(this.#createSyncTokenItem());
+                if (itemId === "__settings_file") {
+                    tab.appendChild(this.#createSettingsFileItem());
                     continue;
                 }
 
@@ -690,7 +685,6 @@ export class SettingsMenu {
             //     sortBookshelf: true,
             // });
             cbReg.go("updateFilterBar");
-            cbReg.go("startBookshelfLoop");
 
             PopupManager.showNotification({
                 iconName: "SETTINGS",
@@ -802,178 +796,52 @@ export class SettingsMenu {
         return wrapper;
     }
 
-    /**
-     * Creates the "Config Sync" token input item for the general tab.
-     * Renders a text input for the sync token with validation feedback.
-     * @returns {HTMLElement} The sync token item element
-     */
-    #createSyncTokenItem() {
-        const isZh = CONFIG.RUNTIME_VARS.STYLE.ui_LANG === "zh";
-        const placeholder = isZh ? "输入令牌以启用多设备同步" : "Enter token to enable multi-device sync";
-        const saveText = isZh ? "保存" : "Save";
-        const savedEnabledText = isZh ? "✓ 已启用" : "✓ Enabled";
-        const savedDisabledText = isZh ? "✓ 已禁用" : "✓ Disabled";
-        const hintText = isZh
-            ? "仅支持字母、数字和下划线（4-64 位）"
-            : "Letters, digits, and underscores only (4-64 chars)";
-
+    #createSettingsFileItem() {
         const wrapper = document.createElement("div");
-        wrapper.className = "sync-token-wrapper";
-
-        // Inner container constrained to the same width as other setting items
-        const inner = document.createElement("div");
-        inner.className = "sync-token-inner";
-
-        // Input row (label moved to placeholder, hint moved to title)
-        const inputRow = document.createElement("div");
-        inputRow.className = "sync-token-input-row";
-
-        const input = document.createElement("input");
-        input.type = "text";
-        input.id = "config-sync-token";
-        input.className = "sync-token-input";
-        input.placeholder = placeholder;
-        input.title = hintText;
-        input.value = getSyncToken() || "";
-        input.setAttribute("autocomplete", "off");
-        input.setAttribute("spellcheck", "false");
-        inputRow.appendChild(input);
-
-        // Save button — initial state reflects whether a token is already saved
-        const saveBtn = document.createElement("button");
-        saveBtn.className = "sync-token-save-btn";
-        const _hasToken = !!getSyncToken();
-        saveBtn.textContent = _hasToken ? savedEnabledText : saveText;
-        if (_hasToken) saveBtn.dataset.savedState = "enabled";
-        inputRow.appendChild(saveBtn);
-
-        inner.appendChild(inputRow);
-
-        // Hint / validation message (hidden by default, only shown on error)
-        const hint = document.createElement("div");
-        hint.className = "sync-token-hint";
-        hint.id = "config-sync-token-hint";
-        hint.textContent = hintText;
-        inner.appendChild(hint);
-
-        // Action row: manual Pull / Push buttons (sync is on-demand, not auto)
-        const pullText = isZh ? "拉取" : "Pull";
-        const pushText = isZh ? "推送" : "Push";
-        const pullingText = isZh ? "拉取中…" : "Pulling…";
-        const pushingText = isZh ? "推送中…" : "Pushing…";
-        const okText = isZh ? "✓ 完成" : "✓ Done";
-        const failText = isZh ? "✗ 失败" : "✗ Failed";
-        const disabledHint = isZh ? "（先保存令牌）" : " (save token first)";
-
-        const actionRow = document.createElement("div");
-        actionRow.className = "sync-token-action-row";
-
-        const pullBtn = document.createElement("button");
-        pullBtn.className = "sync-token-action-btn sync-token-pull-btn";
-        pullBtn.textContent = pullText;
-        actionRow.appendChild(pullBtn);
-
-        const pushBtn = document.createElement("button");
-        pushBtn.className = "sync-token-action-btn sync-token-push-btn";
-        pushBtn.textContent = pushText;
-        actionRow.appendChild(pushBtn);
+        wrapper.className = "settings-file-actions";
+        const file = document.createElement("input");
+        file.type = "file";
+        file.accept = ".json,application/json";
+        file.hidden = true;
 
         const status = document.createElement("span");
-        status.className = "sync-token-status";
-        actionRow.appendChild(status);
-
-        inner.appendChild(actionRow);
-        const syncLimit = document.createElement("small");
-        syncLimit.textContent = isZh
-            ? "多设备请依次拉取、修改、推送；同时推送仍可能覆盖更改。"
-            : "Pull, edit and push one device at a time; simultaneous pushes can overwrite changes.";
-        inner.appendChild(syncLimit);
-
-        wrapper.appendChild(inner);
-
-        const setActionStatus = (text, kind) => {
-            status.textContent = text;
-            status.classList.remove("sync-token-status-ok", "sync-token-status-err");
-            if (kind === "ok") status.classList.add("sync-token-status-ok");
-            else if (kind === "err") status.classList.add("sync-token-status-err");
+        status.role = "status";
+        const setStatus = (key) => {
+            status.textContent = getComputedStyle(status).getPropertyValue(key).trim().replace(/^"|"$/g, "");
         };
 
-        const withBusy = async (btn, busyText, fn) => {
-            if (!isSyncEnabled()) {
-                setActionStatus(disabledHint, "err");
-                return;
-            }
-            const original = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = busyText;
+        const exportButton = document.createElement("button");
+        exportButton.type = "button";
+        exportButton.id = "settings-file-export";
+        exportButton.textContent = getComputedStyle(document.documentElement)
+            .getPropertyValue("--ui_settings_file_export").trim().replace(/^"|"$/g, "");
+        exportButton.addEventListener("click", () => {
+            const url = URL.createObjectURL(new Blob([this.settingsObj.exportSettingsFile()], { type: "application/json" }));
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "simplereader-settings.json";
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
+
+        const importButton = document.createElement("button");
+        importButton.type = "button";
+        importButton.id = "settings-file-import";
+        importButton.textContent = getComputedStyle(document.documentElement)
+            .getPropertyValue("--ui_settings_file_import").trim().replace(/^"|"$/g, "");
+        importButton.addEventListener("click", () => file.click());
+        file.addEventListener("change", async () => {
+            if (!file.files[0]) return;
             try {
-                await fn();
+                await this.settingsObj.importSettingsFile(file.files[0]);
+                setStatus("--ui_settings_file_imported");
+            } catch {
+                setStatus("--ui_settings_file_failed");
             } finally {
-                btn.disabled = false;
-                btn.textContent = original;
-            }
-        };
-
-        pullBtn.addEventListener("click", () => {
-            withBusy(pullBtn, pullingText, async () => {
-                const { ok, changedKeys } = await this.settingsObj.syncPull();
-                if (ok) {
-                    setActionStatus(
-                        changedKeys.length > 0
-                            ? `${okText} (${changedKeys.length})`
-                            : okText,
-                        "ok"
-                    );
-                } else {
-                    setActionStatus(failText, "err");
-                }
-            });
-        });
-
-        pushBtn.addEventListener("click", () => {
-            withBusy(pushBtn, pushingText, async () => {
-                const { ok } = await this.settingsObj.syncPush();
-                setActionStatus(ok ? okText : failText, ok ? "ok" : "err");
-            });
-        });
-
-        const validateAndSave = () => {
-            const raw = input.value;
-            const result = validateSyncToken(raw);
-
-            if (!result.valid) {
-                hint.classList.add("sync-token-error");
-                hint.textContent = isZh
-                    ? `格式错误：${hintText}`
-                    : `Invalid: ${hintText}`;
-                return;
-            }
-
-            hint.classList.remove("sync-token-error");
-            hint.textContent = hintText;
-
-            // Empty string = disable sync
-            const token = raw.trim() || null;
-            setSyncToken(token);
-
-            // Visual feedback on save button — persistent until user edits again
-            saveBtn.textContent = token ? savedEnabledText : savedDisabledText;
-            saveBtn.dataset.savedState = token ? "enabled" : "disabled";
-            setActionStatus("", null);
-        };
-
-        saveBtn.addEventListener("click", validateAndSave);
-        input.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") validateAndSave();
-        });
-        // Reset button to "Save" when user starts editing again
-        input.addEventListener("input", () => {
-            if (saveBtn.dataset.savedState) {
-                saveBtn.textContent = saveText;
-                delete saveBtn.dataset.savedState;
+                file.value = "";
             }
         });
-
+        wrapper.append(exportButton, importButton, file, status);
         return wrapper;
     }
 
@@ -1009,7 +877,6 @@ export class SettingsMenu {
             if (this.#colorPickerTornDown) return;
             this.#colorPicker = getColorPicker({
                 callbackOnInput: () => {
-                    // cbReg.go("updateAllBookCovers");
                     this.settingsObj.saveSettings(false, false, true);
                 },
                 callbackOnChange: () => {
@@ -1114,17 +981,6 @@ export class SettingsMenu {
                 {
                     func: this.settingsObj.saveSettings.bind(this.settingsObj),
                     params: [false, false],
-                },
-                {
-                    func: cbReg.go.bind(cbReg),
-                    params: [
-                        "updateAllBookCoversAfterFontsLoaded",
-                        // { message: `${element} => ${fontValue}` }
-                    ],
-                },
-                {
-                    func: cbReg.go.bind(cbReg),
-                    params: ["startBookshelfLoop"],
                 },
             ],
             options: {

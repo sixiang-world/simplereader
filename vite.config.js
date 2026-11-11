@@ -25,34 +25,6 @@ import { cpSync, existsSync, mkdirSync, statSync, readFileSync, writeFileSync, r
 import { dirname } from "node:path";
 
 /**
- * Vite plugin: pre-process books/ at build time.
- *
- * Scans the books/ directory for .txt and .epub files, runs each
- * through FileProcessorCore + PaginationCalculator, and writes the
- * result as static JSON under dist/books/. This lets the production
- * build serve pre-paginated book content without needing a backend.
- *
- * The plugin runs in the closeBundle hook so it executes after Vite
- * has emitted its own assets — dist/ exists by then.
- *
- * Failures are logged but do NOT abort the build (a missing or
- * corrupt book should not block the rest of the deployment).
- *
- * @returns {import("vite").Plugin}
- */
-function preprocessBooksPlugin() {
-    return {
-        name: "preprocess-books",
-        apply: "build",
-        async closeBundle() {
-            // Missing tooling is a broken build, not a successful empty library.
-            const { preprocessBooks } = await import("./build-tools/preprocess-books.mjs");
-            await preprocessBooks();
-        },
-    };
-}
-
-/**
  * Post-build: copy files to dist/ that are loaded at runtime (classic <script>
  * libs, JSON data, Web Worker, font CSS) so they resolve correctly.
  */
@@ -78,7 +50,6 @@ function copyDir(src, dest) {
 
 export default defineConfig({
     plugins: [
-        preprocessBooksPlugin(),
         {
             name: "postbuild-copy-lib",
             apply: "build",

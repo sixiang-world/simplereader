@@ -191,17 +191,8 @@ export class PaginationCalculator {
      */
     #htmlCleanCache = new Map();
 
-    /**
-     * @type {Map} Content line cache
-     * @private
-     */
-    #contentLineCache = new Map();
-
-    /**
-     * @type {Map} Content character cache
-     * @private
-     */
-    #contentCharCache = new Map();
+    /** Cumulative content counts; titles and empty lines contribute zero. */
+    #contentCounts;
 
     /**
      * @type {Map} Valid break point cache
@@ -236,6 +227,12 @@ export class PaginationCalculator {
         this.#useCharCount = config.USE_CHAR_COUNT ?? config.IS_EASTERN_LAN;
         if (!this.#useSmartPagination) {
             this.#useCharCount = false;
+        }
+        this.#contentCounts = new Float64Array(contentChunks.length + 1);
+        for (let i = 0; i < contentChunks.length; i++) {
+            const chars = contentChunks[i].charCount;
+            const count = this.#allTitlesInd[i] === undefined && chars > 0 ? (this.#useCharCount ? chars : 1) : 0;
+            this.#contentCounts[i + 1] = this.#contentCounts[i] + count;
         }
         this.#charMultiplier = config.CHAR_MULTIPLIER ?? this.#charMultiplier;
 
@@ -517,7 +514,9 @@ export class PaginationCalculator {
             }
         }
 
-        return this.#useCharCount ? this.#countContentChars(realStart, end) : this.#countContentLines(realStart, end);
+        const limit = this.#contentChunks.length;
+        if (realStart >= end || realStart >= limit) return 0;
+        return this.#contentCounts[Math.min(end, limit)] - this.#contentCounts[realStart];
     }
 
     /**
@@ -533,73 +532,6 @@ export class PaginationCalculator {
             .slice(start, end)
             .map((chunk) => chunk.content)
             .join("\n");
-    }
-
-    /**
-     * @private
-     * @method #countContentLines
-     * @param {number} start - Starting position
-     * @param {number} end - Ending position
-     * @returns {number} Number of content lines
-     * @description Counts the number of actual content lines between positions, excluding titles
-     */
-    #countContentLines(start, end) {
-        const cacheKey = `lines-${start}-${end}`;
-        if (this.#contentLineCache.has(cacheKey)) {
-            // this.#logger.log("Cache hit for countContentLines", { start, end });
-            return this.#contentLineCache.get(cacheKey);
-        }
-
-        let count = 0;
-        for (let i = start; i < end && i < this.#contentChunks.length; i++) {
-            // Don't count title lines
-            const titleIndex = this.#allTitlesInd[i];
-            if (titleIndex !== undefined) {
-                continue;
-            }
-
-            const charCount = this.#contentChunks[i].charCount;
-            if (charCount && charCount > 0) {
-                count++;
-            }
-        }
-
-        this.#contentLineCache.set(cacheKey, count);
-        return count;
-    }
-
-    /**
-     * @private
-     * @method #countContentChars
-     * @param {number} start - Starting position
-     * @param {number} end - Ending position
-     * @returns {number} Number of characters
-     * @description Counts the number of characters between positions, excluding titles
-     */
-    #countContentChars(start, end) {
-        const cacheKey = `chars-${start}-${end}`;
-        if (this.#contentCharCache.has(cacheKey)) {
-            // this.#logger.log("Cache hit for countContentChars", { start, end });
-            return this.#contentCharCache.get(cacheKey);
-        }
-
-        let count = 0;
-        for (let i = start; i < end && i < this.#contentChunks.length; i++) {
-            // Don't count title lines
-            const titleIndex = this.#allTitlesInd[i];
-            if (titleIndex !== undefined) {
-                continue;
-            }
-
-            const chunk = this.#contentChunks[i];
-            const charCount = chunk.charCount;
-            if (charCount && charCount > 0) {
-                count += charCount;
-            }
-        }
-
-        this.#contentCharCache.set(cacheKey, count);
-        return count;
     }
 
     /**
@@ -1093,12 +1025,10 @@ export class PaginationCalculator {
     /**
      * @private
      * @method #clearCaches
-     * @description Clears all internal caches (HTML clean cache, content line cache, etc.)
+     * @description Clears all internal caches (HTML clean and break point caches)
      */
     #clearCaches() {
         this.#htmlCleanCache.clear();
-        this.#contentLineCache.clear();
-        this.#contentCharCache.clear();
         this.#validBreakPointCache.clear();
         this.#logger.log("Caches cleared");
     }

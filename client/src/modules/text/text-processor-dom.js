@@ -16,6 +16,7 @@
 export class TextProcessorDOM {
     /** @type {Set<string>} Tracked blob URLs for cleanup */
     static #blobUrls = new Set();
+    static #imageUrls = new Map();
 
     /** Threshold in bytes above which data URLs are converted to blob URLs (~2MB) */
     static #BLOB_URL_THRESHOLD = 2 * 1024 * 1024;
@@ -30,6 +31,7 @@ export class TextProcessorDOM {
             URL.revokeObjectURL(url);
         }
         this.#blobUrls.clear();
+        this.#imageUrls.clear();
     }
 
     /**
@@ -45,6 +47,10 @@ export class TextProcessorDOM {
         for (const img of root.querySelectorAll("img[src^='data:image/']")) {
             const src = img.getAttribute("src");
             if (!src || src.length < this.#BLOB_URL_THRESHOLD) continue;
+            if (this.#imageUrls.has(src)) {
+                img.setAttribute("src", this.#imageUrls.get(src));
+                continue;
+            }
             try {
                 // Parse the data URL to extract MIME and base64 payload
                 const match = src.match(/^data:(image\/[a-z+]+);base64,(.+)$/i);
@@ -57,6 +63,7 @@ export class TextProcessorDOM {
                 const blob = new Blob([bytes], { type: mime });
                 const blobUrl = URL.createObjectURL(blob);
                 this.#blobUrls.add(blobUrl);
+                this.#imageUrls.set(src, blobUrl);
                 img.setAttribute("src", blobUrl);
             } catch {
                 // Keep the original data URL if conversion fails

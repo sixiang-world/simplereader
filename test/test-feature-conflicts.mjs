@@ -2,7 +2,7 @@
  * Tests for feature conflict detection and resolution.
  *
  * Validates the documented behavior in AGENTS.md:
- *   - 日志模式 (Log Mode) forces auto-join and line numbers
+ *   - 日志模式 (Log Mode) preserves source text with line numbers
  *   - 自动拼接 (Auto-Join) and 无限滚动 (Infinite Scroll) are mutually exclusive
  *   - Log mode hides sidebar
  *
@@ -122,17 +122,12 @@ function test(name, fn) {
 console.log("Feature conflict detection — schema-level validation\n");
 
 const logMode = SETTINGS_SCHEMA.find((e) => e.key === "log_mode");
-const autoJoin = SETTINGS_SCHEMA.find((e) => e.key === "continuous_scroll_mode");
 const infiniteScroll = SETTINGS_SCHEMA.find((e) => e.key === "infinite_scroll_mode");
 const showLineNumbers = SETTINGS_SCHEMA.find((e) => e.key === "show_line_numbers");
 const showToc = SETTINGS_SCHEMA.find((e) => e.key === "show_toc");
 
 test("log_mode exists in SETTINGS_SCHEMA", () => {
     assert.ok(logMode, "log_mode not found in SETTINGS_SCHEMA");
-});
-
-test("continuous_scroll_mode (auto-join) exists in SETTINGS_SCHEMA", () => {
-    assert.ok(autoJoin, "continuous_scroll_mode not found in SETTINGS_SCHEMA");
 });
 
 test("infinite_scroll_mode exists in SETTINGS_SCHEMA", () => {
@@ -157,26 +152,10 @@ if (readerSrc) {
         );
     });
 
-    test("reader.js references CONTINUOUS_SCROLL_MODE", () => {
-        assert.ok(
-            /CONTINUOUS_SCROLL_MODE/.test(readerSrc),
-            "reader.js should reference CONTINUOUS_SCROLL_MODE"
-        );
-    });
-
     test("reader.js references INFINITE_SCROLL_MODE", () => {
         assert.ok(
             /INFINITE_SCROLL_MODE/.test(readerSrc),
             "reader.js should reference INFINITE_SCROLL_MODE"
-        );
-    });
-
-    test("reader.js enforces log mode → flow mode (LOG_MODE activates flowReader.enter())", () => {
-        // Log mode now enters flow mode via flowReader.enter() directly,
-        // without modifying CONTINUOUS_SCROLL_MODE setting value.
-        assert.ok(
-            /flowReader\.enter\(\)|Log mode.*flow/.test(readerSrc),
-            "reader.js should activate flow mode when LOG_MODE is on"
         );
     });
 
@@ -226,13 +205,6 @@ test("constants.js defines LOG_MODE default as false", () => {
     assert.ok(
         /LOG_MODE:\s*false/.test(constantsSrc),
         "LOG_MODE should default to false"
-    );
-});
-
-test("constants.js defines CONTINUOUS_SCROLL_MODE default as false", () => {
-    assert.ok(
-        /CONTINUOUS_SCROLL_MODE:\s*false/.test(constantsSrc),
-        "CONTINUOUS_SCROLL_MODE should default to false"
     );
 });
 

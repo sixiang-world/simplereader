@@ -1,3 +1,4 @@
+import { allocateBookId, associateBookFile } from "../file/book-identity.js";
 /**
  * @fileoverview Bookshelf module for managing book storage and display
  *
@@ -17,7 +18,6 @@
  * @requires client/src/modules/text/text-processor
  * @requires client/src/modules/file/file-handler
  * @requires shared/core/callback/callback-registry
- * @requires client/src/modules/components/cover-generator
  * @requires client/src/modules/components/popup-manager
  * @requires client/src/utils/base
  * @requires client/src/utils/helpers-ui
@@ -30,13 +30,13 @@ import * as CONFIG from "../../config/index.js";
 import { ICONS } from "../../config/icons.js";
 import { cbReg } from "../../../../shared/core/callback/callback-registry.js";
 import { Logger } from "../../../../shared/utils/logger.js";
-import { isProcessedBookComplete } from "../file/book-data.js";
+import { BOOK_CACHE_VERSION, isProcessedBookComplete } from "../file/book-data.js";
 import { TextProcessor } from "../text/text-processor.js";
 import { FileHandler } from "../file/file-handler.js";
 import { PopupManager } from "../../components/popup-manager.js";
 import { isVariableDefined, getSizePrecise, removeFileExtension, convertUTCTimestampToLocalString, formatBytes, truncateText } from "../../utils/base.js";
 import { showLoadingScreen, hideLoadingScreen, resetUI, resetVars, resetDropZoneState, delegateScroll } from "../../utils/helpers/ui.js";
-import { setBookLastReadTimestamp, setIsFromLocal, getIsFromLocal, setIsOnServer, getIsOnServer } from "../../utils/helpers/bookshelf.js";
+import { setBookLastReadTimestamp, getBookLastReadTimestamp, setIsFromLocal, getIsFromLocal, setIsOnServer, getIsOnServer } from "../../utils/helpers/bookshelf.js";
 import { getProgressText, removeHistory, getIsBookFinished } from "../../utils/helpers/reader.js";
 import { BookshelfDB } from "./bookshelf-db.js";
 export { BookshelfDB };
@@ -53,7 +53,6 @@ export const bookshelf = {
     logger: Logger.getLogger("Bookshelf", false),
     worker: null,
 
-    _coverGenerator: null,
     _FILENAME_: "STR-Filename",
     _CACHE_FLAG_: "STR-Cache-File",
 
@@ -61,9 +60,6 @@ export const bookshelf = {
     _tokenAfterDBSave: null,
     _tokenAfterBookOpen: null,
 
-    _loopInterval: 2000,
-    _loopCount: 0,
-    _loopCountMax: 30,
 
     /**
      * Reopens the last read book on startup
@@ -93,6 +89,7 @@ export const bookshelf = {
      */
     async openBook(fname, forceRefresh = false) {
         if (this.enabled) {
+            const signal = FileHandler.beginLoad();
             showLoadingScreen();
 
             // console.log("Open book from cache: " + fname);
@@ -101,6 +98,7 @@ export const bookshelf = {
 
                 // Check if the book exists in db
                 const existsLocally = await this.isBookExist(fname);
+                signal.throwIfAborted();
 
                 if (!existsLocally) {
                     // Since v2 refactor the cloud-server pipeline has been
@@ -119,6 +117,7 @@ export const bookshelf = {
 
                 // Local book directly from database
                 fetchedBook = await this.db.getBook(fname);
+                signal.throwIfAborted();
 
                 this.logger.log("fetchedBook", fetchedBook);
 
@@ -144,22 +143,25 @@ export const bookshelf = {
                 if (book) {
                     if (book instanceof File) {
                         book[this._CACHE_FLAG_] = true;
+                        associateBookFile(book, fname);
                     }
                     resetVars();
                     if (
                         !book_processed ||
                         !isProcessedBookComplete(fetchedBook) ||
+                        fetchedBook.book_contract_version !== BOOK_CACHE_VERSION ||
                         book_epubConverterStale ||
                         CONFIG.RUNTIME_CONFIG.ALWAYS_PROCESS ||
                         book_pageBreakOnTitle !== CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE ||
                         forceRefresh
                     ) {
-                        await this.processBook(book, fetchedBook, forceRefresh);
+                        await this.processBook(book, fetchedBook, forceRefresh, signal);
                     } else {
-                        await this.handleBook(book, fetchedBook);
+                        await this.handleBook(book, fetchedBook, signal);
                     }
+                    signal.throwIfAborted();
                     this.hide(true);
-                    setBookLastReadTimestamp(fname);
+                    if (!CONFIG.CONST_CONFIG.ANONYMOUS_MODE) setBookLastReadTimestamp(fname);
                     return true;
                 } else {
                     hideLoadingScreen(false);
@@ -171,6 +173,7 @@ export const bookshelf = {
                     throw new Error(`openBook error: "${fname}"`);
                 }
             } catch (e) {
+                if (signal.aborted) return false;
                 hideLoadingScreen(false);
                 console.log(e);
                 return false;
@@ -183,16 +186,17 @@ export const bookshelf = {
      * @async
      * @param {File} book - Book file to process
      */
-    async processBook(book, fetchedBook, forceRefresh = false) {
+    async processBook(book, fetchedBook, forceRefresh, signal) {
         try {
             // EPUB files use a separate conversion path
             if (fetchedBook?.is_epub) {
                 if (book instanceof ArrayBuffer) {
                     // Convert ArrayBuffer back to File for handleEpubFile
-                    const file = new File([book], fetchedBook.name, { type: "application/epub+zip" });
-                    await FileHandler.handleEpubFile(file);
+                    const file = new File([book], fetchedBook.displayName ?? fetchedBook.name, { type: "application/epub+zip" });
+                    associateBookFile(file, fetchedBook.name);
+                    await FileHandler.handleEpubFile(file, signal);
                 } else if (book instanceof File) {
-                    await FileHandler.handleEpubFile(book);
+                    await FileHandler.handleEpubFile(book, signal);
                 } else {
                     throw new Error("EPUB book data is not a File or ArrayBuffer");
                 }
@@ -201,8 +205,9 @@ export const bookshelf = {
 
             const isEastern = fetchedBook.isEastern ?? null;
             const encoding = fetchedBook.encoding ?? null;
-            await FileHandler.handleSelectedFile([book], isEastern, encoding, forceRefresh);
+            await FileHandler.handleSelectedFile([book], isEastern, encoding, forceRefresh, signal);
         } catch (error) {
+            signal?.throwIfAborted();
             // Never delete the user's original file because derived parsing
             // failed. Invalidate only the cache flag and let the next open retry.
             try {
@@ -210,6 +215,7 @@ export const bookshelf = {
             } catch (invalidateError) {
                 console.error("Could not invalidate book cache", invalidateError);
             }
+            signal?.throwIfAborted();
             PopupManager.showNotification({
                 iconName: "ERROR",
                 text: `${CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToOpen} "${truncateText(fetchedBook.name || book.name)}"`,
@@ -225,12 +231,13 @@ export const bookshelf = {
      * @param {File} book - Book file to handle
      * @param {Object} fetchedBook - Fetched book object from db
      */
-    async handleBook(book, fetchedBook) {
+    async handleBook(book, fetchedBook, signal) {
         try {
-            await FileHandler.handleProcessedBook(fetchedBook);
+            await FileHandler.handleProcessedBook(fetchedBook, signal);
         } catch (e) {
+            signal?.throwIfAborted();
             console.log(e);
-            await this.processBook(book, fetchedBook); // Fallback to reprocess the book
+            await this.processBook(book, fetchedBook, false, signal); // Fallback to reprocess the book
         }
     },
 
@@ -271,8 +278,10 @@ export const bookshelf = {
                         //     return file;
                         // }
 
-                        await this.db.putBook(file.name, file, isFromLocal, isOnServer);
-                        if (!CONFIG.CONST_CONFIG.ANONYMOUS_MODE && !(await this.db.isBookExist(file.name))) {
+                        const bookId = CONFIG.CONST_CONFIG.ANONYMOUS_MODE ? null : allocateBookId(file);
+                        if (!bookId) return file;
+                        await this.db.putBook(bookId, file, isFromLocal, isOnServer);
+                        if (!CONFIG.CONST_CONFIG.ANONYMOUS_MODE && !(await this.db.isBookExist(bookId))) {
                             PopupManager.showNotification({
                                 iconName: "ERROR",
                                 text: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToSave,
@@ -331,7 +340,7 @@ export const bookshelf = {
      */
     updateBookProgressInfo(fname, bookElm = null, inLoop = false) {
         if (!bookElm) {
-            bookElm = $(".bookshelf .book").filter((_, element) => element.getAttribute("data-filename") === fname);
+            bookElm = $(".bookshelf .book").filter((_, element) => (element.getAttribute("data-book-id") ?? element.getAttribute("data-filename")) === fname);
             if (bookElm.length <= 0) {
                 return;
             }
@@ -385,19 +394,12 @@ export const bookshelf = {
      * @returns {jQuery} Generated book element
      */
     genBookItem(bookInfo, idx) {
-        // Generate book cover art
-        const canvasWidth = getSizePrecise(CONFIG.RUNTIME_VARS.STYLE.ui_bookCoverWidth);
-        const canvasHeight = getSizePrecise(CONFIG.RUNTIME_VARS.STYLE.ui_bookCoverHeight);
-        const currentBookNameAndAuthor = TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.name));
+        const displayName = bookInfo.displayName ?? bookInfo.name;
+        const currentBookNameAndAuthor = TextProcessor.getBookNameAndAuthor(removeFileExtension(displayName));
         const hasRealCover = Boolean(bookInfo.coverDataUrl);
-        let htmlTag = "";
-        if (hasRealCover) {
-            htmlTag = "img";
-        } else if (CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS) {
-            htmlTag = "canvas";
-        } else {
-            htmlTag = "div";
-        }
+        const cover = hasRealCover
+            ? '<img class="cover-canvas" loading="lazy">'
+            : '<div class="cover-canvas cover-fallback"><span></span><small></small></div>';
         const book = $(
             `<div class="book">
                 <div class="cover-container">
@@ -406,7 +408,7 @@ export const bookshelf = {
                         <span class="cover-hidden-text bookName"></span>
                         <span class="cover-hidden-text author"></span>
                     </div>
-                    <${htmlTag} class="cover-canvas" width="${canvasWidth}" height="${canvasHeight}"></${htmlTag}>
+                    ${cover}
                 </div>
                 <div class="info-container">
                     <div class="progress"></div>
@@ -426,8 +428,9 @@ export const bookshelf = {
                 </div>
             </div>`
         );
-        book.attr("data-filename", bookInfo.name);
-        book.find(".cover-hidden-text.filename").text(bookInfo.name);
+        book.attr("data-filename", displayName);
+        book.attr("data-book-id", bookInfo.name);
+        book.find(".cover-hidden-text.filename").text(displayName);
         book.find(".cover-hidden-text.bookName").text(currentBookNameAndAuthor.bookName);
         book.find(".cover-hidden-text.author").text(currentBookNameAndAuthor.author);
         if (hasRealCover) {
@@ -436,17 +439,8 @@ export const bookshelf = {
             img.alt = currentBookNameAndAuthor.bookName;
             img.style.objectFit = "cover";
         } else {
-            const coverSettings = this._getCoverSettings({
-                width: canvasWidth,
-                height: canvasHeight,
-                bookNameAndAuthor: currentBookNameAndAuthor,
-            });
-            const container = book.find(".cover-canvas")[0];
-            if (CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS) {
-                this._coverGenerator.generate(coverSettings, container.getContext("2d"));
-            } else {
-                this._coverGenerator.generate(coverSettings, container);
-            }
+            book.find(".cover-fallback span").text(currentBookNameAndAuthor.bookName);
+            book.find(".cover-fallback small").text(currentBookNameAndAuthor.author);
         }
         if (currentBookNameAndAuthor.author === "") {
             book.find(".cover-container").css("box-shadow", "var(--ui_bookshadow_noAuthor)");
@@ -474,7 +468,7 @@ export const bookshelf = {
                     book.find(".delete-btn-wrapper").css("opacity", "0");
                     const tempBookAuthor =
                         book.data("bookNameAndAuthor") ??
-                        TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.name));
+                        TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.displayName ?? bookInfo.name));
                     if (tempBookAuthor.author === "") {
                         $(this).css("box-shadow", "var(--ui_bookshadow_noAuthor)");
                     } else {
@@ -535,7 +529,7 @@ export const bookshelf = {
                     iconName: "DELETE_BOOK",
                     text: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_deleteBook.replace(
                         "xxx",
-                        `"${truncateText(bookInfo.name)}"`
+                        `"${truncateText(bookInfo.displayName ?? bookInfo.name)}"`
                     ),
                 });
             });
@@ -567,7 +561,7 @@ export const bookshelf = {
             if (book.find(".dot-menu__checkbox").is(":checked") || e.originalEvent.button === 2) {
                 const tempBookAuthor =
                     book.data("bookNameAndAuthor") ??
-                    TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.name));
+                    TextProcessor.getBookNameAndAuthor(removeFileExtension(bookInfo.displayName ?? bookInfo.name));
                 const tempBookTitle = tempBookAuthor.bookName;
                 const tempBookLastOpenedTimestamp =
                     isVariableDefined(bookInfo.lastOpenedTimestamp) && bookInfo.lastOpenedTimestamp !== ""
@@ -630,7 +624,7 @@ export const bookshelf = {
                 // Add popup menu to the book
                 const menuContent = $(bookInfoMenu);
                 menuContent.find(".bookinfo-menu-item-info_title").text(tempBookTitle);
-                menuContent.find(".bookinfo-menu-item-info_filename").text(bookInfo.name);
+                menuContent.find(".bookinfo-menu-item-info_filename").text(bookInfo.displayName ?? bookInfo.name);
                 const authorInfo = menuContent.find(".bookinfo-menu-item-info_author");
                 if (tempBookAuthor.author) authorInfo.text(tempBookAuthor.author);
                 else authorInfo.html('<span class="bookinfo-menu-item-text bookinfo-menu-item-text_unknown"></span>');
@@ -682,126 +676,6 @@ export const bookshelf = {
     },
 
     /**
-     * Updates all book covers with current theme colors and fonts
-     * @async
-     * @param {boolean} colorOnly - Whether to only update the book covers' colors
-     * @param {string} message - Message to log
-     */
-    async updateAllBookCovers(colorOnly = false, message = "") {
-        if (!CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS && colorOnly) {
-            return;
-        }
-
-        Array.prototype.slice.call(document.getElementsByClassName("book")).forEach((book) => {
-            // Skip books with real cover images (img.cover-canvas) — they don't use canvas generation
-            const coverEl = book.getElementsByClassName("cover-canvas")[0];
-            if (coverEl && coverEl.tagName === "IMG") return;
-            const book_filename = book.getAttribute("data-filename");
-            const bookNameAndAuthor =
-                $(book).data("bookNameAndAuthor") ??
-                TextProcessor.getBookNameAndAuthor(removeFileExtension(book_filename));
-            const coverSettings = this._getCoverSettings({
-                width: getSizePrecise(CONFIG.RUNTIME_VARS.STYLE.ui_bookCoverWidth),
-                height: getSizePrecise(CONFIG.RUNTIME_VARS.STYLE.ui_bookCoverHeight),
-                bookNameAndAuthor: bookNameAndAuthor,
-            });
-            let book_cover;
-            if (CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS) {
-                book_cover = book.getElementsByTagName("canvas")[0].getContext("2d");
-            } else {
-                book_cover = coverEl;
-            }
-            this._coverGenerator.generate(coverSettings, book_cover);
-        });
-    },
-
-    /**
-     * Gets all book names and authors
-     * @returns {Array} Array of book names and authors
-     */
-    getAllBookNamesAndAuthors() {
-        const allBookNamesAndAuthors = { booknames: [], authors: [] };
-        Array.prototype.slice.call(document.getElementsByClassName("book")).forEach((book) => {
-            const book_filename = removeFileExtension(book.getAttribute("data-filename"));
-            const bookNameAndAuthor =
-                $(book).data("bookNameAndAuthor") ??
-                TextProcessor.getBookNameAndAuthor(removeFileExtension(book_filename));
-            allBookNamesAndAuthors.booknames.push(bookNameAndAuthor.bookName);
-            allBookNamesAndAuthors.authors.push(bookNameAndAuthor.author);
-        });
-        return allBookNamesAndAuthors;
-    },
-
-    /**
-     * Gets all unique characters from book names, authors, or both.
-     * @returns {Object} Object with bookNameChars and bookAuthorChars
-     * @returns {Object} bookNameChars - Set of unique characters from book names
-     * @returns {Object} bookAuthorChars - Set of unique characters from book authors
-     */
-    getAllBookNamesAndAuthorsCharacters() {
-        const bookNameChars = new Set();
-        const bookAuthorChars = new Set();
-        Array.from(document.getElementsByClassName("book")).forEach((book) => {
-            const book_filename = removeFileExtension(book.getAttribute("data-filename"));
-            const bookNameAndAuthor =
-                $(book).data("bookNameAndAuthor") ??
-                TextProcessor.getBookNameAndAuthor(removeFileExtension(book_filename));
-
-            for (const char of bookNameAndAuthor.bookName) bookNameChars.add(char);
-            for (const char of bookNameAndAuthor.author) bookAuthorChars.add(char);
-        });
-        return { bookNameChars, bookAuthorChars };
-    },
-
-    /**
-     * Loads book covers after all fonts are loaded
-     * @param {string} message - Message to log
-     */
-    loadBookCoversAfterFontsLoaded(message = "") {
-        const fontFamilyTitle = CONFIG.RUNTIME_VARS.STYLE.fontFamily_title.split(",")[0];
-        const fontFamilyBody = CONFIG.RUNTIME_VARS.STYLE.fontFamily_body.split(",")[0];
-        const { bookNameChars, bookAuthorChars } = this.getAllBookNamesAndAuthorsCharacters();
-        if (message !== "") {
-            console.log("[loadBookCoversAfterFontsLoaded]", {
-                message,
-                bookNameChars: Array.from(bookNameChars).join(""),
-                bookAuthorChars: Array.from(bookAuthorChars).join(""),
-                fontFamilyTitle: fontFamilyTitle + " " + this.isFontfaceDefined(fontFamilyTitle),
-                fontFamilyBody: fontFamilyBody + " " + this.isFontfaceDefined(fontFamilyBody),
-            });
-        }
-        Promise.all([
-            ...Array.from(bookNameChars).map((char) => document.fonts.load(`12px "${fontFamilyTitle}"`, char)),
-            ...Array.from(bookAuthorChars).map((char) => document.fonts.load(`12px "${fontFamilyBody}"`, char)),
-        ])
-            .then(() => document.fonts.ready)
-            .then(() => {
-                console.log("All book cover fonts loaded, updating book covers");
-                cbReg.go("updateAllBookCovers");
-            })
-            .catch((e) => {
-                // console.warn("Failed to load all cover fonts:", e);
-                cbReg.go("updateAllBookCovers");
-            });
-    },
-
-    /**
-     * Checks if a font face is defined
-     * @param {string} fontFace - The font face to check
-     * @returns {boolean} True if the font face is defined, false otherwise
-     */
-    isFontfaceDefined(fontFace) {
-        return document.fonts.check(`12px "${fontFace}"`);
-    },
-
-    /**
-     * Gets the language of a book
-     * @async
-     * @param {Object} book - Book object
-     * @returns {Promise<boolean>} Language of the book
-     */
-
-    /**
      * Refreshes the bookshelf display and book list
      * @async
      * @param {boolean} [hardRefresh=false] - Whether to completely rebuild the book list
@@ -835,7 +709,7 @@ export const bookshelf = {
                 for (const book of allBooks) {
                     const new_book = { ...book };
 
-                    const lastOpenedTimestamp = localStorage.getItem(`${new_book.name}_lastopened`);
+                    const lastOpenedTimestamp = getBookLastReadTimestamp(new_book.name);
                     if (lastOpenedTimestamp) {
                         new_book.lastOpenedTimestamp = lastOpenedTimestamp;
                         new_book.progress = getProgressText(new_book.name, false);
@@ -866,7 +740,7 @@ export const bookshelf = {
                         // otherwise, add the book to the bookshelf
                         const bookIndex = Array.prototype.slice
                             .call(container.children())
-                            .findIndex((book) => book.getAttribute("data-filename") === bookInfo.name);
+                            .findIndex((book) => book.getAttribute("data-book-id") === bookInfo.name);
                         if (bookIndex !== -1) {
                             // console.log(`Book ${bookInfo.name} is already in bookshelf at index=${bookIndex}. Removing it first.`);
                             container.children().eq(bookIndex).remove();
@@ -926,7 +800,7 @@ export const bookshelf = {
                     !CONFIG.VARS.ALL_BOOKS_INFO[a].lastOpenedTimestamp &&
                     !CONFIG.VARS.ALL_BOOKS_INFO[b].lastOpenedTimestamp
                 ) {
-                    return CONFIG.VARS.ALL_BOOKS_INFO[a].name.localeCompare(CONFIG.VARS.ALL_BOOKS_INFO[b].name, "zh");
+                    return (CONFIG.VARS.ALL_BOOKS_INFO[a].displayName ?? a).localeCompare(CONFIG.VARS.ALL_BOOKS_INFO[b].displayName ?? b, "zh");
                 } else if (
                     CONFIG.VARS.ALL_BOOKS_INFO[a].lastOpenedTimestamp &&
                     !CONFIG.VARS.ALL_BOOKS_INFO[b].lastOpenedTimestamp
@@ -947,51 +821,6 @@ export const bookshelf = {
         });
 
         return allBooksInfo_names;
-    },
-
-    /**
-     * Gets or creates the CoverGenerator instance
-     * @private
-     * @returns {getCoverGenerator} The cover generator instance
-     */
-    async _getCoverGenerator(baselineOffsets = {}) {
-        if (!this._coverGenerator) {
-            let getCoverGenerator;
-            if (CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS) {
-                ({ getCoverGenerator } = await import("../../components/cover-generator-canvas.js"));
-            } else {
-                ({ getCoverGenerator } = await import("../../components/cover-generator-dom.js"));
-            }
-            this._coverGenerator = getCoverGenerator(baselineOffsets);
-        }
-        this._coverGenerator.updateFontBaselineOffsets(baselineOffsets);
-        return this._coverGenerator;
-    },
-
-    /**
-     * Creates cover settings object for a book
-     * @private
-     * @param {Object} params - Parameters for cover generation
-     * @param {number} params.width - Canvas width
-     * @param {number} params.height - Canvas height
-     * @param {Object} params.bookNameAndAuthor - Book name and author info
-     * @returns {Object} Cover settings object
-     */
-    _getCoverSettings({ width, height, bookNameAndAuthor }) {
-        return {
-            width,
-            height,
-            padding: width / 8,
-            bottomRectHeightRatio: 0.3,
-            coverColor1: CONFIG.RUNTIME_VARS.STYLE.mainColor_inactive,
-            coverColor2: CONFIG.RUNTIME_VARS.STYLE.mainColor_active,
-            textColor1: CONFIG.RUNTIME_VARS.STYLE.bgColor,
-            textColor2: CONFIG.RUNTIME_VARS.STYLE.bgColor,
-            font1: CONFIG.RUNTIME_VARS.STYLE.fontFamily_title_zh,
-            font2: CONFIG.RUNTIME_VARS.STYLE.fontFamily_body_zh,
-            bookTitle: bookNameAndAuthor.bookName,
-            authorName: bookNameAndAuthor.author,
-        };
     },
 
     /**
@@ -1397,15 +1226,15 @@ export const bookshelf = {
             this.logger.log("in hide", window.history.state);
             if (
                 addToHistory &&
-                CONFIG.VARS.FILENAME &&
+                CONFIG.VARS.BOOK_ID &&
                 (!window.history.state ||
                     window.history.state.type !== "book" ||
-                    window.history.state.bookName !== CONFIG.VARS.FILENAME)
+                    window.history.state.bookName !== CONFIG.VARS.BOOK_ID)
             ) {
                 window.history.pushState(
                     {
                         type: "book",
-                        bookName: CONFIG.VARS.FILENAME,
+                        bookName: CONFIG.VARS.BOOK_ID,
                     },
                     ""
                 );
@@ -1434,28 +1263,6 @@ export const bookshelf = {
     },
 
     /**
-     * Periodic loop to update book progress and save current filename
-     * @note Replaced by: 1) triggering the `_tokenAfterBookOpen` callback after the book is opened (set _FILENAME_ in localStorage)
-     * 2) triggering the `refreshBookList` -> `getBookItem` -> `updateBookProgressInfo` after the book is closed (update book progress info)
-     * 3) triggering the `closeBook` event after the book is closed (clear `_FILENAME_` in localStorage)
-     * No need to loop for every second anymore.
-     */
-    loop() {
-        if (this.enabled && CONFIG.CONST_UI.COVER_GENERATOR_CONFIG.USE_CANVAS && this._loopCount < this._loopCountMax) {
-            // localStorage.setItem(this._FILENAME_, CONFIG.VARS.FILENAME);
-            // if (CONFIG.VARS.FILENAME) this.updateBookProgressInfo(CONFIG.VARS.FILENAME, null, true);
-
-            if (!CONFIG.VARS.IS_BOOK_OPENED) {
-                // console.log("looping...");
-                cbReg.go("updateAllBookCovers");
-            }
-
-            this._loopCount++;
-            this._loopTimer = setTimeout(() => this.loop(), this._loopInterval);
-        }
-    },
-
-    /**
      * Enables the bookshelf module and sets up event handlers
      * @returns {Object} The bookshelf instance for chaining
      */
@@ -1464,7 +1271,6 @@ export const bookshelf = {
             this.db = new BookshelfDB({ onError: () => this.disable() });
             await this.db.upgradeBookshelfDB();
             this.enabled = true;
-            this._loopCount = 0;
             $(document).off("click.bookshelfInfo").on("click.bookshelfInfo", (event) => {
                 if ($(event.target).closest(".bookinfo-menu, .bookinfo-menu-btn").length) return;
                 $(".bookshelf .dot-menu__checkbox").prop("checked", false);
@@ -1494,20 +1300,12 @@ export const bookshelf = {
                 );
             });
 
-            // Initialize the cover generator
-            this._coverGenerator = await this._getCoverGenerator(CONFIG.RUNTIME_VARS.FONT_BASELINE_OFFSETS);
-            if (window.fetchFontBaselineOffsetsPromise) {
-                window.fetchFontBaselineOffsetsPromise.then((fontBaselineOffsets) => {
-                    // console.log("update baseline offsets", fontBaselineOffsets);
-                    this._coverGenerator.updateFontBaselineOffsets(fontBaselineOffsets);
-                    cbReg.go("truncateBookCoverText");
-                });
-            }
-
             // Register the callback after book opened
             this._tokenAfterBookOpen = register("fileAfter", () => {
                 CONFIG.VARS.IS_BOOK_OPENED = true;
-                localStorage.setItem(this._FILENAME_, CONFIG.VARS.FILENAME);
+                if (!CONFIG.VARS.BOOK_ID) return;
+                localStorage.setItem(this._FILENAME_, CONFIG.VARS.BOOK_ID);
+                setBookLastReadTimestamp(CONFIG.VARS.BOOK_ID);
             });
 
             // Upgrade the bookshelf database
@@ -1520,30 +1318,10 @@ export const bookshelf = {
                 await this.db.printAllDatabases();
             }
 
-            // Listen for startLoop event
-            register("startBookshelfLoop", () => {
-                this._loopCount = 0;
-                clearTimeout(this._loopTimer);
-                this._loopTimer = setTimeout(() => this.loop(), this._loopInterval);
-            });
-
             // Listen for refreshBookList event
             register("refreshBookList", async (e) => {
                 const { hardRefresh, sortBookshelf } = e;
                 await this.refreshBookList(hardRefresh, sortBookshelf);
-            });
-
-            // Listen for settings change events
-            register("updateAllBookCovers", async (e = {}) => {
-                const { colorOnly = false, message = "" } = e;
-                await this.updateAllBookCovers(colorOnly, message);
-                cbReg.go("truncateBookCoverText");
-            });
-
-            // Listen for updateAllBookCoversAfterFontsLoaded event
-            register("updateAllBookCoversAfterFontsLoaded", (e = {}) => {
-                const { message = "" } = e;
-                this.loadBookCoversAfterFontsLoaded(message);
             });
 
             // Listen for updateFilterBar event
@@ -1631,7 +1409,7 @@ export const bookshelf = {
                             file.encoding = file.encoding ?? "utf-8";
                             file.size = file.size ?? 0;
 
-                            const lastOpenedTimestamp = localStorage.getItem(`${file.name}_lastopened`);
+                            const lastOpenedTimestamp = getBookLastReadTimestamp(file.name);
                             if (lastOpenedTimestamp) {
                                 file.lastOpenedTimestamp = lastOpenedTimestamp;
                                 file.progress = getProgressText(file.name, false);
@@ -1905,7 +1683,6 @@ export const bookshelf = {
             // (v2 refactor) The bookshelf-db-worker.js was deleted along with
             // saveProcessedBookFromServer — it was the worker's only consumer.
 
-            cbReg.go("startBookshelfLoop");
 
             // console.log("Module <Bookshelf> enabled.");
         }
@@ -1920,7 +1697,6 @@ export const bookshelf = {
         if (this.enabled || this.db) {
             for (const [event, token] of this._eventSubscriptions || []) cbReg.rm(event, token);
             this._eventSubscriptions = [];
-            clearTimeout(this._loopTimer);
             $(window).off(".bookshelf");
             $(document).off(".bookshelfInfo");
             this._wheelElement?.removeEventListener("wheel", this._wheelHandler);
@@ -2002,11 +1778,6 @@ export async function initBookshelf(displayBooks = true) {
                 await bookshelf.reopenBook();
             }
 
-            // Load book covers after all fonts are loaded
-            cbReg.go(
-                "updateAllBookCoversAfterFontsLoaded"
-                //  { message: "initBookshelf" }
-            );
         }
     }
 }

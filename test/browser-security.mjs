@@ -31,11 +31,13 @@ await withBrowserTest(async ({browser,baseURL})=>{
         document.body.appendChild(anchor);
         getFootnotes().setup();
         anchor.dispatchEvent(new MouseEvent('mouseover',{bubbles:true}));
-        await new Promise(resolve=>setTimeout(resolve,150));
         const popup=document.getElementById('footnotediv');
-        const footnoteExec=window.__fnExec||0;
         const popupHasImg=popup?popup.querySelectorAll('img[onerror],img[src="x"]').length:0;
         const popupText=popup?popup.textContent:'';
+        // Capture the DOM at creation; unrelated layout events can dismiss it.
+        // Still wait for any asynchronous image event before checking execution.
+        await new Promise(resolve=>setTimeout(resolve,150));
+        const footnoteExec=window.__fnExec||0;
         anchor.remove();popup?.remove();
         return {executed:window.__securityMarker||0,title:document.querySelector('#span0')?.textContent,unexpectedImages:document.querySelectorAll('#toc-list img[onerror],.custom-notification img[onerror]').length,body:node.textContent,footnoteExec,popupHasImg,popupText};
     });

@@ -8,12 +8,10 @@
  * @module client/src/modules/features/go-line
  * @requires client/src/config/index
  * @requires client/src/utils/helpers-reader
- * @requires client/src/modules/features/flow-reader
  */
 
 import * as CONFIG from "../../config/index.js";
 import { setHistory } from "../../utils/helpers/reader.js";
-import { flowReader } from "./flow-reader.js";
 import { pageForLine } from "../../../../shared/core/text/page-navigation.js";
 
 /** @type {HTMLElement|null} The go-line dialog element */
@@ -118,23 +116,19 @@ function doGo() {
     }
 
     // Navigate
-    if (flowReader.isActive()) {
-        flowReader.gotoLine(targetLine, false);
-    } else {
-        // Page mode: find which page and navigate
-        const targetPage = pageForLine(targetLine, CONFIG.VARS.PAGE_BREAKS, CONFIG.VARS.TOTAL_PAGES);
+    // Page mode: find which page and navigate
+    const targetPage = pageForLine(targetLine, CONFIG.VARS.PAGE_BREAKS, CONFIG.VARS.TOTAL_PAGES);
 
-        import("./reader.js").then(({ reader }) => {
-            if (targetPage !== CONFIG.VARS.CURRENT_PAGE) {
-                reader.gotoPage(targetPage, "top");
-            }
-            const el = CONFIG.DOM_ELEMENT.GET_LINE(targetLine);
-            if (el) {
-                el.scrollIntoView({ behavior: "instant", block: "start" });
-            }
-        });
-    }
+    import("./reader.js").then(({ reader }) => {
+        if (targetPage !== CONFIG.VARS.CURRENT_PAGE) {
+            reader.gotoPage(targetPage, "top");
+        }
+        const el = CONFIG.DOM_ELEMENT.GET_LINE(targetLine);
+        if (el) {
+            el.scrollIntoView({ behavior: "instant", block: "start" });
+        }
+    });
 
-    setHistory(CONFIG.VARS.FILENAME, targetLine);
+    setHistory(CONFIG.VARS.BOOK_ID, targetLine);
     goLine.close();
 }

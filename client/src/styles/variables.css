@@ -223,10 +223,6 @@
     --ui_log_mode_note_zh: "⚠ 实验功能，可能存在BUG";
     --ui_log_mode_en: "Log Mode";
     --ui_log_mode_note_en: "⚠ Experimental, may contain bugs";
-    --ui_continuous_scroll_mode_zh: "连续滚动";
-    --ui_continuous_scroll_mode_en: "Continuous Scroll";
-    --ui_continuous_scroll_mode_note_zh: "消除分页边界，内容连续显示（与无限滚动互斥）";
-    --ui_continuous_scroll_mode_note_en: "Remove page boundaries for continuous scrolling (mutually exclusive with Infinite Scroll)";
     --ui_anonymous_mode_zh: "匿名模式";
     --ui_anonymous_mode_en: "Anonymous Mode";
     --ui_anonymous_mode_note_zh: "开启后，打开的书籍不会出现在书架上";
@@ -247,8 +243,6 @@
     --ui_show_content_boundary_lines_en: "Show Content Boundary Lines";
     --ui_show_content_boundary_lines_note_zh: "仅当正文区域宽度小于 100% 时显示";
     --ui_show_content_boundary_lines_note_en: "Only shown when the width of the main content area is less than 100%.";
-    --ui_enable_custom_cursor_zh: "自定义光标";
-    --ui_enable_custom_cursor_en: "Custom Cursor";
     --ui_arrow_left_zh: "向前翻页";
     --ui_arrow_left_en: "Previous Page";
     --ui_arrow_right_zh: "向后翻页";
@@ -283,14 +277,26 @@
     --ui_separator_shortcuts_en: "Keyboard Shortcuts";
     --ui_separator_share_zh: "分享配置";
     --ui_separator_share_en: "Share Config";
-    --ui_separator_sync_zh: "配置同步";
-    --ui_separator_sync_en: "Config Sync";
+    --ui_settings_file_export: "";
+    --ui_settings_file_export_zh: "导出配置";
+    --ui_settings_file_export_en: "Export settings";
+    --ui_settings_file_import: "";
+    --ui_settings_file_import_zh: "导入配置";
+    --ui_settings_file_import_en: "Import settings";
+    --ui_settings_file_imported: "";
+    --ui_settings_file_imported_zh: "配置已导入";
+    --ui_settings_file_imported_en: "Settings imported";
+    --ui_settings_file_failed: "";
+    --ui_settings_file_failed_zh: "无法导入此配置文件";
+    --ui_settings_file_failed_en: "Could not import this settings file";
+    --ui_separator_settings_file_zh: "配置文件";
+    --ui_separator_settings_file_en: "Settings File";
     --ui_separator_t2s_zh: "繁简转换";
     --ui_separator_t2s_en: "T2S Conversion";
-    --ui_t2s_lite_zh: "繁体转简体（Lite）";
-    --ui_t2s_lite_en: "Trad → Simp (Lite)";
-    --ui_t2s_lite_note_zh: "基于字符映射表的快速转换（内置，无网络依赖）";
-    --ui_t2s_lite_note_en: "Fast char-level conversion (built-in, no network)";
+    --ui_t2s_enabled_zh: "繁体转简体";
+    --ui_t2s_enabled_en: "Traditional → Simplified";
+    --ui_t2s_enabled_note_zh: "离线 OpenCC 词汇转换；关闭后重新打开书籍显示原文";
+    --ui_t2s_enabled_note_en: "Offline OpenCC; reopen the book after switching to restore original text";
     --ui_t2s_pro_zh: "繁体转简体（Pro）";
     --ui_t2s_pro_en: "Trad → Simp (Pro)";
     --ui_t2s_pro_note_zh: "基于 OpenCC 的词汇级精确转换（首次使用需加载约 1MB）";
@@ -735,8 +741,6 @@
     --ui_infinite_scroll_easy_mode_note: var(--ui_infinite_scroll_easy_mode_note_zh);
     --ui_log_mode: var(--ui_log_mode_zh);
     --ui_log_mode_note: var(--ui_log_mode_note_zh);
-    --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_zh);
-    --ui_continuous_scroll_mode_note: var(--ui_continuous_scroll_mode_note_zh);
     --ui_anonymous_mode: var(--ui_anonymous_mode_zh);
     --ui_anonymous_mode_note: var(--ui_anonymous_mode_note_zh);
     --ui_show_line_numbers: var(--ui_show_line_numbers_zh);
@@ -747,7 +751,6 @@
     --ui_main_content_width: var(--ui_main_content_width_zh);
     --ui_show_content_boundary_lines: var(--ui_show_content_boundary_lines_zh);
     --ui_show_content_boundary_lines_note: var(--ui_show_content_boundary_lines_note_zh);
-    --ui_enable_custom_cursor: var(--ui_enable_custom_cursor_zh);
     --ui_arrow_left: var(--ui_arrow_left_zh);
     --ui_arrow_right: var(--ui_arrow_right_zh);
     --ui_page_up: var(--ui_page_up_zh);
@@ -764,10 +767,14 @@
     --ui_separator_behavior: var(--ui_separator_behavior_zh);
     --ui_separator_shortcuts: var(--ui_separator_shortcuts_zh);
     --ui_separator_share: var(--ui_separator_share_zh);
-    --ui_separator_sync: var(--ui_separator_sync_zh);
+    --ui_settings_file_export: var(--ui_settings_file_export_zh);
+    --ui_settings_file_import: var(--ui_settings_file_import_zh);
+    --ui_settings_file_imported: var(--ui_settings_file_imported_zh);
+    --ui_settings_file_failed: var(--ui_settings_file_failed_zh);
+    --ui_separator_settings_file: var(--ui_separator_settings_file_zh);
     --ui_separator_t2s: var(--ui_separator_t2s_zh);
-    --ui_t2s_lite: var(--ui_t2s_lite_zh);
-    --ui_t2s_lite_note: var(--ui_t2s_lite_note_zh);
+    --ui_t2s_enabled: var(--ui_t2s_enabled_zh);
+    --ui_t2s_enabled_note: var(--ui_t2s_enabled_note_zh);
     --ui_t2s_pro: var(--ui_t2s_pro_zh);
     --ui_t2s_pro_note: var(--ui_t2s_pro_note_zh);
     --ui_settingMenuFontSize: var(--ui_settingMenuFontSize_zh);
@@ -915,8 +922,6 @@
     --ui_infinite_scroll_easy_mode_note: var(--ui_infinite_scroll_easy_mode_note_en);
     --ui_log_mode: var(--ui_log_mode_en);
     --ui_log_mode_note: var(--ui_log_mode_note_en);
-    --ui_continuous_scroll_mode: var(--ui_continuous_scroll_mode_en);
-    --ui_continuous_scroll_mode_note: var(--ui_continuous_scroll_mode_note_en);
     --ui_anonymous_mode: var(--ui_anonymous_mode_en);
     --ui_anonymous_mode_note: var(--ui_anonymous_mode_note_en);
     --ui_show_line_numbers: var(--ui_show_line_numbers_en);
@@ -927,7 +932,6 @@
     --ui_main_content_width: var(--ui_main_content_width_en);
     --ui_show_content_boundary_lines: var(--ui_show_content_boundary_lines_en);
     --ui_show_content_boundary_lines_note: var(--ui_show_content_boundary_lines_note_en);
-    --ui_enable_custom_cursor: var(--ui_enable_custom_cursor_en);
     --ui_arrow_left: var(--ui_arrow_left_en);
     --ui_arrow_right: var(--ui_arrow_right_en);
     --ui_page_up: var(--ui_page_up_en);
@@ -944,10 +948,14 @@
     --ui_separator_behavior: var(--ui_separator_behavior_en);
     --ui_separator_shortcuts: var(--ui_separator_shortcuts_en);
     --ui_separator_share: var(--ui_separator_share_en);
-    --ui_separator_sync: var(--ui_separator_sync_en);
+    --ui_settings_file_export: var(--ui_settings_file_export_en);
+    --ui_settings_file_import: var(--ui_settings_file_import_en);
+    --ui_settings_file_imported: var(--ui_settings_file_imported_en);
+    --ui_settings_file_failed: var(--ui_settings_file_failed_en);
+    --ui_separator_settings_file: var(--ui_separator_settings_file_en);
     --ui_separator_t2s: var(--ui_separator_t2s_en);
-    --ui_t2s_lite: var(--ui_t2s_lite_en);
-    --ui_t2s_lite_note: var(--ui_t2s_lite_note_en);
+    --ui_t2s_enabled: var(--ui_t2s_enabled_en);
+    --ui_t2s_enabled_note: var(--ui_t2s_enabled_note_en);
     --ui_t2s_pro: var(--ui_t2s_pro_en);
     --ui_t2s_pro_note: var(--ui_t2s_pro_note_en);
     --ui_settingMenuFontSize: var(--ui_settingMenuFontSize_en);
@@ -1174,12 +1182,6 @@
 #tooltip-setting_log_mode::before {
     content: var(--ui_log_mode_note);
 }
-#settingLabel-setting_continuous_scroll_mode::before {
-    content: var(--ui_continuous_scroll_mode);
-}
-#tooltip-setting_continuous_scroll_mode::before {
-    content: var(--ui_continuous_scroll_mode_note);
-}
 #settingLabel-setting_anonymous_mode::before {
     content: var(--ui_anonymous_mode);
 }
@@ -1209,9 +1211,6 @@
 }
 #tooltip-setting_show_content_boundary_lines::before {
     content: var(--ui_show_content_boundary_lines_note);
-}
-#settingLabel-setting_enable_custom_cursor::before {
-    content: var(--ui_enable_custom_cursor);
 }
 #settingLabel-setting_arrow_left::before {
     content: var(--ui_arrow_left);
@@ -1276,17 +1275,17 @@
 #settingLabel-setting_separator_share::before {
     content: var(--ui_separator_share);
 }
-#settingLabel-setting_separator_sync::before {
-    content: var(--ui_separator_sync);
+#settingLabel-setting_separator_settings_file::before {
+    content: var(--ui_separator_settings_file);
 }
 #settingLabel-setting_separator_t2s::before {
     content: var(--ui_separator_t2s);
 }
-#settingLabel-setting_t2s_lite::before {
-    content: var(--ui_t2s_lite);
+#settingLabel-setting_t2s_enabled::before {
+    content: var(--ui_t2s_enabled);
 }
-#tooltip-setting_t2s_lite::before {
-    content: var(--ui_t2s_lite_note);
+#tooltip-setting_t2s_enabled::before {
+    content: var(--ui_t2s_enabled_note);
 }
 #settingLabel-setting_t2s_pro::before {
     content: var(--ui_t2s_pro);
@@ -1396,24 +1395,3 @@
 #footnotediv .footnote-notfound::before {
     content: var(--ui_footnote_notfound);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,3 +1,4 @@
+import { readT2SEnabled } from "../../core/t2s.js";
 /**
  * @fileoverview Settings module for managing UI and style configurations.
  *
@@ -42,9 +43,8 @@ import { PopupManager } from "../../components/popup-manager.js";
 import { isVariableDefined, toBool, setDeep } from "../../utils/base.js";
 import { parseURLSettings } from "../../utils/url-settings.js";
 import { resolvePresetFromURL, applyPreset, FACTORY_DEFAULT_MARKER } from "../../core/presets.js";
-import { pullConfigResult, pushMergedConfig, isSyncEnabled, getSyncToken, buildPushPayload, recordLocalChange } from "../../core/config-sync.js";
 import { normalizeSettingValue, normalizeSettings, readStoredSetting } from "../../core/setting-values.js";
-import { applyPulledSettings } from "../../core/settings-state.js";
+import { MAX_SETTINGS_FILE_BYTES, readSettingsFile, writeSettingsFile } from "../../core/settings-file.js";
 import { refreshShareButtonLabels } from "../../utils/label-refresh.js";
 import { setRangeValue, setColorValue, setSelectorValue, setCheckboxValue, findFontIndex, changeLanguageSelectorItemLanguage, changeFontSelectorItemLanguage } from "../../utils/helpers/settings.js";
 import { setTitle } from "../../utils/helpers/reader.js";
@@ -65,13 +65,6 @@ const settings = {
      */
     enabled: false,
     settingsMenu: null,
-
-    /*
-     * Config-sync: keys the user has modified in this session.
-     * Pulls never override these keys — the user's in-session change
-     * always wins for them. Reset on page reload.
-     */
-    _userInteractedKeys: new Set(),
 
     /*
      * Language settings
@@ -181,6 +174,7 @@ const settings = {
      * @instance
      */
     loadSettings() {
+        if (localStorage.getItem("t2s_enabled") === null) localStorage.setItem("t2s_enabled", String(readT2SEnabled()));
         // Special case: respectUserLangSetting (not in manifest)
         this.respectUserLangSetting =
             toBool(localStorage.getItem("respectUserLangSetting"), false) ??
@@ -226,9 +220,17 @@ const settings = {
             }
         } else if (presetName) {
             // Apply named preset as a shallow merge over current values.
-            this.values = { ...this.values, ...normalizeSettings(SETTINGS_SCHEMA, applyPreset(this.values, presetName)) };
+            const presetValues = applyPreset(this.values, presetName);
+            if (Object.hasOwn(presetValues, "t2s_lite") || Object.hasOwn(presetValues, "t2s_pro")) {
+                presetValues.t2s_enabled = readT2SEnabled({ getItem: key => key === "t2s_enabled" ? null : presetValues[key] == null ? null : String(presetValues[key]) });
+            }
+            this.values = { ...this.values, ...normalizeSettings(SETTINGS_SCHEMA, presetValues) };
         }
 
+        const conversionParams = new URLSearchParams(window.location.search);
+        if (!conversionParams.has("t2s_enabled") && (conversionParams.has("t2s_lite") || conversionParams.has("t2s_pro"))) {
+            this.values.t2s_enabled = readT2SEnabled({ getItem: key => conversionParams.get(key) });
+        }
         // URL parameter override: schema-driven, properly typed, memory-only.
         // Runs AFTER preset application so individual URL params (?key=value)
         // take precedence over preset values.
@@ -277,35 +279,12 @@ const settings = {
     },
 
     /**
-     * Persist specific keys' values to localStorage. Called after a
-     * sync pull merge to ensure the merged values survive a page
-     * reload (otherwise loadSettings would read stale localStorage
-     * values and the next pull would be redundant).
-     *
-     * @public
-     * @method persistSyncedKeys
-     * @param {string[]} keys - The keys to persist.
-     */
-    persistSyncedKeys(keys) {
-        for (const key of keys) {
-            const def = this.schemaMap[key];
-            if (def && def.persist) {
-                try {
-                    localStorage.setItem(key, this.values[key]);
-                } catch (e) {
-                    console.warn(`[settings] Failed to persist synced key '${key}':`, e);
-                }
-            }
-        }
-    },
-
-    /**
      * Sync the current `this.values` back into the settings-panel form
      * controls (range sliders, color pickers, checkboxes, font selectors,
      * and the language selector). This is the reverse of saveSettings —
      * it makes the UI reflect the in-memory values.
      *
-     * Used after a sync pull merges new values, and after loadDefaultSettings.
+     * Used after importing settings or restoring defaults.
      *
      * @param {string[]|Set<string>|null} [keys=null] - Only sync these keys.
      *        If null/empty, syncs all schema keys.
@@ -344,69 +323,6 @@ const settings = {
         }
     },
 
-    /**
-     * Refresh the sync-token panel UI from the persisted token state.
-     *
-     * Re-reads the token from localStorage and re-renders the input value,
-     * save-button label/state, hint, and action status. Called on settings
-     * menu show() so that any unsaved edits typed into the input (which
-     * persist because the panel DOM is kept alive via show/hide) are
-     * discarded in favour of the actually-saved token.
-     *
-     * @public
-     */
-    refreshSyncTokenUI() {
-        const input = document.getElementById("config-sync-token");
-        if (!input) return;
-        const saveBtn = document.querySelector(".sync-token-save-btn");
-        const hint = document.getElementById("config-sync-token-hint");
-        const status = document.querySelector(".sync-token-status");
-
-        const isZh = CONFIG.RUNTIME_VARS.STYLE.ui_LANG === "zh";
-        const saveText = isZh ? "保存" : "Save";
-        const savedEnabledText = isZh ? "✓ 已启用" : "✓ Enabled";
-        const hintText = isZh
-            ? "仅支持字母、数字和下划线（4-64 位）"
-            : "Letters, digits, and underscores only (4-64 chars)";
-
-        const token = getSyncToken();
-        // Restore the saved token, discarding any unsaved in-input edits.
-        input.value = token || "";
-
-        if (saveBtn) {
-            if (token) {
-                saveBtn.textContent = savedEnabledText;
-                saveBtn.dataset.savedState = "enabled";
-            } else {
-                saveBtn.textContent = saveText;
-                delete saveBtn.dataset.savedState;
-            }
-        }
-        if (hint) {
-            hint.classList.remove("sync-token-error");
-            hint.textContent = hintText;
-        }
-        if (status) {
-            status.textContent = "";
-            status.classList.remove("sync-token-status-ok", "sync-token-status-err");
-        }
-    },
-
-    /**
-     * Apply pulled sync data: merge into current values using field-level
-     * LWW, persist changed keys, re-render the UI. This is the core
-     * "process the returned change-status → local update → render" step
-     * for the manual pull action.
-     *
-     * @param {Object|null} syncData - V2-format sync object from pullOnBoot.
-     * @returns {string[]} The keys that actually changed (empty if none).
-     * @public
-     */
-    applySyncPull(syncData) {
-        // protectedKeys are consumed by the pure state transition; no DOM imports there.
-        return applyPulledSettings(this, syncData, SETTINGS_SCHEMA);
-    },
-
     /** Update both preference semantics and the currently resolved UI language. */
     applyLanguagePreference(preference) {
         this.respectUserLangSetting = preference !== "auto";
@@ -419,45 +335,21 @@ const settings = {
         CONFIG.RUNTIME_VARS.WEB_LANG = this._resolved_ui_language;
     },
 
-    /**
-     * Manual pull action: fetch the synced config from textdb and apply it.
-     * Returns the change-status so the caller (e.g. the token panel button)
-     * can render feedback.
-     *
-     * @returns {Promise<{ok: boolean, changedKeys: string[]}>}
-     * @public
-     */
-    async syncPull() {
-        if (!isSyncEnabled()) return { ok: false, changedKeys: [] };
-        try {
-            const result = await pullConfigResult();
-            if (result.status === "error") return { ok: false, changedKeys: [] };
-            if (result.status === "missing") return { ok: true, changedKeys: [] };
-            const changedKeys = this.applySyncPull(result.data);
-            return { ok: true, changedKeys };
-        } catch (e) {
-            console.warn("[settings] syncPull failed:", e.message);
-            return { ok: false, changedKeys: [] };
-        }
+    exportSettingsFile() {
+        return writeSettingsFile(SETTINGS_SCHEMA, this.values);
     },
 
-    /**
-     * Manual push action: build a payload from current values (with field
-     * timestamps) and POST it to textdb.
-     *
-     * @returns {Promise<{ok: boolean}>}
-     * @public
-     */
-    async syncPush() {
-        if (!isSyncEnabled()) return { ok: false };
-        try {
-            const payload = buildPushPayload(this.values);
-            const ok = await pushMergedConfig(payload, { schema: SETTINGS_SCHEMA });
-            return { ok };
-        } catch (e) {
-            console.warn("[settings] syncPush failed:", e.message);
-            return { ok: false };
-        }
+    async importSettingsFile(file) {
+        if (file.size > MAX_SETTINGS_FILE_BYTES) throw new RangeError("Settings file is too large");
+        const imported = readSettingsFile(SETTINGS_SCHEMA, await file.text());
+        const changed = Object.keys(imported).filter(key => this.values[key] !== imported[key]);
+        if (!changed.length) return [];
+        for (const key of changed) localStorage.setItem(key, imported[key]);
+        Object.assign(this.values, imported);
+        if (changed.includes("ui_language")) this.applyLanguagePreference(this.values.ui_language);
+        this.applySettings();
+        this.syncValuesToForm();
+        return changed;
     },
 
     /**
@@ -695,8 +587,6 @@ const settings = {
         // Apply infinite scroll mode
         cbReg.go("toggleInfiniteScroll");
 
-        // Apply continuous scroll (flow) mode
-        cbReg.go("toggleContinuousScroll");
 
         // Apply show line numbers
         cbReg.go("toggleShowLineNumbers");
@@ -711,7 +601,6 @@ const settings = {
         cbReg.go("toggleHelpBtn");
 
         // Apply custom cursor visibility
-        cbReg.go("toggleCustomCursor");
     },
 
     /**
@@ -738,13 +627,6 @@ const settings = {
     saveSettings(toSetLanguage = false, forceSetLanguage = false, colorOnly = false) {
         // console.log("saveSettings", { toSetLanguage, forceSetLanguage });
 
-        // Snapshot current values so we can detect which keys actually
-        // changed. Changed keys are:
-        //   1. Added to _userInteractedKeys (protects against sync pull
-        //      reverting them).
-        //   2. Timestamped via recordLocalChange() (field-level LWW).
-        const oldValues = { ...this.values };
-
         // Helper: update values from schema
         const updateValuesFromInputs = (filterType = null) => {
             // Loop through all settings from schema
@@ -756,22 +638,9 @@ const settings = {
             }
         };
 
-        // Helper: detect changed keys, mark them as protected + timestamped
-        const recordChangedKeys = () => {
-            for (const def of SETTINGS_SCHEMA) {
-                const key = def.key;
-                if (this.values[key] !== oldValues[key]) {
-                    this._userInteractedKeys.add(key);
-                    recordLocalChange(key);
-                }
-            }
-        };
-
         if (colorOnly) {
             updateValuesFromInputs("color");
-            recordChangedKeys();
             this.applySettings(true);
-            cbReg.go("updateAllBookCovers", { colorOnly: colorOnly });
             return;
         }
 
@@ -836,8 +705,6 @@ const settings = {
 
         this.applySettings();
 
-        // Trigger updateAllBookCovers event
-        cbReg.go("updateAllBookCovers", { colorOnly: colorOnly });
 
         // Refresh the share URL input with updated settings.
         // Only do this when the settings menu is actually visible — saveSettings
@@ -851,11 +718,6 @@ const settings = {
             }
         }
 
-        // Settings changes are recorded (timestamped + protected) so that a
-        // later manual syncPush/syncPull has accurate field timestamps.
-        // Sync itself is NOT auto-triggered — the user pulls/pushes on
-        // demand via the token panel buttons.
-        recordChangedKeys();
     },
 
     /**
@@ -959,6 +821,13 @@ const settings = {
             document.getElementById("config-share-url-copy-btn"),
             lang
         );
+        for (const action of ["export", "import"]) {
+            const button = document.getElementById(`settings-file-${action}`);
+            if (button) {
+                button.textContent = getComputedStyle(document.documentElement)
+                    .getPropertyValue(`--ui_settings_file_${action}`).trim().replace(/^"|"$/g, "");
+            }
+        }
 
         if (consoleLog) {
             console.log(`Language set to "${lang}".`);
@@ -1164,8 +1033,4 @@ export function initSettings() {
     }
 }
 
-// Export the settings singleton so other modules (e.g. app.js's config-sync
-// wiring) can access settings.values and call settings.applySettings() after
-// a sync pull. Without this export, `(await import('./settings.js')).settings`
-// is undefined and sync merges are silently skipped.
 export { settings };

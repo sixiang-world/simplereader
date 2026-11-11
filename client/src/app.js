@@ -43,8 +43,6 @@ import { setTitle } from "./utils/helpers/reader.js";
 import {
     setHelpButton,
     toggleHelpButton,
-    setCustomCursor,
-    toggleCustomCursor,
     setCustomTooltip,
     initUIMode,
     setUIMode,
@@ -104,7 +102,6 @@ import {
     updateMetaTags();
     requestIdleCallback(() => {
         setTitle();
-        setCustomCursor();
         setCustomTooltip();
         initUIMode();
         displayDarkModeToggleButton();
@@ -140,14 +137,8 @@ import {
     // Read the effective runtime settings, including memory-only URL/preset
     // overrides, on every invocation instead of reading stale persistence.
     registerT2SHook(() => ({
-        lite: CONFIG.CONST_CONFIG.T2S_LITE,
-        pro: CONFIG.CONST_CONFIG.T2S_PRO,
+        enabled: CONFIG.CONST_CONFIG.T2S_ENABLED,
     }));
-
-    // Config sync is MANUAL (on-demand): pull/push are triggered by the
-    // user via the token panel buttons (settings.syncPull / settings.syncPush).
-    // There is no boot-time auto-pull, no periodic polling, and no auto-push
-    // on settings change. See docs/config-sync-contract.md.
 
     // Parallel execution of initBookshelf & initFontpool
     if (window.consoleTime) console.time("[time][background] Initialize Bookshelf");
@@ -235,7 +226,6 @@ function initializeFontStatus() {
  */
 async function loadFontsInBackground() {
     const notifyFontChange = createFrameScheduler(() => {
-        cbReg.go("updateAllBookCovers").catch((error) => console.warn("[font] Cover refresh failed:", error));
         cbReg.go("updateFontBaselineOffsets").catch((error) => console.warn("[font] Baseline refresh failed:", error));
     });
     const allSingleFonts = [...window.localFonts, ...window.remoteFonts];
@@ -587,10 +577,6 @@ function setupUIEventListeners() {
         toggleHelpButton(CONFIG.CONST_CONFIG.SHOW_HELPER_BTN);
     });
 
-    // Handle toggle custom cursor event
-    cbReg.add("toggleCustomCursor", () => {
-        toggleCustomCursor(CONFIG.CONST_CONFIG.ENABLE_CUSTOM_CURSOR);
-    });
 }
 
 /**

@@ -19,37 +19,15 @@ self.onmessage = async function (e) {
         id,
         operation = null,
         file = null,
-        fileName = null,
         metadata = null,
-        chunk = null,
-        chunkStart = -1,
-        sliceLineOffset = 0,
         extraContent = null,
         encoding = "utf-8",
         isEasternLan = true,
-        totalLines = -1,
         title_page_line_number_offset = 0,
         pageBreakOnTitle = false,
         styles = null,
         logMode = false,
     } = e.data;
-    // console.group("Worker message");
-    // console.log("operation: ", operation);
-    // console.log("file: ", file);
-    // console.log("fileName: ", fileName);
-    // console.log("metadata: ", metadata);
-    // console.log("chunk: ", chunk);
-    // console.log("chunkStart: ", chunkStart);
-    // console.log("sliceLineOffset: ", sliceLineOffset);
-    // console.log("extraContent: ", extraContent);
-    // console.log("encoding: ", encoding);
-    // console.log("isEasternLan: ", isEasternLan);
-    // console.log("totalLines: ", totalLines);
-    // console.log("title_page_line_number_offset: ", title_page_line_number_offset);
-    // console.log("pageBreakOnTitle: ", pageBreakOnTitle);
-    // console.log("styles: ", styles);
-    // console.groupEnd();
-
     try {
         const { importDependencies } = await import("../../utils/helpers/worker.js");
         const [FileProcessorCore, CONSTANTS, VARS, Logger] = await importDependencies(
@@ -80,58 +58,21 @@ self.onmessage = async function (e) {
                 break;
             }
 
-            case "processInitialChunk": {
+            case "processBook": {
                 CONFIG.VARS.IS_EASTERN_LAN = isEasternLan;
                 CONFIG.VARS.BOOK_AND_AUTHOR = metadata;
-
-                const processedChunk = await FileProcessorCore.processChunkStatic(chunk, {
+                const result = await FileProcessorCore.processChunkStatic(file, {
                     extraContent,
-                    sliceLineOffset,
-                    title_page_line_number_offset,
-                    pageBreakOnTitle,
-                    CONFIG,
-                    encoding,
-                    isInitialChunk: true,
-                    logMode,
-                });
-
-                self.postMessage({
-                    id,
-                    type: "processInitialChunkComplete",
-                    ...processedChunk,
-                });
-                break;
-            }
-
-            case "processRemainingContent": {
-                const remainingChunk = file.slice(chunkStart);
-
-                CONFIG.VARS.IS_EASTERN_LAN = isEasternLan;
-                CONFIG.VARS.BOOK_AND_AUTHOR = metadata;
-
-                const processedChunk = await FileProcessorCore.processChunkStatic(remainingChunk, {
-                    extraContent,
-                    sliceLineOffset,
                     title_page_line_number_offset,
                     pageBreakOnTitle,
                     CONFIG,
                     encoding,
                     isInitialChunk: false,
+                    forcePatternDetection: !logMode,
+                    patternDetectionOptions: { fileSize: file.size, initialChunkSize: 1024 * 1024 },
                     logMode,
-                    // progressCallback: (progress) => {
-                    //     self.postMessage({
-                    id,
-                    //         type: "processingProgress",
-                    //         ...progress,
-                    //     });
-                    // },
                 });
-
-                self.postMessage({
-                    id,
-                    type: "processRemainingContentComplete",
-                    ...processedChunk,
-                });
+                self.postMessage({ id, type: "processBookComplete", ...result });
                 break;
             }
 
@@ -147,17 +88,6 @@ self.onmessage = async function (e) {
                 break;
             }
 
-            case "generateEndPage": {
-                const { totalLines } = e.data;
-                const endPageLine = FileProcessorCore.generateEndPage(totalLines);
-
-                self.postMessage({
-                    id,
-                    type: "generateEndPageComplete",
-                    endPageLine,
-                });
-                break;
-            }
             default:
                 throw new Error(`Unknown operation: ${operation}`);
         }

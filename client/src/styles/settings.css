@@ -961,7 +961,8 @@ dialog::backdrop {
 .share-url-wrapper input:focus {
     border-color: var(--mainColor_active);
 }
-.share-url-wrapper .share-url-copy-btn {
+.share-url-wrapper .share-url-copy-btn,
+.settings-file-actions button {
     flex-shrink: 0;
     height: 32px;
     padding: 0 12px;
@@ -976,126 +977,21 @@ dialog::backdrop {
     box-sizing: border-box;
     line-height: normal;
 }
-.share-url-wrapper .share-url-copy-btn:hover {
+.share-url-wrapper .share-url-copy-btn:hover,
+.settings-file-actions button:hover {
     background: var(--mainColor_active);
     color: var(--bgColor);
     border-color: var(--mainColor_active);
 }
 
-/* Config sync token input */
-.sync-token-wrapper {
-    padding: 10px 0px;
+/* Local settings transfer */
+.settings-file-actions {
     display: flex;
-    justify-content: center;
     align-items: center;
-    position: relative;
-    flex-shrink: 0;
-}
-.sync-token-inner {
-    display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
+    gap: 0.5em;
     width: var(--ui_settingMenuSeparatorWidth);
-}
-.sync-token-input-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    width: 100%;
-}
-.sync-token-input-row .sync-token-input {
-    flex: 1;
-    min-width: 0;
-    height: 32px;
-    padding: 0 8px;
-    border: 1px solid var(--mainColor_inactive);
-    border-radius: 4px;
-    background: transparent;
-    color: inherit;
-    font-size: 0.85em;
-    outline: none;
-    box-sizing: border-box;
-    line-height: normal;
-}
-.sync-token-input-row .sync-token-input:focus {
-    border-color: var(--mainColor_active);
-}
-.sync-token-input-row .sync-token-save-btn {
+    margin-inline: auto;
+    padding-block: 10px;
     flex-shrink: 0;
-    height: 32px;
-    padding: 0 12px;
-    border: 1px solid var(--mainColor_inactive);
-    border-radius: 4px;
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-    font-size: 0.8em;
-    white-space: nowrap;
-    transition: background 0.15s;
-    box-sizing: border-box;
-    line-height: normal;
-}
-.sync-token-input-row .sync-token-save-btn:hover {
-    background: var(--mainColor_active);
-    color: var(--bgColor);
-    border-color: var(--mainColor_active);
-}
-.sync-token-hint {
-    display: none;
-    font-size: 0.7em;
-    margin-top: 4px;
-    color: var(--fontColor);
-    opacity: 0.6;
-}
-.sync-token-hint.sync-token-error {
-    display: block;
-    color: #e74c3c;
-    opacity: 1;
-}
-.sync-token-action-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    width: 100%;
-}
-.sync-token-action-btn {
-    flex-shrink: 0;
-    height: 30px;
-    padding: 0 12px;
-    border: 1px solid var(--mainColor_inactive);
-    border-radius: 4px;
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-    font-size: 0.8em;
-    white-space: nowrap;
-    transition: background 0.15s;
-    box-sizing: border-box;
-    line-height: normal;
-}
-.sync-token-action-btn:hover:not(:disabled) {
-    background: var(--mainColor_active);
-    color: var(--bgColor);
-    border-color: var(--mainColor_active);
-}
-.sync-token-action-btn:disabled {
-    opacity: 0.5;
-    cursor: progress;
-}
-.sync-token-status {
-    flex: 1;
-    min-width: 0;
-    font-size: 0.72em;
-    opacity: 0.7;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.sync-token-status-ok {
-    color: #2ecc71;
-    opacity: 1;
-}
-.sync-token-status-err {
-    color: #e74c3c;
-    opacity: 1;
 }

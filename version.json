@@ -1,6 +1,23 @@
 {
-    "version": "2.4.0",
+    "version": "2.5.0",
     "changelog": {
+        "2.5.0": {
+            "date": "2026-11-11",
+            "changes": {
+                "zh": [
+                    "书库为新导入的书籍分配独立 ID，同名书可共存，阅读进度彼此独立。旧书保留原件并在首次打开时重建旧缓存。",
+                    "设置支持本地 JSON 导入与导出，替代 textdb 同步。繁简转换合并为离线 OpenCC 开关，关闭后重开书籍即可显示原文。",
+                    "TXT 改为单次 Worker 解析，优化分页计数。移除实验性自动拼接，保留滚轮翻页。日志保留空白和缩进，每页最多 500 行。",
+                    "简化书架封面，复用同一书籍的大图对象 URL。Web 是本版发布目标，默认构建不再打包内置书。"
+                ],
+                "en": [
+                    "New imports receive independent book IDs, so books with the same filename retain separate reading progress. Existing books retain their original files and rebuild outdated caches on open.",
+                    "Local JSON import and export replace textdb sync. One offline OpenCC switch controls Chinese conversion. Reopen the book with conversion off to see the original.",
+                    "TXT now uses one Worker parse and faster pagination counts. Experimental Auto-Join was removed while scroll-to-turn remains. Log pages retain indentation and blank lines and render up to 500 physical lines.",
+                    "Bookshelf covers are simpler and large image URLs are reused within a book. This release targets the Web, with bundled books excluded from the default build."
+                ]
+            }
+        },
         "2.4.0": {
             "date": "2026-10-26",
             "changes": {

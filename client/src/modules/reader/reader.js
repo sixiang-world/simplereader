@@ -38,7 +38,6 @@ import {
     showShortenedTitle,
     getCurrentTitleLineNumber,
 } from "../../utils/helpers/reader.js";
-import { flowReader } from "./flow-reader.js";
 import { resolveEpubHref } from "../../../../shared/core/file/epub-path.js";
 import { search } from "./search.js";
 import { pageForLine } from "../../../../shared/core/text/page-navigation.js";
@@ -64,13 +63,6 @@ export const reader = {
      * @private
      */
     SCROLL_EVENT_LISTENER: null,
-
-    /**
-     * Flow mode (continuous scroll) reader reference
-     * @type {Object}
-     * @public
-     */
-    flow: flowReader,
 
     /**
      * Initializes the table of contents (TOC)
@@ -239,12 +231,6 @@ export const reader = {
      */
     showCurrentPageContent() {
         try {
-            // Flow mode: delegate to flowReader
-            if (flowReader.isActive()) {
-                flowReader.enter(); // re-renders with sliding window
-                return;
-            }
-
             const contentChunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
             const maxLines = contentChunks.length;
             const [startIndex, endIndex] = this._getCurrentPageIndices();
@@ -539,14 +525,6 @@ export const reader = {
      * @public
      */
     gotoPage(page, scrollTo = "top") {
-        // Flow mode: convert page navigation to line navigation
-        if (flowReader.isActive()) {
-            const targetLine = CONFIG.VARS.PAGE_BREAKS[page - 1] || 0;
-            flowReader.gotoLine(targetLine, false);
-            GetScrollPositions(true, true);
-            return;
-        }
-
         CONFIG.VARS.CURRENT_PAGE = isNaN(page)
             ? CONFIG.VARS.CURRENT_PAGE
             : Math.max(1, Math.min(page, CONFIG.VARS.TOTAL_PAGES));
@@ -609,22 +587,9 @@ export const reader = {
      * @public
      */
     async gotoLine(lineNumber, isTitle = true) {
-        const filename = CONFIG.VARS.FILENAME;
+        const filename = CONFIG.VARS.BOOK_ID;
         const chunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
-        const isCurrent = () => filename === CONFIG.VARS.FILENAME && chunks === CONFIG.VARS.FILE_CONTENT_CHUNKS;
-        // Flow mode: delegate to flowReader
-        if (flowReader.isActive()) {
-            flowReader.gotoLine(lineNumber, isTitle);
-            if (isTitle) {
-                await setChapterTitleActive(lineNumber);
-                if (!isCurrent()) return -1;
-                CONFIG.VARS.GOTO_TITLE_CLICKED = true;
-            }
-            if (!isCurrent()) return -1;
-            setHistory(filename, lineNumber);
-            return 0;
-        }
-
+        const isCurrent = () => filename === CONFIG.VARS.BOOK_ID && chunks === CONFIG.VARS.FILE_CONTENT_CHUNKS;
         // Find the page number to jump to
         // console.log(`lineNumber: ${lineNumber}, isTitle: ${isTitle}`);
 
@@ -1053,10 +1018,6 @@ export function initReader() {
                 if (isElementInContainer(target, CONTENT_CONTAINER)) {
                     if (!CONFIG.VARS.INIT) {
                         GetScrollPositions();
-                        // Flow mode: trigger accumulate-append on scroll (throttled)
-                        if (flowReader.isActive()) {
-                            flowReader.scheduleScrollAppend();
-                        }
                     }
                 }
                 return;
@@ -1074,28 +1035,6 @@ export function initReader() {
     window.isKeyboardNavigation = false;
     cbReg.add("toggleInfiniteScroll", () => {
         reader.toggleInfiniteScroll();
-    });
-
-    /**
-     * Handle continuous scroll (flow) mode toggle
-     */
-    cbReg.add("toggleContinuousScroll", () => {
-        if (CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE) {
-            flowReader.enter();
-            reader.generatePagination();
-        } else {
-            const result = flowReader.exit();
-            if (result) {
-                reader.gotoPage(result.targetPage);
-            }
-        }
-    });
-
-    /**
-     * Handle flow mode page change — regenerate pagination
-     */
-    cbReg.add("flowPageChanged", (newPage) => {
-        reader.generatePagination();
     });
 
     /**
@@ -1120,27 +1059,9 @@ export function initReader() {
         if (CONFIG.CONST_CONFIG.LOG_MODE || CONFIG.VARS.IS_LOG_MODE) {
             container?.setAttribute("data-reader-mode", "log");
             content.setAttribute("data-reader-mode", "log");
-            // Log mode uses flow mode for continuous scrolling and line numbers.
-            // Enter flow mode directly without modifying CONTINUOUS_SCROLL_MODE
-            // (so the setting checkbox stays independent — log mode is hidden anyway).
-            if (!flowReader.isActive()) {
-                flowReader.enter();
-            }
-            if (!CONFIG.CONST_CONFIG.SHOW_LINE_NUMBERS) {
-                CONFIG.CONST_CONFIG.SHOW_LINE_NUMBERS = true;
-                content.setAttribute("data-show-line-num", "true");
-            }
         } else {
             container?.removeAttribute("data-reader-mode");
             content.removeAttribute("data-reader-mode");
-            // If log mode is turned off and continuous_scroll_mode setting is also off,
-            // exit flow mode to restore paged mode
-            if (flowReader.isActive() && !CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE) {
-                const result = flowReader.exit();
-                if (result) {
-                    reader.gotoPage(result.targetPage);
-                }
-            }
         }
     });
 
@@ -1177,12 +1098,10 @@ export function initReader() {
 
         const navigationMap = {
             ArrowLeft: (e) => {
-                if (flowReader.isActive()) return; // No page turns in flow mode
-                return CONFIG.CONST_CONFIG.SHORTCUTS.arrow_left ? handleNavigation(e, () => reader.gotoPrevPage(true)) : null;
+                    return CONFIG.CONST_CONFIG.SHORTCUTS.arrow_left ? handleNavigation(e, () => reader.gotoPrevPage(true)) : null;
             },
             ArrowRight: (e) => {
-                if (flowReader.isActive()) return; // No page turns in flow mode
-                return CONFIG.CONST_CONFIG.SHORTCUTS.arrow_right ? handleNavigation(e, () => reader.gotoNextPage()) : null;
+                    return CONFIG.CONST_CONFIG.SHORTCUTS.arrow_right ? handleNavigation(e, () => reader.gotoNextPage()) : null;
             },
             PageUp: (e) =>
                 CONFIG.CONST_CONFIG.SHORTCUTS.page_up ? handleNavigation(e, () => reader.gotoPrevChapter()) : null,
@@ -1225,16 +1144,9 @@ export function initReader() {
             const totalLines = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
             if (totalLines <= 0) return;
 
-            if (flowReader.isActive()) {
-                // Flow mode: navigate to line by percentage
-                const targetLine = Math.round((value / 100) * (totalLines - 1));
-                flowReader.gotoLine(targetLine, false);
-            } else {
-                // Page mode: scroll to percentage position
-                const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
-                const scrollTarget = (value / 100) * (content.scrollHeight - content.clientHeight);
-                content.scrollTo({ top: scrollTarget, behavior: "instant" });
-            }
+            const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
+            const scrollTarget = (value / 100) * (content.scrollHeight - content.clientHeight);
+            content.scrollTo({ top: scrollTarget, behavior: "instant" });
             GetScrollPositions();
         });
     }

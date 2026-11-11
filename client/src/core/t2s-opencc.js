@@ -73,7 +73,9 @@ async function _loadOpenCC() {
         const script = document.createElement("script");
         script.src = OPENCC_JS_PATH;
         script.async = true;
+        const timer = setTimeout(() => { script.remove(); reject(new Error("OpenCC load timed out")); }, 5000);
         script.onload = () => {
+            clearTimeout(timer);
             if (typeof globalThis.OpenCC === "undefined") {
                 reject(
                     new Error(
@@ -84,12 +86,13 @@ async function _loadOpenCC() {
             }
             resolve(globalThis.OpenCC);
         };
-        script.onerror = () =>
+        script.onerror = () => { clearTimeout(timer); script.remove();
             reject(
                 new Error(
                     `[t2s-opencc] Failed to load script from ${script.src}`
                 )
             );
+        };
         document.head.appendChild(script);
     });
 }

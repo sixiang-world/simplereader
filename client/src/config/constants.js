@@ -29,10 +29,6 @@ import { SUPPORTED_FILE_EXT, SUPPORTED_EPUB_EXT, EPUB_FILE_TYPE, SUPPORTED_FONT_
  * @property {number} INFINITE_SCROLL_MODE_THRESHOLD - Threshold for infinite scroll mode
  * @property {boolean} SHOW_TOC_AREA - Whether to show the TOC area
  * @property {boolean} SHOW_TOC_AREA_DEFAULT - Whether to show the TOC area (default value)
- * @property {boolean} ENABLE_CUSTOM_CURSOR - Whether to enable custom cursor
- * @property {boolean} ENABLE_CUSTOM_CURSOR_DEFAULT - Whether to enable custom cursor (default value)
- * @property {boolean} CONTINUOUS_SCROLL_MODE - Whether to use continuous scroll (flow/auto-join) mode
- * @property {boolean} CONTINUOUS_SCROLL_MODE_DEFAULT - Whether to use continuous scroll mode (default value)
  * @property {boolean} LOG_MODE - Whether to use log mode (monospace, no TOC)
  * @property {boolean} LOG_MODE_DEFAULT - Log mode default value
  * @property {boolean} LOG_MODE_UI_ENABLED - Whether to expose the (experimental, known-bugs) log mode toggle in the settings UI. Gated behind a flag instead of a hardcoded `hidden: true` so it can be enabled deliberately.
@@ -64,10 +60,6 @@ export const CONST_CONFIG = {
     INFINITE_SCROLL_EASY_MODE_DEFAULT: false,
     SHOW_TOC_AREA: true,
     SHOW_TOC_AREA_DEFAULT: true,
-    ENABLE_CUSTOM_CURSOR: false,
-    ENABLE_CUSTOM_CURSOR_DEFAULT: false,
-    CONTINUOUS_SCROLL_MODE: false,
-    CONTINUOUS_SCROLL_MODE_DEFAULT: false,
     SHOW_BOOK_TITLE: true,
     SHOW_BOOK_TITLE_DEFAULT: true,
     LOG_MODE: false,
@@ -76,10 +68,8 @@ export const CONST_CONFIG = {
     SHOW_LINE_NUMBERS: false,
     SHOW_LINE_NUMBERS_DEFAULT: false,
     // Traditional → Simplified Chinese conversion (see client/src/core/t2s.js)
-    T2S_LITE: true,
-    T2S_LITE_DEFAULT: true,
-    T2S_PRO: false,
-    T2S_PRO_DEFAULT: false,
+    T2S_ENABLED: true,
+    T2S_ENABLED_DEFAULT: true,
     LOG_FILENAME_RE: /\.log$|^(.*[^a-zA-Z])?log([^a-zA-Z].*)?.txt$/i,
     SHORTCUTS: {
         arrow_left: true,
@@ -182,7 +172,6 @@ export const CONST_FOOTNOTE = Object.freeze({
  * @property {Object} LANGUAGE_MAPPING - Mapping of language codes to display names
  * @property {Object} CUSTOM_TOOLTIP_CONFIG - Configuration for the custom tooltip
  * @property {Object} SIDEBAR_SPLITVIEW_CONFIG - Configuration for the sidebar splitview
- * @property {Object} COVER_GENERATOR_CONFIG - Configuration for the cover generator
  * @readonly
  */
 export const CONST_UI = Object.freeze({
@@ -223,9 +212,6 @@ export const CONST_UI = Object.freeze({
             proxyScroll: true,
             patchWindowScroll: true,
         },
-    },
-    COVER_GENERATOR_CONFIG: {
-        USE_CANVAS: false,
     },
 });
 

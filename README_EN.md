@@ -1,3 +1,5 @@
+
+> 2026-11-11 重构：Web 为主线；本地设置文件替代 textdb，单一离线 OpenCC 开关。新导入书籍使用独立 ID，同名书不覆盖，缓存保留原文。更改转换开关后重新打开书籍生效。构建不再自动打包 books/；`pnpm run preprocess-books` 仅为显式离线工具。实施与限制见 [重构记录](docs/DEV-REFACTOR-PLAN-2026-11-11.md)。
 <!-- markdownlint-disable MD033 MD041 -->
 <div align="center">
 
@@ -49,6 +51,8 @@ Core features from [henryxrl/SimpleTextReader](https://github.com/henryxrl/Simpl
 
 **Browser extensions** (Chrome / Firefox / Edge) are published by henryxrl, version v1.6.9.5:
 
+This fork publishes the Web reader. Legacy extension tooling remains available for local compatibility checks.
+
 - [Chrome Extension](https://chrome.google.com/webstore/detail/%E6%98%93%E7%AC%BA/dbanahlbopbjpgdkecmclbbonhpohcaf)
 - [Firefox Extension](https://addons.mozilla.org/en-US/firefox/addon/yijian/)
 - [Edge Extension](https://microsoftedge.microsoft.com/addons/detail/pabihehbdhldbdliffaddllmjlknmpak)
@@ -57,11 +61,11 @@ Core features from [henryxrl/SimpleTextReader](https://github.com/henryxrl/Simpl
 
 Enhancements from [cataerogong/SimpleTextReader](https://github.com/cataerogong/SimpleTextReader):
 
-1. **Auto-Join Mode (Flow Mode)**: Sliding-window renderer that dynamically loads/unloads content as you scroll, providing seamless reading without page breaks. ⚠ Experimental feature with known bugs — not recommended for daily use.
+1. **分页阅读 / Paginated reading**：保留滚轮翻页；实验性自动拼接已退役。
 2. **Full-Text Search**: Regex-enabled search dialog with forward/backward navigation and match highlighting. Shortcut: `F`.
 3. **Quick Jump (Go to Line)**: Jump by line number or percentage. Shortcut: `G`.
-4. **Log Mode**: Simplified rendering for `.log` files — skips title detection, text optimization, and pagination. Auto-detected or manually toggled.
-5. **Progress Bar**: Vertical slider in the sidebar for quick navigation. Works in both page and flow modes.
+4. **Log Mode**: Simplified rendering for `.log` files — preserves blank lines and indentation, skips title detection and text optimization, and renders at most 500 physical lines per page.
+5. **Progress Bar**: Vertical slider in the sidebar for quick navigation. Works with paginated reading.
 6. **Line Number Display**: `data-line-num` attribute on all content elements, toggled via settings.
 7. **Reader Mode Setting**: Auto / Book / Log modes.
 
@@ -82,7 +86,7 @@ Added by this repository (sixiang-world):
 ### Recommended Page-Turn Settings
 
 > **Recommended: Enable both "Infinite Scroll" and "Easier Infinite Scrolling"** — the combination provides the smoothest page-turn experience.
-> "Auto-Join" is experimental with known bugs and is not recommended for daily use.
+> Auto-Join 已退役；滚轮翻页仍保留。
 
 ## Usage
 
@@ -183,7 +187,7 @@ client/
     app.js                  # Application entry point
     init-webpage.js         # Page initialization (language/theme/SVG icons)
     config/                 # Constants, runtime variables, Schema
-    core/                   # Architecture extensions: Hook system, Presets, Config sync
+    core/                   # Presets, settings files, and other core logic
     components/             # Reusable UI components
     modules/
       reader/               # Reader core (pagination, footnotes, search, navigation)
@@ -212,9 +216,9 @@ test/                       # Unit tests (22 test files, Node-native assert)
 This release line (since v2.0.0) is a major refactor and is **not backward compatible with v1**. Read the following before upgrading:
 
 1. **Server-side is deprecated**: the old `server/` (Node + Express + Prisma, including `/api/library/*`, `/api/auth/*`, login and the bookshelf database) is archived under `archive/server/`. **The v2 image is a static frontend only** (Vite build output), served by Caddy or any static server. There is **no migration script** for server-stored bookshelves — re-import your books after upgrading.
-2. **Config-sync security model changed**: v1 used session auth; v2 uses a **plain-text token** mode — the token is the storage key and is placed directly in the URL (`https://textdb.hunluan.space/{token}`), so it appears in server access logs and browser history. **Only sync reading preferences; do not use a token that contains sensitive information.**
+2. **Local settings files**: export/import JSON preferences. The retired textdb service is no longer contacted. Files do not contain books, fonts or old sync tokens.
 3. **Sync data format v2 (not backward compatible)**: the format is now `{_meta:{v:2}, key:{v,ts}}` with field-level timestamps, incompatible with the flat 1.x format. **Upgrade all devices to ≥2.0.0**, otherwise old clients fail to read v2 data.
-4. **`isOnServer` is deprecated**: the client no longer has the concept of "book stored on server"; related UI and fields are removed.
+4. **`isOnServer` is deprecated**: the client no longer has the concept of "book stored on server"; legacy data fields remain for compatibility; the current application has no server library.
 
 Upgrade tip: rebuild the image (don't blindly overwrite an incompatible environment with the old `:latest`), and back up local books before upgrading.
 

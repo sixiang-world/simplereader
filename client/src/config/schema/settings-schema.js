@@ -77,15 +77,6 @@ const SETTINGS_SCHEMA = [
         persist: true,
     },
     {
-        key: "enable_custom_cursor",
-        type: "checkbox",
-        tab: "general",
-        label: "setting_enable_custom_cursor",
-        bind: "CONFIG.CONST_CONFIG.ENABLE_CUSTOM_CURSOR",
-        default: CONFIG.CONST_CONFIG.ENABLE_CUSTOM_CURSOR_DEFAULT,
-        persist: true,
-    },
-    {
         key: "show_book_title",
         type: "checkbox",
         tab: "general",
@@ -125,12 +116,6 @@ const SETTINGS_SCHEMA = [
         bind: "CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE",
         default: CONFIG.CONST_CONFIG.INFINITE_SCROLL_MODE_DEFAULT,
         persist: true,
-        mutualExclusiveWith: "continuous_scroll_mode",
-        onApply: function (value) {
-            if (value) {
-                this.values.continuous_scroll_mode = false;
-            }
-        },
     },
     {
         key: "infinite_scroll_easy_mode",
@@ -171,22 +156,6 @@ const SETTINGS_SCHEMA = [
         // flag below — instead of being silently dropped from the UI.
         hidden: true,
         featureFlag: "LOG_MODE_UI_ENABLED",
-    },
-    {
-        key: "continuous_scroll_mode",
-        type: "checkbox",
-        tab: "general",
-        label: "setting_continuous_scroll_mode",
-        note: true,
-        bind: "CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE",
-        default: CONFIG.CONST_CONFIG.CONTINUOUS_SCROLL_MODE_DEFAULT,
-        persist: true,
-        mutualExclusiveWith: "infinite_scroll_mode",
-        onApply: function (value) {
-            if (value) {
-                this.values.infinite_scroll_mode = false;
-            }
-        },
     },
     {
         key: "show_line_numbers",
@@ -531,60 +500,15 @@ const SETTINGS_SCHEMA = [
         persist: true,
     },
 
-    // ==== T2S (Traditional -> Simplified Chinese) ====
-    // Two mutually exclusive checkboxes:
-    //   - t2s_lite : character-level JSON map (fast, no network)
-    //   - t2s_pro  : OpenCC Wasm (vocabulary-level, ~1MB lazy-loaded)
-    // Enabling one disables the other automatically.
-    // Both off = no conversion; either on = auto-detect traditional chars.
+    // One conversion preference; old lite/pro keys migrate during load.
     {
-        key: "t2s_lite",
-        type: "checkbox",
-        tab: "general",
-        label: "setting_t2s_lite",
-        note: true,
-        bind: "CONFIG.CONST_CONFIG.T2S_LITE",
-        default: CONFIG.CONST_CONFIG.T2S_LITE_DEFAULT,
-        persist: true,
-        mutualExclusiveWith: "t2s_pro",
-        onApply: function (value) {
-            if (value) {
-                this.values.t2s_pro = false;
-            }
-        },
-    },
-    {
-        key: "t2s_pro",
-        type: "checkbox",
-        tab: "general",
-        label: "setting_t2s_pro",
-        note: true,
-        bind: "CONFIG.CONST_CONFIG.T2S_PRO",
-        default: CONFIG.CONST_CONFIG.T2S_PRO_DEFAULT,
-        persist: true,
-        mutualExclusiveWith: "t2s_lite",
-        onApply: function (value) {
-            if (value) {
-                this.values.t2s_lite = false;
-            }
-        },
+        key: "t2s_enabled", type: "checkbox", tab: "general",
+        label: "setting_t2s_enabled", note: true,
+        bind: "CONFIG.CONST_CONFIG.T2S_ENABLED",
+        default: CONFIG.CONST_CONFIG.T2S_ENABLED_DEFAULT, persist: true,
     },
 
-    // ==== Config Sync ====
-    // Not a real SETTINGS_SCHEMA input — the UI is a custom text field
-    // rendered via the virtual item "__config_sync_token" in MENU_SCHEMA.
-    // We still list it here so schemaMap has an entry and generateConfigURL
-    // knows about it, but it is marked hidden so the generic renderer skips it.
-    {
-        key: "config_sync_token",
-        type: "hidden",
-        tab: "general",
-        label: "setting_config_sync_token",
-        hidden: true,
-        persist: false, // Handled manually by config-sync.js
-        default: "",
-        bind: "CONFIG.RUNTIME_VARS.STYLE.ui_sync_token",
-    },
+
 ]
 /**
  * Array of menu schema definitions describing the UI layout of the settings menu.
@@ -657,12 +581,12 @@ const MENU_SCHEMA = [
             {
                 section: "setting_separator_ui",
                 order: 1,
-                items: ["ui_language", "show_filter_bar", "show_book_title", "show_helper_btn", "enable_custom_cursor"],
+                items: ["ui_language", "show_filter_bar", "show_book_title", "show_helper_btn"],
             },
             {
                 section: "setting_separator_behavior",
                 order: 2,
-                items: ["auto_open_last_book", "infinite_scroll_mode", "infinite_scroll_easy_mode", "continuous_scroll_mode", "anonymous_mode"],
+                items: ["auto_open_last_book", "infinite_scroll_mode", "infinite_scroll_easy_mode", "anonymous_mode"],
             },
             {
                 section: "setting_separator_reading_mode",
@@ -672,12 +596,12 @@ const MENU_SCHEMA = [
             {
                 section: "setting_separator_t2s",
                 order: 4,
-                items: ["t2s_lite", "t2s_pro"],
+                items: ["t2s_enabled"],
             },
             {
-                section: "setting_separator_sync",
+                section: "setting_separator_settings_file",
                 order: 5,
-                items: ["__config_sync_token"],
+                items: ["__settings_file"],
             },
             {
                 section: "setting_separator_share",

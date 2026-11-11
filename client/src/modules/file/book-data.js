@@ -1,4 +1,6 @@
 // @ts-check
+export const BOOK_CACHE_VERSION = 2;
+
 /** Disk names are retained for compatibility with existing IndexedDB books. */
 const fields = {
     file_content_chunks: 'FILE_CONTENT_CHUNKS',
@@ -16,7 +18,7 @@ const fields = {
 };
 /** @param {Record<string, any>} state @param {Record<string, any>} extra */
 export function snapshotProcessedBook(state, extra = {}) {
-    return { name: state.FILENAME, processed: true, book_contract_version: 1,
+    return { name: state.BOOK_ID || state.FILENAME, displayName: state.FILENAME, processed: true, book_contract_version: BOOK_CACHE_VERSION,
         is_eastern_lan: state.IS_EASTERN_LAN, encoding: state.ENCODING,
         bookAndAuthor: state.BOOK_AND_AUTHOR, title_page_line_number_offset: state.TITLE_PAGE_LINE_NUMBER_OFFSET,
         ...Object.fromEntries(Object.entries(fields).map(([disk, runtime]) => [disk, state[runtime]])), ...extra };

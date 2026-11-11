@@ -9,12 +9,10 @@
  * @module client/src/modules/features/search
  * @requires client/src/config/index
  * @requires client/src/utils/helpers-reader
- * @requires client/src/modules/features/flow-reader
  */
 
 import * as CONFIG from "../../config/index.js";
 import { setHistory } from "../../utils/helpers/reader.js";
-import { flowReader } from "./flow-reader.js";
 import { pageForLine } from "../../../../shared/core/text/page-navigation.js";
 
 /** @type {HTMLElement|null} The search dialog element */
@@ -209,26 +207,22 @@ async function doSearch(down = true) {
 }
 
 /**
- * Navigate to a specific line (handles both flow and page mode)
+ * Navigate to a specific line
  * @param {number} lineNumber
  */
 async function navigateToLine(lineNumber, isCurrent = () => true) {
-    if (flowReader.isActive()) {
-        flowReader.gotoLine(lineNumber, false);
-    } else {
-        // Page mode: find which page contains the line and navigate
-        const targetPage = pageForLine(lineNumber, CONFIG.VARS.PAGE_BREAKS, CONFIG.VARS.TOTAL_PAGES);
+    // Page mode: find which page contains the line and navigate
+    const targetPage = pageForLine(lineNumber, CONFIG.VARS.PAGE_BREAKS, CONFIG.VARS.TOTAL_PAGES);
 
-        // Await navigation so the result exists before applying highlights.
-        const { reader } = await import("./reader.js");
-        if (!isCurrent()) return;
-        if (targetPage !== CONFIG.VARS.CURRENT_PAGE) {
-            reader.gotoPage(targetPage, "top");
-        }
-        const el = CONFIG.DOM_ELEMENT.GET_LINE(lineNumber);
-        if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
+    // Await navigation so the result exists before applying highlights.
+    const { reader } = await import("./reader.js");
+    if (!isCurrent()) return;
+    if (targetPage !== CONFIG.VARS.CURRENT_PAGE) {
+        reader.gotoPage(targetPage, "top");
     }
-    if (isCurrent()) setHistory(CONFIG.VARS.FILENAME, lineNumber);
+    const el = CONFIG.DOM_ELEMENT.GET_LINE(lineNumber);
+    if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
+    if (isCurrent()) setHistory(CONFIG.VARS.BOOK_ID, lineNumber);
 }
 
 /**

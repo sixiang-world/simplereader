@@ -149,7 +149,7 @@ export class FileProcessorCore {
          */
         const buffer = await chunk.arrayBuffer();
         const decoder = await FileProcessorCore.#getDecoder(encoding);
-        const content = decoder.decode(new Uint8Array(buffer), { fatal: true });
+        const content = decoder.decode(new Uint8Array(buffer));
         // Logs use physical source lines, including indentation and empty
         // lines. Novel normalization must not rewrite stack traces/log data.
         const lines = logMode ? content.replace(/\r\n?/g, "\n").split("\n") : content
@@ -178,8 +178,11 @@ export class FileProcessorCore {
             let linesForPatternDetection = lines;
             if (forcePatternDetection && patternDetectionOptions.fileSize > patternDetectionOptions.initialChunkSize) {
                 const bufferForPatternDetection = buffer.slice(0, patternDetectionOptions.initialChunkSize);
-                const contentForPatternDetection = decoder.decode(new Uint8Array(bufferForPatternDetection), {
-                    fatal: true,
+                // The sample can end inside a multibyte character. Do not flush
+                // that partial character into the chapter candidate set.
+                const sampleDecoder = new decoder.constructor(decoder.encoding);
+                const contentForPatternDetection = sampleDecoder.decode(new Uint8Array(bufferForPatternDetection), {
+                    stream: true,
                 });
                 linesForPatternDetection = contentForPatternDetection
                     .split("\n")
@@ -349,8 +352,12 @@ export class FileProcessorCore {
             });
             result.pageBreaks = calculator.calculate();
         } else {
-            // Log mode: each line is its own "page" (single page containing all lines)
-            result.pageBreaks = [0];
+            // Keep the rendered DOM bounded while preserving physical lines.
+            const linesPerPage = 500;
+            result.pageBreaks = Array.from(
+                { length: Math.max(1, Math.ceil(result.htmlLines.length / linesPerPage)) },
+                (_, page) => page * linesPerPage
+            );
         }
 
         progressCallback?.({

@@ -1,3 +1,5 @@
+
+> 2026-11-11 重构：Web 为主线；本地设置文件替代 textdb，单一离线 OpenCC 开关。新导入书籍使用独立 ID，同名书不覆盖，缓存保留原文。更改转换开关后重新打开书籍生效。构建不再自动打包 books/；`pnpm run preprocess-books` 仅为显式离线工具。实施与限制见 [重构记录](docs/DEV-REFACTOR-PLAN-2026-11-11.md)。
 <!-- markdownlint-disable MD033 MD041 -->
 <div align="center">
 
@@ -31,7 +33,7 @@
 
 原版 [henryxrl/SimpleTextReader](https://github.com/henryxrl/SimpleTextReader) 提供的核心功能：
 
-1. 百兆文件秒开，支持自动识别文件编码
+1. 支持自动识别文件编码，以单次 Worker 解析完成导入；耗时取决于内容和设备
 2. 中英文小说名、作者名自动识别（`《书名》作者：作者名.txt`、`书名.[作者].txt`、`Bookname by author.txt`）
 3. 中英文标题正则自动识别，支持 `[::]` 手动标记标题行
 4. 自动抓取脚注（① 到 ㊿）
@@ -49,6 +51,8 @@
 
 **浏览器插件**（Chrome / Firefox / Edge）为 henryxrl 原版发布，版本号 v1.6.9.5：
 
+本 fork 的主线只发布 Web。旧扩展构建工具保留供本地兼容排查，不随 Web 发版。
+
 - [Chrome 插件](https://chrome.google.com/webstore/detail/%E6%98%93%E7%AC%BA/dbanahlbopbjpgdkecmclbbonhpohcaf)
 - [Firefox 插件](https://addons.mozilla.org/zh-CN/firefox/addon/yijian/)
 - [Edge 插件](https://microsoftedge.microsoft.com/addons/detail/pabihehbdhldbdliffaddllmjlknmpak)
@@ -57,11 +61,11 @@
 
 来自 [cataerogong/SimpleTextReader](https://github.com/cataerogong/SimpleTextReader) 的增强特性：
 
-1. **自动拼接模式（Auto-Join Mode）**：滑动窗口渲染器，滚动时动态加载/卸载页面内容，实现无缝连续阅读（⚠ 实验功能，存在已知 BUG，不推荐日常使用）
+1. **分页阅读 / Paginated reading**：保留滚轮翻页；实验性自动拼接已退役。
 2. **全文搜索**：支持正则表达式，向前/向后导航，匹配高亮。快捷键 `F`
 3. **快速跳转**：按行号或百分比跳转。快捷键 `G`
-4. **日志模式（Log Mode）**：为 `.log` 文件提供简化渲染——跳过标题检测、文本优化和分页，自动识别或手动切换
-5. **进度条**：侧边栏垂直滑块，支持快速导航，兼容分页和自动拼接模式
+4. **日志模式（Log Mode）**：为 `.log` 文件提供简化渲染——跳过标题检测和文本优化，保留空行及缩进，每页最多 500 个物理行
+5. **进度条**：侧边栏垂直滑块，支持快速导航，用于分页阅读
 6. **行号显示**：所有内容元素带 `data-line-num` 属性，通过设置开关切换
 7. **阅读器模式设置**：自动/书本/日志三种模式可选
 
@@ -87,7 +91,7 @@
 ### 推荐翻页设置
 
 > **推荐使用「无限滚动」+「让无限滚动更容易触发」**，两功能配合翻页更丝滑。
-> 「自动拼接」为实验功能，存在已知 BUG，不推荐日常使用。
+> Auto-Join 已退役；滚轮翻页仍保留。
 
 ### 界面优化
 
@@ -207,14 +211,12 @@ pnpm run test
 
 ```bash
 pnpm run validate        # lint + 增量语义检查 + build + Node/浏览器/Python回归
-pnpm run test:extension  # 独立真实扩展验收；需允许加载扩展的浏览器
 ```
 
 审查修复记录、兼容风险与已知限制见 [实施记录](docs/REFACTOR_PROGRESS.md)，
 各审查问题的最终去向与遗留开放项见 [遗留问题台账](docs/ISSUE-LEDGER.md)。
-[同步契约](docs/config-sync-contract.md) 明确无 CAS 的并发限制；
 [性能基准](docs/PERFORMANCE_BASELINE.md) 区分实测与未承诺的流式/内存优化；
-[扩展验收](docs/EXTENSION_TESTING.md) 说明平台策略限制；
+[扩展验收](docs/EXTENSION_TESTING.md) 仅供旧扩展兼容排查；
 [Docker 构建](docs/DOCKER_BUILD.md) 保留 TLS 校验并支持可选可信代理 CA。
 
 ### 项目结构（v2 重构）
@@ -225,7 +227,7 @@ client/
     app.js                  # 应用入口
     init-webpage.js         # 页面初始化（语言/主题/SVG 图标）
     config/                 # 配置常量、运行时变量、Schema
-    core/                   # 架构扩展：Hook 系统、预设管理、配置同步
+    core/                   # 预设、配置文件及其他核心逻辑
     components/             # 可复用 UI 组件
     modules/
       reader/               # 阅读器核心（分页、脚注、搜索、跳转）
@@ -254,9 +256,8 @@ test/                       # Node/浏览器行为回归（自动发现）
 本版本（v2.0.0 起）是一次重大重构，**不向后兼容 v1**。升级前请阅读以下要点：
 
 1. **服务端已废弃**：原 `server/`（Node + Express + Prisma，含 `/api/library/*`、`/api/auth/*`、登录体系与书架数据库）已归档至 `archive/server/`。**v2 镜像仅为静态前端**（Vite 构建产物），由 Caddy 或任意静态服务器托管。旧版部署在服务器端的书架数据**没有迁移脚本**，升级后需重新导入书籍。
-2. **配置同步安全模型变更**：v1 使用会话鉴权；v2 改为「明文令牌」模式——令牌即存储键，直接拼在 URL 中（`https://textdb.hunluan.space/{token}`），会出现在服务器访问日志与浏览器历史中。**仅同步阅读偏好，不要使用含敏感信息的令牌。**
-3. **同步数据格式 v2（不向后兼容）**：数据格式升级为 `{_meta:{v:2}, key:{v,ts}}` 字段级时间戳结构，与 1.x 客户端的扁平格式不兼容。**多设备请统一升级到 ≥2.0.0**，否则旧客户端读取 v2 数据会失败。
-4. **`isOnServer` 已废弃**：客户端不再有「书籍在服务器上」的概念，相关 UI 与字段已清理。
+2. **本地配置文件**：在设置中导出或导入 JSON，可将阅读偏好带到另一台设备。旧 textdb 配置不会自动下载，也不会被删除；配置文件不包含书籍、字体文件或旧同步令牌。
+4. **`isOnServer` 已废弃**：客户端不再有「书籍在服务器上」的概念，旧数据兼容字段仍保留，当前不提供服务端书库。
 
 升级建议：重新构建镜像（不要对旧 `:latest` 直接覆盖到不兼容环境），导出本地书籍备份后再升级。
 

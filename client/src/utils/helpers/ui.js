@@ -56,8 +56,6 @@ export function setUIMode(mode, silence = false) {
     cbReg.go("applySettings");
     document.documentElement.setAttribute("data-theme", theme);
 
-    // Trigger updateAllBookCovers event
-    cbReg.go("updateAllBookCovers");
 }
 
 /**
@@ -398,7 +396,6 @@ export async function resetUI(
         }
         hideContent();
         showDropZone();
-        cbReg.go("truncateBookCoverText");
 
         // Simulate a scroll event to hide the tooltips
         handleGlobalScrolling({ isScrolling: true, delay: 150, destroy: true });
@@ -856,62 +853,6 @@ export function toggleHelpButton(visible = false) {
     } else {
         if (isHelpButtonDefined) {
             CONFIG.DOM_ELEMENT.HELP_BUTTON.style.display = "none";
-        }
-    }
-}
-
-/**
- * Sets up the custom cursor
- * @public
- */
-export function setCustomCursor() {
-    // INTENT: read CONFIG.CONST_CONFIG.ENABLE_CUSTOM_CURSOR first (NOT localStorage)
-    // because URL parameter overrides are applied to CONFIG by applySettings(),
-    // never to localStorage. Falling back to localStorage only matters when
-    // applySettings() has not yet run (e.g. early init) or failed.
-    // The trailing `?? false` preserves the upstream default of "disabled"
-    // when neither source provides a value.
-    const enableCustomCursor =
-        CONFIG.CONST_CONFIG.ENABLE_CUSTOM_CURSOR ??
-        toBool(localStorage.getItem("enable_custom_cursor"), false) ??
-        false;
-    if (enableCustomCursor) {
-        if (typeof IPadCursor !== "undefined") {
-            IPadCursor.init({
-                defaultBackgroundColor: "color-mix(in srgb, var(--fontInfoColor), transparent 15%)",
-                activeBackgroundColor: "color-mix(in srgb, var(--mainColor_inactive), transparent 15%)",
-                hoverBackgroundColor: "color-mix(in srgb, var(--fontInfoColor), transparent 15%)",
-                hoverStyle: 2,
-                glowEnabled: false,
-                verticalBarWhenHoveringTextEnabled: false,
-                hoverSelector:
-                    "a:not([class^='page-input-container']), button, div[class^='btn-icon'], div[class^='cover-container'], div[class^='bookFinished_badge'], div[class^='bookNotRead_badge'], div[class^='delete-btn-wrapper'], div[class^='bookinfo-menu-btn'], span[class^='tooltip-icon'], div[class^='sidebar-splitview-divider']",
-            });
-        } else {
-            console.error("IPadCursor object is undefined");
-        }
-    } else {
-        if (typeof IPadCursor !== "undefined") {
-            IPadCursor.destroy();
-        } else {
-            console.error("IPadCursor object is undefined");
-        }
-    }
-}
-
-/**
- * Toggles the custom cursor visibility
- * @param {boolean} enabled - Whether to enable or disable the custom cursor
- * @public
- */
-export function toggleCustomCursor(enabled = true) {
-    if (enabled) {
-        setCustomCursor();
-    } else {
-        if (typeof IPadCursor !== "undefined") {
-            IPadCursor.destroy();
-        } else {
-            console.error("IPadCursor object is undefined");
         }
     }
 }

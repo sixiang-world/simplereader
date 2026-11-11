@@ -80,6 +80,7 @@ export class BookshelfDB extends DBManager {
                     [this.#objectStoreNames.bookfiles]: (inputData) => ({
                         name: inputData.name,
                         data: inputData.data,
+                        displayName: inputData.data.name || inputData.name,
                         isFromLocal: inputData.isFromLocal,
                         isOnServer: inputData.isOnServer,
                         processed: false,
@@ -257,7 +258,7 @@ export class BookshelfDB extends DBManager {
     async getBookList() {
         const rows = await this.getAll([this.#objectStoreNames.bookfiles], {
             useCursor: true,
-            transform: record => ({ name: record.name, size: record.data?.size ?? record.data?.byteLength ?? 0,
+            transform: record => ({ name: record.name, displayName: record.displayName ?? record.data?.name ?? record.name, size: record.data?.size ?? record.data?.byteLength ?? 0,
                 isEastern: record.isEastern, isFromLocal: record.isFromLocal ?? false,
                 isOnServer: record.isOnServer ?? false, coverDataUrl: record.coverDataUrl || null,
                 epubMeta: record.epubMeta || null }),

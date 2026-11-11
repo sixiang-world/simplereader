@@ -9,37 +9,15 @@
  * @module client/src/utils/helpers-bookshelf
  */
 
-/**
- * Saves the current timestamp as the last read time for a book
- * @param {string} filename - The name of the book file
- */
-export function setBookLastReadTimestamp(filename) {
-    // Save current timestamp in UTC to localStorage
-    let now = new Date();
-    localStorage.setItem(
-        `${filename}_lastopened`,
-        Date.UTC(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-            now.getHours(),
-            now.getMinutes(),
-            now.getSeconds(),
-            now.getMilliseconds()
-        )
-    );
+import { readBookProgress, writeBookProgress } from "../../core/book-progress.js";
+
+export function setBookLastReadTimestamp(bookId) {
+    writeBookProgress(bookId, "opened", Date.now());
 }
 
-/**
- * Retrieves the last read timestamp for a book
- * @param {string} filename - The name of the book file
- * @returns {string} UTC timestamp string or empty string if not found
- */
-export function getBookLastReadTimestamp(filename) {
-    if (localStorage.getItem(`${filename}_lastopened`)) {
-        return localStorage.getItem(`${filename}_lastopened`);
-    }
-    return "";
+export function getBookLastReadTimestamp(bookId) {
+    const value = readBookProgress(bookId, "opened");
+    return value && /^[0-9]+$/.test(value) ? value : "";
 }
 
 /**

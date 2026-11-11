@@ -51,7 +51,20 @@ await withBrowserTest(async ({ browser, baseURL, productionURL }) => {
             PopupManager.showNotification({ iconName: 'BOOK', text: payload, timer: 100 });
             const text = document.querySelector('.custom-notification-text').textContent;
             const images = document.querySelectorAll('.custom-notification-text img').length;
-            await new Promise(resolve => setTimeout(resolve, 1100));
+            await new Promise((resolve, reject) => {
+                const selector = '.custom-notification-popup';
+                const observer = new MutationObserver(() => {
+                    if (document.querySelector(selector)) return;
+                    clearTimeout(timeout);
+                    observer.disconnect();
+                    resolve();
+                });
+                const timeout = setTimeout(() => {
+                    observer.disconnect();
+                    reject(new Error('Notification did not close within five seconds'));
+                }, 5000);
+                observer.observe(document.body, { childList: true, subtree: true });
+            });
             return { text, payload, images, executed: !!window.__notificationXss, adds, removes, remaining: document.querySelectorAll('.custom-notification-popup').length };
         });
         assert.equal(result.images, 0);
@@ -75,19 +88,21 @@ await withBrowserTest(async ({ browser, baseURL, productionURL }) => {
         assert.deepEqual(result.map(list => list.connected), [false, false, true]);
         assert.deepEqual(result.map(list => list.scheduled), [false, false, true]);
     });
-    await test('flow replaces equal-size documents', async page => {
+    await test('long logs preserve physical lines in bounded pages', async page => {
         const result = await page.evaluate(async () => {
             const C = await import('/client/src/config/index.js');
             const { reader } = await import('/client/src/modules/reader/reader.js');
-            const { flowReader } = await import('/client/src/modules/reader/flow-reader.js');
-            C.VARS.PAGE_BREAKS = [0]; C.VARS.TOTAL_PAGES = 1; C.VARS.CURRENT_PAGE = 1;
-            C.VARS.FILE_CONTENT_CHUNKS = [{ type: 'paragraph', content: 'Old book', lineNumber: 0 }];
-            flowReader.enter();
-            C.VARS.FILE_CONTENT_CHUNKS = [{ type: 'paragraph', content: 'New book', lineNumber: 0 }];
-            reader.showCurrentPageContent();
-            return C.DOM_ELEMENT.CONTENT_CONTAINER.textContent;
+            const { FileHandler } = await import('/client/src/modules/file/file-handler.js');
+            const lines = ['  原文  ', '', '\tindent', ...Array.from({ length: 998 }, (_, i) => 'Line ' + i)];
+            await FileHandler.handleSelectedFile([new File([lines.join('\n')], 'bounded.log', { type: 'text/plain' })], false, 'utf-8');
+            const content = C.DOM_ELEMENT.CONTENT_CONTAINER;
+            const first = Array.from(content.children).slice(0, 3).map(el => el.textContent);
+            const count = content.children.length;
+            const mode = content.getAttribute('data-reader-mode');
+            reader.gotoPage(3);
+            return { first, count, mode, last: [...content.children].map(el => el.textContent), breaks: [...C.VARS.PAGE_BREAKS] };
         });
-        assert.equal(result, 'New book');
+        assert.deepEqual(result, { first: ['  原文  ', '', '\tindent'], count: 500, mode: 'log', last: ['Line 997'], breaks: [0, 500, 1000] });
     });
     await test('EPUB text footnotes have finite positioning', async (page, errors) => {
         const result = await page.evaluate(async () => {

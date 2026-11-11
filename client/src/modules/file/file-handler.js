@@ -1,3 +1,4 @@
+import { allocateBookId, associateBookFile, getBookId } from "./book-identity.js";
 /**
  * @fileoverview File handler for processing text files and managing book content
  *
@@ -39,7 +40,6 @@ import {
     removeFileExtension,
     randomFloatFromInterval,
     formatBytes,
-    addFootnotesToDOM,
     pairAnchorsAndFootnotes,
     constructNotificationMessageFromArray,
     isSafari,
@@ -61,11 +61,9 @@ import {
     getIsOnServer,
     setIsFromLocal,
     setIsOnServer,
-    setBookLastReadTimestamp,
 } from "../../utils/helpers/bookshelf.js";
 import {
     GetScrollPositions,
-    getHistory,
     getHistoryAndSetChapterTitleActive,
     setTitle,
 } from "../../utils/helpers/reader.js";
@@ -78,7 +76,7 @@ import { validateFontFile } from "../../utils/helpers/fonts.js";
 export class FileHandler {
     static #loadController = null;
 
-    static #beginLoad() {
+    static beginLoad() {
         this.#loadController?.abort();
         this.#loadController = new AbortController();
         this.#dbSaveComplete = false;
@@ -101,10 +99,14 @@ export class FileHandler {
     // All loading paths own the same reader lifecycle, including EPUB links.
     static #mountCurrentBook() {
         setTitle(CONFIG.VARS.BOOK_AND_AUTHOR.bookName);
+        cbReg.go("applyReaderMode");
         reader.initTOC();
         reader.processTOC();
         reader.initInternalLinks();
-        getFootnotes().setup();
+        const footnotes = getFootnotes();
+        const paired = pairAnchorsAndFootnotes(CONFIG.VARS.FOOTNOTES);
+        footnotes.setFootnoteLookup((marker, index) => paired[marker]?.[Number(index)] || CONFIG.CONST_FOOTNOTE.NOTFOUND);
+        footnotes.setup();
         CONFIG.VARS.INIT = false;
         reader.showCurrentPageContent();
         reader.generatePagination();
@@ -173,6 +175,7 @@ export class FileHandler {
      * @returns {Promise<void>}
      */
     static async handleMultipleFiles(fileList, isFromLocal = true, isOnServer = false, loadFiles = true) {
+        const signal = FileHandler.beginLoad();
         // Show loading screen
         hideDropZone();
         hideContent();
@@ -198,6 +201,7 @@ export class FileHandler {
                 // where #isLikelyText will decide whether it is readable text.
                 nonEpubFiles.push(file);
             }
+            signal.throwIfAborted();
         }
         for (const file of allFiles) {
             if (!file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT)) {
@@ -211,8 +215,8 @@ export class FileHandler {
             const epubFile = epubFiles[0];
             setIsFromLocal(epubFile.name, getIsFromLocal(epubFile.name) || isFromLocal);
             setIsOnServer(epubFile.name, getIsOnServer(epubFile.name) || isOnServer);
-            setBookLastReadTimestamp(epubFile.name);
-            await FileHandler.handleEpubFile(epubFile);
+            await FileHandler.handleEpubFile(epubFile, signal);
+            signal.throwIfAborted();
 
             // If there are also TXT files, notify user that only one type is handled at a time
             if (nonEpubFiles.length > 0) {
@@ -400,6 +404,7 @@ export class FileHandler {
             return;
         }
 
+        signal.throwIfAborted();
         // Handle text files
         if (txtFiles.length > 1 || isOnServer) {
             resetVars();
@@ -430,7 +435,6 @@ export class FileHandler {
             const singleFile = txtFiles[0];
             setIsFromLocal(singleFile.name, getIsFromLocal(singleFile.name) || isFromLocal);
             setIsOnServer(singleFile.name, getIsOnServer(singleFile.name) || isOnServer);
-            setBookLastReadTimestamp(singleFile.name);
 
             // PopupManager.showNotification({
             //     iconName: "BOOK",
@@ -445,7 +449,7 @@ export class FileHandler {
             //     ),
             // });
 
-            await FileHandler.handleSelectedFile(txtFiles);
+            await FileHandler.handleSelectedFile(txtFiles, null, null, false, signal);
         } else {
             console.log("No valid file selected.");
             await resetUI();
@@ -453,15 +457,15 @@ export class FileHandler {
     }
 
     /**
-     * Handles a single selected file for reading using chunked processing
+     * Handles a single selected file using complete-book processing
      * @param {FileList} fileList - List containing single file to process
      * @param {boolean} isEastern - Whether the file is eastern language
      * @param {string} encoding - The encoding of the file
      * @returns {Promise<void>}
      */
-    static async handleSelectedFile(fileList, isEastern = null, encoding = null, forceRefresh = false) {
+    static async handleSelectedFile(fileList, isEastern = null, encoding = null, forceRefresh = false, signal = FileHandler.beginLoad()) {
+        signal.throwIfAborted();
         let processor = null;
-        let signal = null;
         /**
          * Metrics for file processing
          * @private
@@ -509,7 +513,7 @@ export class FileHandler {
          * @private
          * @returns {Promise<void>}
          */
-        async function finalProcessing() {
+        async function finalProcessing(rawBook) {
             // Ensure the file is valid before proceeding
             if (!CONFIG.VARS.FILENAME) {
                 throw new Error("Error processing file. No filename found.");
@@ -524,7 +528,8 @@ export class FileHandler {
             await cbReg.go("fileAfter");
 
             signal.throwIfAborted();
-            await cbReg.go("saveProcessedBook", FileHandler.#snapshot());
+            await cbReg.go("saveProcessedBook", rawBook);
+            signal.throwIfAborted();
             FileHandler.markDBSaveComplete();
             await finalizeMetrics();
         }
@@ -554,7 +559,6 @@ export class FileHandler {
             return;
         }
 
-        signal = FileHandler.#beginLoad();
         try {
             // Show loading screen
             hideDropZone();
@@ -604,7 +608,8 @@ export class FileHandler {
             await processor.processBookMetadata();
             signal.throwIfAborted();
             CONFIG.VARS.BOOK_AND_AUTHOR = processor.bookMetadata;
-            CONFIG.VARS.FILENAME = file.name && fileList[0].name;
+            CONFIG.VARS.FILENAME = file.name;
+            CONFIG.VARS.BOOK_ID = CONFIG.CONST_CONFIG.ANONYMOUS_MODE ? "" : getBookId(file) ?? "";
             CONFIG.VARS.TITLE_PAGE_LINE_NUMBER_OFFSET = processor.title_page_line_number_offset;
 
             // Detect log mode
@@ -618,7 +623,8 @@ export class FileHandler {
             }
             processor.logMode = CONFIG.VARS.IS_LOG_MODE;
             if (CONFIG.VARS.IS_LOG_MODE) {
-                console.log("Log mode detected for:", CONFIG.VARS.FILENAME);
+                CONFIG.VARS.TITLE_PAGE_LINE_NUMBER_OFFSET = 0;
+                processor.title_page_line_number_offset = 0;
             }
             CONFIG.RUNTIME_VARS.STYLE.seal_rotate_en = processor.seal_rotate_en;
             CONFIG.RUNTIME_VARS.STYLE.seal_left = processor.seal_left;
@@ -626,143 +632,35 @@ export class FileHandler {
             logTiming("Metadata processing", metadataStart);
             // console.log("Book metadata:", CONFIG.VARS.BOOK_AND_AUTHOR);
 
-            // Process initial chunk
-            const initialChunkStart = performance.now();
-            const initialChunkResult = await processor.processInitialChunk();
+            // Parse once before committing a complete book to the reader.
+            const parseStart = performance.now();
+            const parsed = await processor.processBook();
             signal.throwIfAborted();
-            // console.log("initialChunkResult: ", initialChunkResult);
 
-            // Update global state with initial chunk
-            CONFIG.VARS.FILE_CONTENT_CHUNKS = initialChunkResult.htmlLines;
-            CONFIG.VARS.ALL_TITLES = initialChunkResult.titles;
-            CONFIG.VARS.ALL_TITLES_IND = initialChunkResult.titles_ind;
-            FileHandler.#verifyTitleAndIndexCount("[handleSelectedFile initialChunk]");
-            CONFIG.VARS.FOOTNOTES = initialChunkResult.footnotes;
-            CONFIG.VARS.FOOTNOTE_PROCESSED_COUNTER = initialChunkResult.footnoteCounter;
-            CONFIG.VARS.PAGE_BREAKS = initialChunkResult.pageBreaks;
+            // Commit complete book data
+            CONFIG.VARS.FILE_CONTENT_CHUNKS = parsed.htmlLines;
+            CONFIG.VARS.ALL_TITLES = parsed.titles;
+            CONFIG.VARS.ALL_TITLES_IND = parsed.titles_ind;
+            FileHandler.#verifyTitleAndIndexCount("[handleSelectedFile]");
+            CONFIG.VARS.FOOTNOTES = parsed.footnotes;
+            CONFIG.VARS.FOOTNOTE_PROCESSED_COUNTER = parsed.footnoteCounter;
+            CONFIG.VARS.PAGE_BREAKS = parsed.pageBreaks;
             CONFIG.VARS.TOTAL_PAGES = CONFIG.VARS.PAGE_BREAKS.length;
-            logTiming("Initial chunk processing", initialChunkStart);
+            logTiming("Book processing", parseStart);
             // console.log("CONFIG.VARS.PAGE_BREAKS: ", CONFIG.VARS.PAGE_BREAKS);
             // console.log("CONFIG.VARS.TOTAL_PAGES: ", CONFIG.VARS.TOTAL_PAGES);
 
-            // Convert initial chunk data (T2S etc.) before the first render
-            // so the user sees converted text immediately, not after a reload.
-            await FileHandler.#applyFileAfterProcessHook();
+            const rawBook = FileHandler.#snapshot();
+            // Apply display transforms before the first render.
+            await FileHandler.#applyFileAfterProcessHook(signal);
+            signal.throwIfAborted();
 
-            // Update UI with initial content
+            // Mount the complete document
             const initialUIStart = performance.now();
 
             FileHandler.#mountCurrentBook();
             logTiming("Initial UI update", initialUIStart);
 
-            // If bookshelf and fast open are enabled and history is found within 90% of the initial chunk, show content early without waiting for processing to complete
-            const hasHistoryBeyondInitChunk =
-                (await getHistory(CONFIG.VARS.FILENAME)) > CONFIG.VARS.FILE_CONTENT_CHUNKS.length * 0.9;
-            if (
-                CONFIG.RUNTIME_CONFIG.ENABLE_BOOKSHELF &&
-                CONFIG.RUNTIME_CONFIG.ENABLE_FAST_OPEN &&
-                !hasHistoryBeyondInitChunk
-            ) {
-                await getHistoryAndSetChapterTitleActive(reader.gotoLine.bind(reader));
-            signal?.throwIfAborted();
-
-                // Hide loading screen
-                hideDropZone(false);
-                hideLoadingScreen(false);
-                showContent();
-            }
-
-            // Update pagination UI to show processing state
-            if (file.size > processor.initialChunkSize) {
-                // Hide bookshelf trigger button if bookshelf is opened
-                cbReg.go("hideBookshelfTriggerBtn");
-
-                // Set processing flag
-                CONFIG.VARS.IS_PROCESSING = true;
-
-                // Add processing indicator to pagination
-                const paginationElement = document.querySelector(".pagination");
-                if (paginationElement) {
-                    const existingIndicator = CONFIG.DOM_ELEMENT.PAGINATION_INDICATOR;
-                    if (!existingIndicator) {
-                        const paginationIndicator = document.createElement("div");
-                        paginationIndicator.id = "pagination-indicator";
-                        const paginationIndicatorSpan = document.createElement("span");
-                        paginationIndicatorSpan.classList.add("pagination-processing", "prevent-select");
-                        paginationIndicator.appendChild(paginationIndicatorSpan);
-                        paginationElement.appendChild(paginationIndicator);
-
-                        // const paginationBorder = document.querySelector("#pagination");
-                        // paginationBorder.style.borderColor = CONFIG.RUNTIME_VARS.STYLE.mainColor_active;
-                    }
-                }
-                reader.generatePagination();
-
-                // Process remaining content in background
-                const remainingStart = performance.now();
-
-                await processor
-                    .processRemainingContent()
-                    .then(async (remainingResult) => {
-                        signal.throwIfAborted();
-                        // Update global state
-                        CONFIG.VARS.FILE_CONTENT_CHUNKS = remainingResult.htmlLines;
-                        CONFIG.VARS.ALL_TITLES = remainingResult.titles;
-                        CONFIG.VARS.ALL_TITLES_IND = remainingResult.titles_ind;
-                        FileHandler.#verifyTitleAndIndexCount("[handleSelectedFile remainingContent]");
-                        CONFIG.VARS.FOOTNOTES = remainingResult.footnotes;
-                        CONFIG.VARS.FOOTNOTE_PROCESSED_COUNTER = remainingResult.footnoteCounter;
-                        CONFIG.VARS.PAGE_BREAKS = remainingResult.pageBreaks;
-                        CONFIG.VARS.TOTAL_PAGES = CONFIG.VARS.PAGE_BREAKS.length;
-                        // console.log(CONFIG.VARS.PAGE_BREAKS);
-
-                        // Run T2S (and other file:afterProcess hooks) on the
-                        // freshly merged remaining data BEFORE updating the UI,
-                        // so the user sees converted text immediately.
-                        await FileHandler.#applyFileAfterProcessHook();
-
-                        // Set processing flag to false
-                        CONFIG.VARS.IS_PROCESSING = false;
-
-                        // Remove the existing processing indicator
-                        FileHandler.#deferUIUpdate(() => {
-                            const paginationIndicator = CONFIG.DOM_ELEMENT.PAGINATION_INDICATOR;
-                            if (paginationIndicator) {
-                                paginationIndicator.remove();
-                            }
-                        });
-
-                        // Update UI
-                        FileHandler.#deferUIUpdate(() => {
-                            requestAnimationFrame(() => {
-                                reader.processTOC();
-
-                                requestAnimationFrame(() => {
-                                    reader.generatePagination();
-
-                                    requestAnimationFrame(() => {
-                                        updatePaginationCalculations(false);
-
-                                        requestAnimationFrame(() => {
-                                            GetScrollPositions(false);
-                                        });
-                                    });
-                                });
-                            });
-                        });
-
-                        logTiming("Remaining content processing", remainingStart);
-                        // console.log("Background processing complete");
-                    })
-                    .catch((error) => {
-                        throw new Error("Error processing remaining content: " + error);
-                    });
-            }
-
-            // Show bookshelf trigger button
-            // FileHandler.#deferUIUpdate(() => {
-            //     cbReg.go("showBookshelfTriggerBtn");
-            // });
             FileHandler.markProcessingComplete();
 
             // Mark DB save complete if forceRefresh is true
@@ -777,7 +675,7 @@ export class FileHandler {
 
             // Complete initial processing
             signal.throwIfAborted();
-            await finalProcessing();
+            await finalProcessing(rawBook);
         } catch (error) {
             if (signal?.aborted) throw signal.reason;
             CONFIG.VARS.IS_BOOK_OPENED = false;
@@ -793,10 +691,10 @@ export class FileHandler {
      * @param {Object} book - Processed book data
      * @returns {Promise<void>}
      */
-    static async handleProcessedBook(book) {
+    static async handleProcessedBook(book, signal = FileHandler.beginLoad()) {
+        signal.throwIfAborted();
         // console.log("Processed book: ", book);
         if (isProcessedBookComplete(book)) {
-            const signal = FileHandler.#beginLoad();
             // Show loading screen
             hideDropZone();
             hideContent();
@@ -805,7 +703,8 @@ export class FileHandler {
             resetVars();
 
             CONFIG.VARS.IS_BOOK_OPENED = true;
-            CONFIG.VARS.FILENAME = book.name;
+            CONFIG.VARS.FILENAME = book.displayName ?? book.name;
+            CONFIG.VARS.BOOK_ID = CONFIG.CONST_CONFIG.ANONYMOUS_MODE ? "" : book.name;
             CONFIG.VARS.IS_EASTERN_LAN = book.is_eastern_lan ?? TextProcessor.getLanguage(book.file_content_chunks[0]);
             CONFIG.VARS.ENCODING = book.encoding ?? "utf-8";
             CONFIG.VARS.BOOK_AND_AUTHOR = book.bookAndAuthor;
@@ -827,18 +726,10 @@ export class FileHandler {
                 saveToLocalStorage: false,
             });
 
-            // [Deprecated] Add footnotes to DOM
-            // addFootnotesToDOM(CONFIG.VARS.FOOTNOTES, CONFIG.DOM_ELEMENT.FOOTNOTE_CONTAINER);
-            // [New] Set the lookup function for the current chunk/footnotes
-            const pairedFootnotes = pairAnchorsAndFootnotes(CONFIG.VARS.FOOTNOTES);
-            getFootnotes().setFootnoteLookup((markerCode, index) => {
-                index = Number(index);
-                return pairedFootnotes[markerCode]?.[index] || CONFIG.CONST_FOOTNOTE.NOTFOUND;
-            });
-
             // Run the file:afterProcess hook pipeline (T2S, etc.) BEFORE
             // showing content so the user sees converted text on re-open.
-            await FileHandler.#applyFileAfterProcessHook();
+            await FileHandler.#applyFileAfterProcessHook(signal);
+            signal.throwIfAborted();
 
             FileHandler.#mountCurrentBook();
 
@@ -852,10 +743,11 @@ export class FileHandler {
             showContent();
             await cbReg.go("fileAfter");
         } else if (book?.is_epub) {
-            const epubFile = new File([book?.data], book.name, { type: "application/epub+zip" });
-            await FileHandler.handleEpubFile(epubFile);
+            const epubFile = new File([book?.data], book.displayName ?? book.name, { type: "application/epub+zip" });
+            associateBookFile(epubFile, book.name);
+            await FileHandler.handleEpubFile(epubFile, signal);
         } else {
-            await FileHandler.handleSelectedFile([book?.data], null, null, true);
+            await FileHandler.handleSelectedFile([book?.data], null, null, true, signal);
         }
     }
 
@@ -870,8 +762,8 @@ export class FileHandler {
      * @param {File} file - The EPUB file
      * @returns {Promise<void>}
      */
-    static async handleEpubFile(file) {
-        const signal = FileHandler.#beginLoad();
+    static async handleEpubFile(file, signal = FileHandler.beginLoad()) {
+        signal.throwIfAborted();
         const metrics = {
             startTime: performance.now(),
         };
@@ -962,6 +854,8 @@ export class FileHandler {
                 authorRE: author,
             };
             CONFIG.VARS.FILENAME = file.name;
+            CONFIG.VARS.BOOK_ID = !CONFIG.CONST_CONFIG.ANONYMOUS_MODE && CONFIG.RUNTIME_CONFIG.ENABLE_BOOKSHELF
+                ? allocateBookId(file) : "";
             // Store extended EPUB metadata for bookshelf info display
             CONFIG.VARS.EPUB_META = {
                 publisher: convertResult.metadata.publisher || "",
@@ -1001,9 +895,6 @@ export class FileHandler {
             CONFIG.VARS.SPINE_RANGES = convertResult.spineRanges || [];
             CONFIG.VARS.EPUB_COVER_DATA_URL = convertResult.coverDataUrl || null;
 
-            // Transform before pagination, persistence, and the first render.
-            await FileHandler.#applyFileAfterProcessHook();
-            signal.throwIfAborted();
             const pageBreaks = paginateEpub({
                 htmlLines: CONFIG.VARS.FILE_CONTENT_CHUNKS,
                 titles: CONFIG.VARS.ALL_TITLES,
@@ -1019,6 +910,10 @@ export class FileHandler {
             CONFIG.VARS.CURRENT_PAGE = 1;
             this.#logger.log(`Pagination: ${pageBreaks.length} pages`);
 
+            const rawBook = FileHandler.#snapshot({ data: file });
+            await FileHandler.#applyFileAfterProcessHook(signal);
+            signal.throwIfAborted();
+
             // Set title
             this.#logger.log("Setting title...");
             setTitle(bookName);
@@ -1032,7 +927,8 @@ export class FileHandler {
 
             FileHandler.#mountCurrentBook();
             signal.throwIfAborted();
-            await cbReg.go("saveProcessedBook", FileHandler.#snapshot({ data: file }));
+            await cbReg.go("saveProcessedBook", rawBook);
+            signal.throwIfAborted();
 
             FileHandler.markProcessingComplete();
             FileHandler.markDBSaveComplete();
@@ -1242,12 +1138,11 @@ export class FileHandler {
      * @static
      * @returns {Promise<void>}
      */
-    static async #applyFileAfterProcessHook() {
-        const signal = this.#loadController?.signal;
+    static async #applyFileAfterProcessHook(signal) {
         // Defensive: if FILENAME is missing we can't construct the file
         // context, but still run the hook so it can observe the (incomplete)
         // state. Most hooks will early-return on missing bookData.
-        if (!CONFIG.VARS.FILENAME) return;
+        if (!CONFIG.VARS.FILENAME || CONFIG.VARS.IS_LOG_MODE) return;
 
         const bookDataSnapshot = {
             metadata: {
@@ -1257,6 +1152,7 @@ export class FileHandler {
             processedLines: CONFIG.VARS.FILE_CONTENT_CHUNKS,
             titles: CONFIG.VARS.ALL_TITLES,
             footnotes: CONFIG.VARS.FOOTNOTES,
+            footnoteMap: CONFIG.VARS.FOOTNOTE_MAP,
         };
         const hookCtx = await hooks.run("file:afterProcess", {
             bookData: bookDataSnapshot,
@@ -1273,13 +1169,14 @@ export class FileHandler {
             if (hookCtx.bookData.footnotes) {
                 CONFIG.VARS.FOOTNOTES = hookCtx.bookData.footnotes;
             }
+            if (hookCtx.bookData.footnoteMap) CONFIG.VARS.FOOTNOTE_MAP = hookCtx.bookData.footnoteMap;
             if (hookCtx.bookData.metadata && CONFIG.VARS.BOOK_AND_AUTHOR) {
-                if (typeof hookCtx.bookData.metadata.title === "string") {
-                    CONFIG.VARS.BOOK_AND_AUTHOR.bookName = hookCtx.bookData.metadata.title;
-                }
-                if (typeof hookCtx.bookData.metadata.author === "string") {
-                    CONFIG.VARS.BOOK_AND_AUTHOR.author = hookCtx.bookData.metadata.author;
-                }
+                const { title, author } = hookCtx.bookData.metadata;
+                CONFIG.VARS.BOOK_AND_AUTHOR = {
+                    ...CONFIG.VARS.BOOK_AND_AUTHOR,
+                    ...(typeof title === "string" ? { bookName: title } : {}),
+                    ...(typeof author === "string" ? { author } : {}),
+                };
             }
         }
     }

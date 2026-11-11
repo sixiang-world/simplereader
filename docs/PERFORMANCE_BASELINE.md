@@ -62,3 +62,11 @@ the 2026-10-25 C01 numbers above now QUANTIFY that full recompute (superlinear
 process stage) — a separate measured design task (C03) is justified before any
 streaming rewrite. The pagination algorithm and distinct canvas/DOM cover
 fallbacks were preserved.
+
+## 2026-11-11 重构测量说明
+
+旧报告把 processChunkStatic 内的分页和外部再次运行的分页混为一谈，后者不足以证明管线中分页可忽略。本轮已把区间重复扫描改为累计索引，并删除 TXT 首段/全书双次解析。
+
+同机、同确定性 10k 输入的一次独立断页对照，旧分页约 1316ms、新分页约 6ms，126 个断页位置一致。另一次新核心解析加分页观测：10k 约 369ms、50k 约 859ms。这些是单次开发观测，不是整本书打开速度的统计结论，也不能同历史不同测试设置直接计算提速倍数。最终浏览器门禁仍输出其自身配置和实测数字。
+
+章节候选的全对全比较仍存在，密集纯章节输入仍可能超线性；禁止恢复“百兆秒开”宣传。图像 URL 已在当前会话内去重并有独立释放测试，但原书缓存仍持有 Base64，未承诺资源 ID 重写完成。

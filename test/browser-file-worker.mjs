@@ -8,7 +8,7 @@ await withBrowserTest(async ({browser,baseURL})=>{
         const file=new File(['第一章 测试\n正文内容\n'], 'worker.txt',{type:'text/plain'});
         const processor=new FileProcessor(file,true,'utf-8');
         let result;
-        try {await processor.processBookMetadata();const data=await processor.processInitialChunk();result={name:processor.bookMetadata.bookName,lines:data.htmlLines.length,pending:processor.requests.pending.size};}
+        try {await processor.processBookMetadata();const data=await processor.processBook();result={name:processor.bookMetadata.bookName,lines:data.htmlLines.length,pending:processor.requests.pending.size};}
         finally {processor.destroy();}
         if(processor.worker!==null)throw new Error('Worker still owned after destroy');
         return result;

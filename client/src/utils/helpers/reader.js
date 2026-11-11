@@ -1,3 +1,4 @@
+import { readBookProgress, writeBookProgress, clearBookProgress, clearAllBookProgress } from "../../core/book-progress.js";
 /**
  * @fileoverview Reader helper functions for managing reading progress and navigation
  *
@@ -49,8 +50,7 @@ export function setTitle(title = "") {
  * @param {string} progressText - The progress text to store.
  */
 function setProgressText(filename, progressText) {
-    const storageKey = `${filename}_progressText`;
-    localStorage.setItem(storageKey, progressText);
+    writeBookProgress(filename, "progress", progressText);
 }
 
 /**
@@ -61,10 +61,9 @@ function setProgressText(filename, progressText) {
  * @returns {string} The progress text for the specified file, or an empty string if not found.
  */
 export function getProgressText(filename, consoleLog = true) {
-    const storageKey = `${filename}_progressText`;
-    const progressText = localStorage.getItem(storageKey);
+    const progressText = readBookProgress(filename, "progress");
 
-    if (progressText) {
+    if (progressText && /^(?:100|[0-9]{1,2})(?:\.[0-9])?%$/.test(progressText)) {
         consoleLog && console.log(`Progress of "${filename}" found! Progress: ${progressText}`);
         return progressText;
     }
@@ -79,8 +78,7 @@ export function getProgressText(filename, consoleLog = true) {
  * @param {boolean} isFinished - The finished status to store.
  */
 function setIsBookFinished(filename, isFinished) {
-    const storageKey = `${filename}_isFinished`;
-    localStorage.setItem(storageKey, isFinished);
+    writeBookProgress(filename, "finished", isFinished);
 }
 
 /**
@@ -90,8 +88,7 @@ function setIsBookFinished(filename, isFinished) {
  * @returns {boolean} The finished status for the specified file, or false if not found.
  */
 export function getIsBookFinished(filename) {
-    const storageKey = `${filename}_isFinished`;
-    const isFinished = localStorage.getItem(storageKey);
+    const isFinished = readBookProgress(filename, "finished");
 
     if (isFinished) {
         return isFinished === "true";
@@ -130,7 +127,7 @@ export function GetScrollPositions(toSetHistory = true, gotoPageClicked = false)
     if (!CONFIG.VARS.GOTO_TITLE_CLICKED || gotoPageClicked) {
         // Remember the line number in history
         if (toSetHistory) {
-            setHistory(CONFIG.VARS.FILENAME, curLineNumber);
+            setHistory(CONFIG.VARS.BOOK_ID, curLineNumber);
         }
 
         if (!isLastLineVisible) {
@@ -165,7 +162,7 @@ export function GetScrollPositions(toSetHistory = true, gotoPageClicked = false)
             setChapterTitleActive(CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1);
 
             // If the last line is visible, set the reading history to the last line
-            setHistory(CONFIG.VARS.FILENAME, CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1);
+            setHistory(CONFIG.VARS.BOOK_ID, CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1);
         }
     }
 
@@ -174,33 +171,13 @@ export function GetScrollPositions(toSetHistory = true, gotoPageClicked = false)
 
     CONFIG.DOM_ELEMENT.PROGRESS_TITLE.innerText = CONFIG.VARS.BOOK_AND_AUTHOR.bookName;
     CONFIG.DOM_ELEMENT.PROGRESS_CONTENT.innerText = `${totalPercentage.toFixed(1).replace(".0", "")}%`;
-    setProgressText(CONFIG.VARS.FILENAME, `${totalPercentage.toFixed(1).replace(".0", "")}%`);
-    setIsBookFinished(CONFIG.VARS.FILENAME, isLastLineVisible);
+    setProgressText(CONFIG.VARS.BOOK_ID, `${totalPercentage.toFixed(1).replace(".0", "")}%`);
+    setIsBookFinished(CONFIG.VARS.BOOK_ID, isLastLineVisible);
 
     // Update progress bar slider
     const progressBar = CONFIG.DOM_ELEMENT.PROGRESS_BAR;
     if (progressBar) {
         progressBar.value = totalPercentage;
-    }
-
-    // Flow mode: update CURRENT_PAGE based on scroll position
-    // Use data-page-mode attribute to detect flow mode (works for both
-    // continuous_scroll_mode setting and log-mode auto-activation)
-    const content = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
-    if (content && content.getAttribute("data-page-mode") === "flow") {
-        const pageBreaks = CONFIG.VARS.PAGE_BREAKS;
-        let newPage = 1;
-        for (let i = pageBreaks.length - 1; i >= 0; i--) {
-            if (curLineNumber >= pageBreaks[i]) {
-                newPage = i + 1;
-                break;
-            }
-        }
-        if (newPage !== CONFIG.VARS.CURRENT_PAGE) {
-            CONFIG.VARS.CURRENT_PAGE = newPage;
-            // Notify reader to regenerate pagination
-            cbReg.go("flowPageChanged", newPage);
-        }
     }
 
     CONFIG.VARS.GOTO_TITLE_CLICKED = false;
@@ -214,17 +191,6 @@ export function GetScrollPositions(toSetHistory = true, gotoPageClicked = false)
  */
 function calculateReadingProgress(curLineNumber) {
     const contentLength = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
-
-    // Flow mode: simple line-based progress
-    // Use data-page-mode attribute to detect flow mode
-    const contentContainer = CONFIG.DOM_ELEMENT.CONTENT_CONTAINER;
-    if (contentContainer && contentContainer.getAttribute("data-page-mode") === "flow" && contentLength > 0) {
-        let totalPercentage = (curLineNumber / (contentLength - 1)) * 100;
-        if (curLineNumber === 0 && getScrollY() <= 5) {
-            totalPercentage = 0;
-        }
-        return totalPercentage;
-    }
 
     // Get the current page's start and end positions from break points
     const breakPoints = CONFIG.VARS.PAGE_BREAKS;
@@ -580,12 +546,7 @@ export function unfreezeContent() {
  * @param {number} lineNumber - The current line number
  */
 export function setHistory(filename, lineNumber) {
-    // console.log("History set to line: ", lineNumber);
-    localStorage.setItem(filename, lineNumber);
-    if (lineNumber === 0) {
-        // Don't save history if line number is 0
-        localStorage.removeItem(filename);
-    }
+    if (Number.isSafeInteger(lineNumber) && lineNumber >= 0) writeBookProgress(filename, "line", lineNumber);
 }
 
 /**
@@ -598,10 +559,11 @@ export function setHistory(filename, lineNumber) {
  * @returns {number} The saved line number, or 0 if none found
  */
 export async function getHistory(filename, gotoLineFunc = null, consoleLog = false) {
-    let tempLine = localStorage.getItem(filename);
-    if (tempLine) {
+    let tempLine = readBookProgress(filename, "line");
+    if (tempLine && /^[0-9]+$/.test(tempLine)) {
         try {
-            tempLine = parseInt(tempLine) || 0;
+            tempLine = Number(tempLine);
+            if (!Number.isSafeInteger(tempLine) || tempLine === 0) return 0;
 
             if (consoleLog) {
                 console.log(`History of "${filename}" found! Line: ${tempLine}`);
@@ -632,7 +594,7 @@ export async function getHistory(filename, gotoLineFunc = null, consoleLog = fal
  * @public
  */
 export function removeAllHistory() {
-    localStorage.clear();
+    clearAllBookProgress();
 }
 
 /**
@@ -641,30 +603,7 @@ export function removeAllHistory() {
  * @param {string} filename - The filename/key of the book to remove history for
  */
 export function removeHistory(filename) {
-    // Remove reading progress
-    localStorage.removeItem(filename);
-
-    // Remove all storage items related to this book
-    // Book-related items usually have the filename as prefix or suffix
-    const keysToRemove = [];
-
-    // Iterate through all localStorage items
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        // Check if item is related (contains filename)
-        if (key && (key === filename || key.startsWith(`${filename}_`) || key.endsWith(`_${filename}`))) {
-            keysToRemove.push(key);
-        }
-    }
-
-    // Remove all found related items
-    console.groupCollapsed("[Remove History]");
-    keysToRemove.forEach((key) => {
-        console.log(`Removing storage item: ${key}`);
-        localStorage.removeItem(key);
-    });
-    console.log(`Removed ${keysToRemove.length} storage items for book: ${filename}`);
-    console.groupEnd();
+    clearBookProgress(filename);
 }
 
 /**
@@ -676,10 +615,10 @@ export function removeHistory(filename) {
  * @param {boolean} consoleLog - Whether to log retrieval to console
  */
 export async function getHistoryAndSetChapterTitleActive(gotoLineFunc, setActive = true, consoleLog = true) {
-    const filename = CONFIG.VARS.FILENAME;
+    const filename = CONFIG.VARS.BOOK_ID;
     const chunks = CONFIG.VARS.FILE_CONTENT_CHUNKS;
     const line = await getHistory(filename, gotoLineFunc, consoleLog);
-    if (filename !== CONFIG.VARS.FILENAME || chunks !== CONFIG.VARS.FILE_CONTENT_CHUNKS) return;
+    if (filename !== CONFIG.VARS.BOOK_ID || chunks !== CONFIG.VARS.FILE_CONTENT_CHUNKS) return;
     CONFIG.VARS.HISTORY_LINE_NUMBER = line;
     if (setActive && CONFIG.VARS.CURRENT_PAGE === 1 && CONFIG.VARS.HISTORY_LINE_NUMBER === 0 && getScrollY() === 0) {
         // if the first line is a header, it will show up in TOC
