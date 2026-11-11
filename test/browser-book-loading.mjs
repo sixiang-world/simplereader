@@ -60,7 +60,7 @@ await withBrowserTest(async({browser,baseURL})=>{
    return {initial,restored,shownSimplified,storedTraditional,restoredTraditional,staleOpen,cancelled:outcomes[0].status,last:outcomes[1].status,current,history:C.VARS.HISTORY_LINE_NUMBER};
   }finally{cbReg.rm(token);}
  },bytes);
- assert.equal(result.initial.mapped,result.initial.actual);assert.equal(result.initial.ranges,2);assert.ok(result.initial.notes.includes('OPS/Text/chapter 1.xhtml#note'));assert.equal(result.initial.version,4);
+ assert.equal(result.initial.mapped,result.initial.actual);assert.equal(result.initial.ranges,2);assert.ok(result.initial.notes.includes('OPS/Text/chapter 1.xhtml#note'));assert.equal(result.initial.version,5);
  assert.equal(result.restored.mapped,result.initial.mapped);assert.deepEqual(result.restored.notes,result.initial.notes);assert.equal(result.restored.ranges,2);
  assert.deepEqual([result.shownSimplified,result.storedTraditional,result.restoredTraditional],[true,true,true]);
  assert.deepEqual(result.staleOpen,{success:false,current:'after-lookup.epub'});

@@ -20,7 +20,7 @@
  * @see {@link REGEX_RULES} Regular expression rules used for text processing
  */
 export const REGEX_COMPONENTS = {
-    NUMBER_CHINESE: "一二两三四五六七八九十○零百千万壹贰叁肆伍陆柒捌玖拾佰仟萬首末０-９0-9",
+    NUMBER_CHINESE: "一二两兩三四五六七八九十〇○零百千万壹贰貳叁參肆伍陆陸柒捌玖拾佰仟萬首末０-９0-9",
     NUMBER_ENGLISH_AND_ROMAN_NUMERALS:
         "(?:[0-9]+|[ⅡⅢⅣⅥⅦⅧⅨⅪⅫↀↁↂↇↈⅱⅲⅳⅵⅶⅷⅸⅺⅻ]|\\b(?<!\\w)(?:M{0,4}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3}))\\b(?!\\w)|\\b(?<!\\w)(?:m{0,4}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3}))\b(?!\\w))",
     TITLES_CHINESE: {
@@ -36,6 +36,16 @@ export const REGEX_COMPONENTS = {
         "accolades|appendices|addenda|addendums|preface|foreword|introduction|prologue|epigraph|table of contents|epilogue|afterword|conclusion|glossary|acknowledgements|bibliography|index|errata|colophon|abstract|postscript|contents|list of illustrations|list of tables|notes|note|references|reference|title page|copyright page|dedication|about the author|about the translator|about the editor|about the illustrator|about the publisher|about the series|about the book|credits|credit|prefatory note|prefatory notes|proem|prolegomenon|prefatory material|prefatory matter|endpapers|endpaper|endnotes|endnote|edition",
     TITLE_USER_INDICATOR: "\\[::\\]",
 };
+
+// A conservative fallback for EPUBs whose numbered chapter titles are plain paragraphs.
+const numberedChineseHeading = new RegExp(
+    `^第[^\\S\\r\\n]*[${REGEX_COMPONENTS.NUMBER_CHINESE}]{1,12}[^\\S\\r\\n]*[章回](?:(?:[^\\S\\r\\n]*[:：]|[^\\S\\r\\n]+)[^\\S\\r\\n]*[^\\s。！？][^\\r\\n。！？]{0,79})?$`,
+    "u"
+);
+
+export function isNumberedChineseHeading(text) {
+    return numberedChineseHeading.test(text);
+}
 
 /**
  * Constructs title matching rules

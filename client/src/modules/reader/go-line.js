@@ -1,134 +1,76 @@
-/**
- * @fileoverview Quick jump (go to line) module
- *
- * Provides a dialog for jumping to a specific line number or percentage position.
- * Ported from simplereader-enhance's showGoLine() and adapted for cnb's
- * ES modules architecture.
- *
- * @module client/src/modules/features/go-line
- * @requires client/src/config/index
- * @requires client/src/utils/helpers-reader
- */
-
 import * as CONFIG from "../../config/index.js";
-import { setHistory } from "../../utils/helpers/reader.js";
-import { pageForLine } from "../../../../shared/core/text/page-navigation.js";
 
-/** @type {HTMLElement|null} The go-line dialog element */
-let goLineDlg = null;
+let dialog = null;
 
-/**
- * Go-line module
- * @namespace
- */
 export const goLine = {
-    /**
-     * Show the go-to-line dialog
-     */
-    showDialog() {
-        // Prevent duplicate dialogs
-        if (goLineDlg) return;
+    showDialog(navigate) {
+        if (dialog || !CONFIG.VARS.FILE_CONTENT_CHUNKS.length) return;
 
-        goLineDlg = document.createElement("div");
-        goLineDlg.id = "goLineDlg";
-        goLineDlg.innerHTML = `
+        const previousFocus = document.activeElement;
+        const labels = CONFIG.RUNTIME_VARS.STYLE;
+        dialog = document.createElement("form");
+        dialog.id = "goLineDlg";
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-labelledby", "go-line-title");
+        dialog.innerHTML = `
             <div class="goline-header">
-                <span>快速跳转</span>
-                <button class="close-btn" title="关闭 (Esc)">✕</button>
+                <span id="go-line-title"></span>
+                <button class="close-btn" type="button">✕</button>
             </div>
             <div class="goline-body">
-                <input type="text" class="goline-txt" placeholder="行号 或 百分比（如 50%）" />
-                <button class="goline-btn">跳转</button>
+                <input type="text" class="goline-txt" autocomplete="off" />
+                <button class="goline-btn" type="submit"></button>
             </div>
         `;
 
-        document.body.appendChild(goLineDlg);
+        const input = dialog.querySelector("input");
+        const closeButton = dialog.querySelector(".close-btn");
+        const submitButton = dialog.querySelector(".goline-btn");
+        dialog.querySelector("#go-line-title").textContent = labels.ui_go_line_title;
+        closeButton.title = labels.ui_go_line_close;
+        closeButton.setAttribute("aria-label", labels.ui_go_line_close);
+        input.placeholder = labels.ui_go_line_placeholder;
+        input.setAttribute("aria-label", labels.ui_go_line_placeholder);
+        submitButton.textContent = labels.ui_go_line_submit;
 
-        const input = goLineDlg.querySelector(".goline-txt");
-        const btnClose = goLineDlg.querySelector(".close-btn");
-        const btnGo = goLineDlg.querySelector(".goline-btn");
+        const form = dialog;
+        const close = () => {
+            form.remove();
+            dialog = null;
+            previousFocus?.focus({ preventScroll: true });
+        };
 
-        // Focus input
-        setTimeout(() => input.focus(), 50);
-
-        // Event handlers
-        btnClose.addEventListener("click", () => this.close());
-        btnGo.addEventListener("click", () => doGo());
-        input.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") {
-                e.preventDefault();
-                doGo();
-            } else if (e.key === "Escape") {
-                e.preventDefault();
-                this.close();
+        closeButton.addEventListener("click", close);
+        form.addEventListener("keydown", (event) => {
+            event.stopPropagation();
+            if (event.key === "Escape") {
+                event.preventDefault();
+                close();
+            }
+        });
+        input.addEventListener("input", () => input.setCustomValidity(""));
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const value = input.value.normalize("NFKC").trim();
+            const lastLine = CONFIG.VARS.FILE_CONTENT_CHUNKS.length - 1;
+            const percent = /^(\d+(?:\.\d+)?)\s*%$/.exec(value);
+            const line = percent && Number(percent[1]) <= 100
+                ? Math.round(Number(percent[1]) * lastLine / 100)
+                : /^\d+$/.test(value) ? Number(value) : -1;
+            if (line < 0 || line > lastLine) {
+                input.setCustomValidity(labels.ui_go_line_invalid);
+                input.reportValidity();
+                return;
+            }
+            submitButton.disabled = true;
+            try {
+                if (await navigate(line) === 0 && dialog === form) close();
+            } finally {
+                submitButton.disabled = false;
             }
         });
 
-        // Store reference to the original onkeydown
-        const savedKeydown = document.onkeydown;
-        document.onkeydown = (e) => {
-            if (e.key === "Escape") {
-                this.close();
-            }
-        };
-        goLineDlg._savedKeydown = savedKeydown;
-    },
-
-    /**
-     * Close the go-line dialog
-     */
-    close() {
-        if (!goLineDlg) return;
-
-        // Restore original keydown handler
-        document.onkeydown = goLineDlg._savedKeydown;
-
-        goLineDlg.remove();
-        goLineDlg = null;
+        document.body.appendChild(dialog);
+        input.focus();
     },
 };
-
-/**
- * Parse input and navigate to the target position
- */
-function doGo() {
-    if (!goLineDlg) return;
-
-    const input = goLineDlg.querySelector(".goline-txt");
-    const value = input.value.trim();
-    if (!value) return;
-
-    const totalLines = CONFIG.VARS.FILE_CONTENT_CHUNKS.length;
-    if (totalLines === 0) return;
-
-    let targetLine = 0;
-
-    if (value.endsWith("%")) {
-        // Percentage mode
-        const percent = parseFloat(value);
-        if (isNaN(percent)) return;
-        targetLine = Math.round((Math.max(0, Math.min(100, percent)) / 100) * (totalLines - 1));
-    } else {
-        // Line number mode
-        const lineNum = parseInt(value);
-        if (isNaN(lineNum)) return;
-        targetLine = Math.max(0, Math.min(lineNum, totalLines - 1));
-    }
-
-    // Navigate
-    // Page mode: find which page and navigate
-    const targetPage = pageForLine(targetLine, CONFIG.VARS.PAGE_BREAKS, CONFIG.VARS.TOTAL_PAGES);
-
-    import("./reader.js").then(({ reader }) => {
-        if (targetPage !== CONFIG.VARS.CURRENT_PAGE) {
-            reader.gotoPage(targetPage, "top");
-        }
-        const el = CONFIG.DOM_ELEMENT.GET_LINE(targetLine);
-        if (el) {
-            el.scrollIntoView({ behavior: "instant", block: "start" });
-        }
-    });
-
-    setHistory(CONFIG.VARS.BOOK_ID, targetLine);
-    goLine.close();
-}

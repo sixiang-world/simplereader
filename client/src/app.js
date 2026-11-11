@@ -47,10 +47,7 @@ import {
     initUIMode,
     setUIMode,
     updatePaginationCalculations,
-    showDropZone,
     hideDropZone,
-    resetDropZoneState,
-    hideContent,
     showLoadingScreen,
     hideLoadingScreen,
     resetUI,
@@ -393,15 +390,6 @@ window.addEventListener(
 );
 
 /**
- * Handle drag enter events on window
- */
-window.addEventListener("dragenter", (e) => {
-    CONFIG.VARS.INIT = true;
-    e.preventDefault();
-    updateDropzoneVisualState();
-});
-
-/**
  * Prevent dragging of selected text and non-draggable elements
  */
 document.addEventListener("dragstart", (e) => {
@@ -493,11 +481,18 @@ function setupDropzoneListeners() {
         dropzone.addEventListener("dblclick", openFileSelector);
 
         // Drag and drop events
-        overlay.addEventListener("dragenter", handleDragEvent);
-        overlay.addEventListener("dragover", handleDragEvent);
+        window.addEventListener("dragenter", (event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            event.preventDefault();
+            overlay.classList.add("dragActive");
+        });
+        overlay.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+        });
         overlay.addEventListener("dragleave", (e) => {
             if (!e.relatedTarget || !overlay.contains(e.relatedTarget)) {
-                handleDragLeave(e);
+                overlay.classList.remove("dragActive");
             }
         });
         overlay.addEventListener("drop", handleDrop, true);
@@ -589,12 +584,8 @@ function openFileSelector(e) {
     // Define the file selector
     const fileSelector = document.createElement("input");
     fileSelector.type = "file";
-    fileSelector.accept = CONFIG.CONST_FONT.SUPPORTED_FONT_EXT.concat([CONFIG.CONST_FILE.SUPPORTED_FILE_EXT, CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT]).join(",");
+    fileSelector.accept = CONFIG.CONST_FONT.SUPPORTED_FONT_EXT.concat([CONFIG.CONST_FILE.SUPPORTED_FILE_EXT, ".log", CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT]).join(",");
     fileSelector.multiple = true;
-
-    // Activate overlay before opening file dialog
-    setOverlayActiveState(true);
-    updateDropzoneVisualState();
 
     // Add to DOM to allow events
     document.body.appendChild(fileSelector);
@@ -604,8 +595,6 @@ function openFileSelector(e) {
     const cleanup = () => {
         if (cleanedUp) return;
         cleanedUp = true;
-        setOverlayActiveState(false);
-        resetDropZoneState();
         fileSelector.remove();
         window.removeEventListener("focus", handleWindowFocus);
     };
@@ -630,62 +619,13 @@ function openFileSelector(e) {
 }
 
 /**
- * Common drag utility — safely apply a class to overlay
- */
-function setOverlayActiveState(active) {
-    const overlay = CONFIG.DOM_ELEMENT.DROPZONE_OVERLAY;
-    if (isVariableDefined(overlay)) {
-        overlay.classList.toggle("dragActive", active);
-    }
-}
-
-/**
- * Common drag utility — update dropzone UI state
- */
-function updateDropzoneVisualState() {
-    showDropZone(true, !(CONFIG.DOM_ELEMENT.CONTENT_CONTAINER.innerHTML === ""));
-    hideContent();
-}
-
-/**
- * Allows drag operations by preventing default behavior
- * @param {DragEvent} e - The drag event
- */
-function allowDrag(e) {
-    e.dataTransfer.dropEffect = "copy";
-    e.preventDefault();
-}
-
-/**
- * Handles drag events on the dropzone
- * @param {DragEvent} e - The drag event
- */
-function handleDragEvent(e) {
-    allowDrag(e);
-    setOverlayActiveState(true);
-    updateDropzoneVisualState();
-}
-
-/**
- * Handles drag leave events on the dropzone
- * Manages visibility of dropzone and content based on drag state
- * @param {DragEvent} e - The drag leave event
- */
-function handleDragLeave(e) {
-    e.preventDefault();
-    setOverlayActiveState(false);
-    resetDropZoneState();
-}
-
-/**
  * Handles file drop events
  * Processes dropped files and updates UI accordingly
  * @param {DragEvent} e - The drop event
  */
 async function handleDrop(e) {
     e.preventDefault();
-    setOverlayActiveState(false);
-    resetDropZoneState();
+    e.currentTarget.classList.remove("dragActive");
     await FileHandler.handleMultipleFiles(e.dataTransfer.files);
 }
 

@@ -25,9 +25,12 @@ await withBrowserTest(async ({ browser, baseURL }) => {
             for (const name of names) {
                 const isEpub = name.endsWith(".epub");
                 const bytes = isEpub ? Uint8Array.from(atob(epub), char => char.charCodeAt(0)) : "Chapter One\n\nSample text.\n";
-                transfer.items.add(new File([bytes], name, { type: isEpub ? "application/epub+zip" : "text/plain" }));
+                transfer.items.add(new File([bytes], name, {
+                    type: isEpub ? "application/epub+zip" : name.endsWith(".log") ? "" : "text/plain",
+                }));
             }
             const overlay = C.DOM_ELEMENT.DROPZONE_OVERLAY;
+            window.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true, dataTransfer: transfer }));
             overlay.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: transfer }));
             overlay.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }));
         }, { names, epub });
@@ -78,11 +81,24 @@ await withBrowserTest(async ({ browser, baseURL }) => {
     assert.equal(after.rendered, current.rendered);
     assert.equal(after.visibility, "visible");
 
-    await drop(["single.txt"]);
-    await page.waitForFunction(async () => {
-        const C = await import("/client/src/config/index.js");
-        return C.VARS.FILENAME === "single.txt" && C.DOM_ELEMENT.CONTENT_CONTAINER.textContent.includes("Sample text.");
+    await drop(["single.log"]);
+    await page.locator('#content[data-reader-mode="log"]').getByText("Sample text.").waitFor({ state: "visible" });
+    assert.equal((await readState()).current, "single.log");
+    const dialogMounted = await page.evaluate(async () => {
+        const { goLine } = await import("/client/src/modules/reader/go-line.js");
+        const { reader } = await import("/client/src/modules/reader/reader.js");
+        goLine.showDialog(line => reader.gotoLine(line, false));
+        return Boolean(document.querySelector("#goLineDlg input"));
     });
+    assert.equal(dialogMounted, true, "quick jump mounts an input");
+    const jump = page.locator("#goLineDlg input");
+    assert.match(await jump.getAttribute("placeholder"), /50%/);
+    await jump.fill("1abc");
+    await jump.press("Enter");
+    assert.equal(await jump.evaluate(input => input.validity.customError), true);
+    await jump.fill("５０％");
+    await jump.press("Enter");
+    await jump.waitFor({ state: "detached" });
     assert.deepEqual(errors, []);
     await page.close();
 });

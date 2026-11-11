@@ -114,7 +114,7 @@ export const CONST_FILE = Object.freeze({
     // v1 -> v2: images now inlined as data: URLs in htmlLines (EPUB image
     // rendering, Phase 1). Old cached conversions lack images and must be
     // re-converted.
-    EPUB_CONVERTER_VERSION: 4,
+    EPUB_CONVERTER_VERSION: 5,
     SUPPORTED_FILE_EXT,
     EXT_REGEX: FILE_EXTENSION_REGEX,
     SUPPORTED_FILE_TYPE: "text/plain",

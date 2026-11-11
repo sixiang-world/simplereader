@@ -1124,7 +1124,7 @@ export function initReader() {
             },
             g: (e) => {
                 e.preventDefault();
-                goLine.showDialog();
+                goLine.showDialog(line => reader.gotoLine(line, false));
             },
         };
 

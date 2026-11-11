@@ -12,6 +12,7 @@ import { Logger } from "../../../../shared/utils/logger.js";
 import { CONST_PAGINATION } from "../../config/constants.js";
 import { resolveEpubHref } from "../../../../shared/core/file/epub-path.js";
 import { serializeEpubSvg } from "../../../../shared/core/file/epub-dom.js";
+import { isNumberedChineseHeading } from "../../../../shared/core/text/regex-rules.js";
 import { epubLimits, guardedEpubArchive, checkEpubAbort, checkEpubDocument, epubLimit, rethrowEpubControlError } from "../../../../shared/core/file/epub-budget.js";
 
 /**
@@ -120,13 +121,14 @@ export class EpubConverter {
                     titles.push([entry.label, lineNum, entry.label, false, entry.level ?? 0]);
                 }
             }
-            // Also include auto-detected <h1-h6> titles that weren't in NCX
+            // Keep authored labels at matching locations and insert supplemental headings in reading order.
             for (const st of spineTitles) {
                 if (!seenLines.has(st[1])) {
                     titles.push(st);
                     seenLines.add(st[1]);
                 }
             }
+            titles.sort((a, b) => a[1] - b[1]);
             this.#logger.log(`TOC mapping produced ${titles.length} titles (${tocEntries.length - titles.length} unmapped)`);
         } else {
             titles = spineTitles;
@@ -949,12 +951,14 @@ export class EpubConverter {
 
             const lineNumber = lineOffset + elements.length;
 
-            // Headings
-            if (["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag)) {
+            // Some classic EPUBs store every chapter heading in a plain paragraph.
+            const chapterParagraph = tag === "p" && isNumberedChineseHeading(textContent) &&
+                !node.querySelector("a, img, svg, br");
+            if (chapterParagraph || /^h[1-6]$/.test(tag)) {
                 const content = this.#extractInlineHtml(node, imageRegistry);
-                const level = parseInt(tag[1]);
+                const level = chapterParagraph ? 1 : Number(tag[1]);
 
-                if (level === 1) {
+                if (level === 1 && !chapterParagraph) {
                     // h1 → title page style
                     elements.push({
                         type: "title",
@@ -967,7 +971,7 @@ export class EpubConverter {
                     });
                     titles.push([textContent, lineNumber, textContent, false, 0]);
                 } else {
-                    // h2-h6 → heading
+                    // h2-h6 and inferred chapter paragraphs → heading
                     elements.push({
                         type: "heading",
                         tag: "h2",
@@ -1047,13 +1051,19 @@ export class EpubConverter {
 
             // Paragraphs and divs
             if (["p", "div", "li", "td", "th", "dt", "dd"].includes(tag)) {
-                const content = this.#extractInlineHtml(node, imageRegistry);
+                // Plain-text EPUB conversions can leave a chapter heading at the
+                // end of the previous paragraph, after a source newline.
+                const newline = tag === "p" && node.children.length === 0 ? textContent.lastIndexOf("\n") : -1;
+                const beforeHeading = newline > 0 ? textContent.slice(0, newline).trimEnd() : "";
+                const trailingHeading = newline > 0 ? textContent.slice(newline + 1).trim() : "";
+                const splitHeading = /[。！？]$/.test(beforeHeading) && isNumberedChineseHeading(trailingHeading);
+                const content = splitHeading ? this.#escapeHtml(beforeHeading) : this.#extractInlineHtml(node, imageRegistry);
                 if (content.trim()) {
                     elements.push({
                         type: "paragraph",
                         tag: "p",
                         content,
-                        charCount: textContent.length,
+                        charCount: splitHeading ? beforeHeading.length : textContent.length,
                         lineNumber,
                         elementType: "p",
                         source: "epub",
@@ -1061,6 +1071,19 @@ export class EpubConverter {
                     if (fragmentToLine && filePath && node.id) {
                         fragmentToLine[`${filePath}#${node.id}`] = lineNumber;
                     }
+                }
+                if (splitHeading) {
+                    const headingLine = lineOffset + elements.length;
+                    elements.push({
+                        type: "heading",
+                        tag: "h2",
+                        content: this.#escapeHtml(trailingHeading),
+                        charCount: trailingHeading.length,
+                        lineNumber: headingLine,
+                        elementType: "h",
+                        source: "epub",
+                    });
+                    titles.push([trailingHeading, headingLine, trailingHeading, false, 0]);
                 }
                 continue;
             }

@@ -38,7 +38,6 @@ import { PopupManager } from "../../components/popup-manager.js";
 import { getFootnotes } from "../reader/footnotes.js";
 import {
     removeFileExtension,
-    randomFloatFromInterval,
     formatBytes,
     pairAnchorsAndFootnotes,
     constructNotificationMessageFromArray,
@@ -179,116 +178,54 @@ export class FileHandler {
         const bookshelfOnly = allFiles.length > 1 || isOnServer;
         const signal = bookshelfOnly ? null : FileHandler.beginLoad();
 
-        // Separate EPUB files from the rest. A file "looks like an EPUB" only
-        // when BOTH conditions hold: its name ends with `.epub` AND its magic
-        // number is a ZIP signature. Files that merely have the .epub extension
-        // but aren't actually zips (commonly mis-named TXTs) fall through to
-        // the TXT path below, so the user still gets to read them instead of
-        // hitting an opaque JSZip "Can't find end of central directory" error.
-        const epubCandidates = allFiles.filter((file) => file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT));
         const epubFiles = [];
-        const nonEpubFiles = [];
-        for (const file of epubCandidates) {
-            if (await FileHandler.#isLikelyEpub(file)) {
+        let txtFiles = [];
+        const otherFiles = [];
+        const invalidEpubs = [];
+        const plainTextType = CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE;
+        for (const file of allFiles) {
+            const epubName = file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT);
+            if (epubName && await FileHandler.#isLikelyEpub(file)) {
                 epubFiles.push(file);
+            } else if (epubName && !(await FileHandler.#isLikelyText(file))) {
+                invalidEpubs.push(file.name);
+            } else if (epubName || file.type === plainTextType ||
+                ((!file.type || file.type === "application/octet-stream") && /\.(txt|log)$/i.test(file.name))) {
+                txtFiles.push(file.type === plainTextType ? file :
+                    new File([file], file.name, { type: plainTextType, lastModified: file.lastModified }));
             } else {
-                // Misnamed .epub — let it fall through to the TXT path below,
-                // where #isLikelyText will decide whether it is readable text.
-                nonEpubFiles.push(file);
+                otherFiles.push(file);
             }
             signal?.throwIfAborted();
         }
-        for (const file of allFiles) {
-            if (!file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT)) {
-                nonEpubFiles.push(file);
-            }
-        }
 
-        if (!bookshelfOnly && epubFiles.length === 1) {
-            const [file] = epubFiles;
-            await FileHandler.handleEpubFile(file, signal);
+        if (!bookshelfOnly && epubFiles.length) {
+            await FileHandler.handleEpubFile(epubFiles[0], signal);
             return;
         }
 
-        const isTextFile = (file) => file.type === CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE ||
-            (bookshelfOnly && !file.type && /\.(txt|log)$/i.test(file.name));
-        let txtFiles = nonEpubFiles.filter(isTextFile);
-        // Files we reclassified from .epub → TXT path above have .type set by
-        // the browser as "application/epub+zip" (because of the extension),
-        // not "text/plain". If we left them in otherFiles they'd be sent to
-        // the font validator and rejected as invalid fonts. Pick them out
-        // here and treat as TXT so the user can still read the content.
-        // BUT: a misnamed .epub that isn't actually a zip may also not be
-        // text (e.g. a renamed image). Reading such bytes as TXT produces
-        // garbage, so run a text/binary heuristic and surface an
-        // epubInvalid notification for the ones that fail.
-        const misnamedEpubCandidates = nonEpubFiles.filter(
-            (file) => file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT) &&
-                       !txtFiles.includes(file)
-        );
-        const misnamedEpubs = [];
-        for (const file of misnamedEpubCandidates) {
-            if (await FileHandler.#isLikelyText(file)) {
-                misnamedEpubs.push(file);
-            } else {
-                PopupManager.showNotification({
-                    iconName: "WRONG_FILE_TYPE",
-                    iconColor: "error",
-                    text: constructNotificationMessageFromArray(
-                        CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_epubInvalid,
-                        [file.name],
-                        { language: getCurrentDisplayLanguage(), maxItems: 1 }
-                    ),
-                });
-            }
+        if (invalidEpubs.length) {
+            PopupManager.showNotification({
+                iconName: "WRONG_FILE_TYPE", iconColor: "error",
+                text: constructNotificationMessageFromArray(
+                    CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_epubInvalid,
+                    invalidEpubs,
+                    { language: getCurrentDisplayLanguage(), maxItems: 3 }
+                ),
+            });
         }
-        txtFiles = txtFiles.concat(misnamedEpubs);
-        const otherFiles = nonEpubFiles.filter(
-            (file) => !isTextFile(file) &&
-                       !misnamedEpubCandidates.includes(file)
-        );
-        // const fontFiles = allFiles.filter((file) => CONFIG.CONST_FONT.SUPPORTED_FONT_TYPES.includes(file.type));
 
-        // Validate font files
-        const fontValidationResults = await Promise.all(
-            otherFiles.map(async (file) => {
-                const isSupportedType = CONFIG.CONST_FONT.SUPPORTED_FONT_TYPES.includes(file.type);
-                const validation = await validateFontFile(file);
-                const isValidFont = validation.isValid;
-                const reason = validation.reason;
-
-                // console.log(`File: ${file.name}, isSupportedType: ${isSupportedType}, isValidFont: ${isValidFont}`);
-                // return isSupportedType || isValidFont;
-                // return isValidFont;
-                return validation;
-            })
-        );
-        // console.log("fontValidationResults: ", fontValidationResults);
-
-        // Filter out invalid font files
-        // const fontFiles = otherFiles.filter((_, index) => fontValidationResults[index].isValid);
+        const fontValidationResults = await Promise.all(otherFiles.map(file => validateFontFile(file)));
+        signal?.throwIfAborted();
         const fontFiles = [];
         const incorrectFonts = [];
         const invalidFiles = [];
         fontValidationResults.forEach((result, index) => {
-            if (result.isValid) {
-                fontFiles.push(otherFiles[index]);
-            } else {
-                if (result.type === 0) {
-                    incorrectFonts.push(otherFiles[index].name);
-                } else {
-                    invalidFiles.push(otherFiles[index].name);
-                }
-            }
+            const file = otherFiles[index];
+            if (result.isValid) fontFiles.push(file);
+            else if (result.type === 0) incorrectFonts.push(file.name);
+            else invalidFiles.push(file.name);
         });
-
-        // console.groupCollapsed("[Input Files]");
-        // console.log("allFiles: ", allFiles);
-        // console.log("txtFiles: ", txtFiles);
-        // console.log("fontFiles: ", fontFiles);
-        // console.log("incorrectFonts: ", incorrectFonts);
-        // console.log("invalidFiles: ", invalidFiles);
-        // console.groupEnd();
 
         // Handle incorrect font files
         if (incorrectFonts.length > 0) {

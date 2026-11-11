@@ -1,6 +1,21 @@
 {
-    "version": "2.5.0",
+    "version": "2.5.1",
     "changelog": {
+        "2.5.1": {
+            "date": "2026-11-11",
+            "changes": {
+                "zh": [
+                    "多选 TXT 和 EPUB 时只存入书架，单选直接打开。拖放时保留当前正文，文件选择器可选 .log。",
+                    "改进中文章回识别，支持「第一〇回」等编号，并从 EPUB 普通段落提取回目用于目录和分页。",
+                    "快速跳转提供中英文提示，支持全角行号和百分比，并拒绝无效输入。"
+                ],
+                "en": [
+                    "Selecting multiple TXT or EPUB files saves them to the bookshelf. Selecting one opens it. Dragging files keeps the current page visible, and the picker accepts .log files.",
+                    "Recognize Chinese numbered chapters including ideographic zero, and recover chapter headings stored in EPUB paragraphs for navigation and pagination.",
+                    "Quick jump has Chinese and English labels, accepts full-width line numbers and percentages, and reports invalid input."
+                ]
+            }
+        },
         "2.5.0": {
             "date": "2026-11-11",
             "changes": {

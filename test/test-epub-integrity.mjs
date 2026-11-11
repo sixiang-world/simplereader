@@ -58,6 +58,27 @@ assert(breaks.length > 1);
 assert.equal(breaks[0], 0);
 assert(breaks.every((v, i) => i === 0 || v > breaks[i - 1]));
 
+const chapterBody = '<p>這是章回的正文。</p>'.repeat(14);
+const classic = await EpubConverter.convert(await epubFixture([{
+    path: "classic.xhtml", href: "classic.xhtml",
+    body: '<p id="one"><span>第一回：桃園結義</span></p>' + chapterBody +
+        '<p>第一回見面時，他還不認得我。</p>' +
+        '<p><a href="#one">第一回：桃園結義</a></p>' +
+        '<p id="ten">第一〇回　兩軍相遇</p>' + chapterBody +
+        '<p id="closing">且看下文分解。\n第九十回：再戰</p>' + chapterBody,
+}]));
+assert.deepEqual(classic.titles.map(([title]) => title), ["第一回：桃園結義", "第一〇回　兩軍相遇", "第九十回：再戰"]);
+for (const [, line] of classic.titles) assert.equal(classic.htmlLines[line].type, "heading");
+const tenthChapter = classic.fragmentToLine["OPS/classic.xhtml#ten"];
+assert.equal(classic.titles[1][1], tenthChapter);
+const closing = classic.fragmentToLine["OPS/classic.xhtml#closing"];
+assert.equal(classic.htmlLines[closing].content, "且看下文分解。");
+assert.equal(classic.titles[2][1], closing + 1);
+const classicBreaks = paginateEpub(classic, {
+    ...CONST_PAGINATION, MAX_LINES: 20, MIN_LINES: 5, USE_CHAR_COUNT: false, PAGE_BREAK_ON_TITLE: true,
+});
+assert.ok(classicBreaks.includes(tenthChapter), "inferred EPUB chapter should participate in smart pagination");
+
 await assert.rejects(() => EpubConverter.convert(book, null, { limits: { maxEntries: 1 } }), /EPUB_LIMIT/);
 await assert.rejects(() => EpubConverter.convert(book, null, { limits: { maxEntryBytes: 32 } }), /EPUB_LIMIT/);
 await assert.rejects(() => EpubConverter.convert(book, null, { limits: { maxTotalBytes: 400 } }), /EPUB_LIMIT/);

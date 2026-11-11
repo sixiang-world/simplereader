@@ -1,5 +1,5 @@
 // @ts-check
-export const BOOK_CACHE_VERSION = 2;
+export const BOOK_CACHE_VERSION = 3;
 
 /** Disk names are retained for compatibility with existing IndexedDB books. */
 const fields = {
