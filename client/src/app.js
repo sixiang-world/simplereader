@@ -617,8 +617,9 @@ function openFileSelector(e) {
 
     // Listen for file selection
     fileSelector.onchange = async () => {
-        await FileHandler.handleMultipleFiles(fileSelector.files);
+        const files = Array.from(fileSelector.files);
         cleanup();
+        await FileHandler.handleMultipleFiles(files);
     };
 
     // Watch for window regaining focus (after cancel or select)
@@ -684,6 +685,7 @@ function handleDragLeave(e) {
 async function handleDrop(e) {
     e.preventDefault();
     setOverlayActiveState(false);
+    resetDropZoneState();
     await FileHandler.handleMultipleFiles(e.dataTransfer.files);
 }
 

@@ -47,10 +47,11 @@ export class BookshelfDB extends DBManager {
      * @param {File} data - Book file data
      * @param {boolean} [isFromLocal=true] - Whether book is from local storage
      * @param {boolean} [isOnServer=false] - Whether book is stored on server
-     * @returns {Promise<IDBValidKey>} Key of stored book
+     * @param {{ isEpub?: boolean }} [options] - Whether the original is an EPUB
+     * @returns {Promise<boolean>} Whether the original was saved
      * @throws {Error} When database initialization fails or transaction fails
      */
-    async putBook(name, data, isFromLocal = true, isOnServer = false) {
+    async putBook(name, data, isFromLocal = true, isOnServer = false, { isEpub = false } = {}) {
         if (CONFIG.CONST_CONFIG.ANONYMOUS_MODE) {
             return false;
         }
@@ -59,8 +60,8 @@ export class BookshelfDB extends DBManager {
         }
 
         // Get the language of the book
-        let isEastern = data.isEastern ?? null;
-        let encoding = data.encoding ?? null;
+        let isEastern = isEpub ? TextProcessor.getLanguage(data.name) : data.isEastern ?? null;
+        let encoding = isEpub ? "utf-8" : data.encoding ?? null;
         if (isEastern === null || encoding === null) {
             ({ isEastern, encoding } = await TextProcessor.getLanguageAndEncodingFromBook(data));
         }
@@ -84,6 +85,7 @@ export class BookshelfDB extends DBManager {
                         isFromLocal: inputData.isFromLocal,
                         isOnServer: inputData.isOnServer,
                         processed: false,
+                        is_epub: isEpub,
                         pageBreakOnTitle: CONFIG.RUNTIME_CONFIG.PAGE_BREAK_ON_TITLE ?? true,
                         isEastern: inputData.isEastern,
                         createdAt: new Date().toISOString(),
@@ -129,11 +131,8 @@ export class BookshelfDB extends DBManager {
             // EPUB first save: bookfiles entry doesn't exist yet, create it
             if (!existingBook) {
                 if (processedData.data) {
-                    await this.putBook(name, processedData.data, true, false);
+                    await this.putBook(name, processedData.data, true, false, { isEpub: Boolean(processedData.is_epub) });
                     existingBook = await this.get([this.#objectStoreNames.bookfiles], name);
-                    if (existingBook) {
-                        existingBook.is_epub = processedData.is_epub || false;
-                    }
                     existingProcessedBook = await this.get([this.#objectStoreNames.bookProcessed], name);
                 } else {
                     throw new Error(`Book with name "${name}" not found in the database.`);

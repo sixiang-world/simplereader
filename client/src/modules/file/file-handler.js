@@ -171,18 +171,13 @@ export class FileHandler {
      * @param {FileList} fileList - List of files to process
      * @param {boolean} isFromLocal - Whether files are from local storage
      * @param {boolean} isOnServer - Whether files are stored on server
-     * @param {boolean} loadFiles - Whether to load files into memory
      * @returns {Promise<void>}
      */
-    static async handleMultipleFiles(fileList, isFromLocal = true, isOnServer = false, loadFiles = true) {
-        const signal = FileHandler.beginLoad();
-        // Show loading screen
-        hideDropZone();
-        hideContent();
-        showLoadingScreen();
-
-        // Processing input files
+    static async handleMultipleFiles(fileList, isFromLocal = true, isOnServer = false) {
         const allFiles = Array.from(fileList);
+        if (!allFiles.length) return;
+        const bookshelfOnly = allFiles.length > 1 || isOnServer;
+        const signal = bookshelfOnly ? null : FileHandler.beginLoad();
 
         // Separate EPUB files from the rest. A file "looks like an EPUB" only
         // when BOTH conditions hold: its name ends with `.epub` AND its magic
@@ -201,7 +196,7 @@ export class FileHandler {
                 // where #isLikelyText will decide whether it is readable text.
                 nonEpubFiles.push(file);
             }
-            signal.throwIfAborted();
+            signal?.throwIfAborted();
         }
         for (const file of allFiles) {
             if (!file.name.toLowerCase().endsWith(CONFIG.CONST_FILE.SUPPORTED_EPUB_EXT)) {
@@ -209,27 +204,15 @@ export class FileHandler {
             }
         }
 
-        // Handle EPUB files (first one wins, same as TXT single-file behavior)
-        if (epubFiles.length > 0) {
-            resetVars();
-            const epubFile = epubFiles[0];
-            setIsFromLocal(epubFile.name, getIsFromLocal(epubFile.name) || isFromLocal);
-            setIsOnServer(epubFile.name, getIsOnServer(epubFile.name) || isOnServer);
-            await FileHandler.handleEpubFile(epubFile, signal);
-            signal.throwIfAborted();
-
-            // If there are also TXT files, notify user that only one type is handled at a time
-            if (nonEpubFiles.length > 0) {
-                PopupManager.showNotification({
-                    iconName: "BOOK",
-                    text: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_wrongFileType || "EPUB file opened. TXT files were ignored.",
-                    iconColor: "info",
-                });
-            }
+        if (!bookshelfOnly && epubFiles.length === 1) {
+            const [file] = epubFiles;
+            await FileHandler.handleEpubFile(file, signal);
             return;
         }
 
-        let txtFiles = nonEpubFiles.filter((file) => file.type === CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE);
+        const isTextFile = (file) => file.type === CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE ||
+            (bookshelfOnly && !file.type && /\.(txt|log)$/i.test(file.name));
+        let txtFiles = nonEpubFiles.filter(isTextFile);
         // Files we reclassified from .epub → TXT path above have .type set by
         // the browser as "application/epub+zip" (because of the extension),
         // not "text/plain". If we left them in otherFiles they'd be sent to
@@ -261,7 +244,7 @@ export class FileHandler {
         }
         txtFiles = txtFiles.concat(misnamedEpubs);
         const otherFiles = nonEpubFiles.filter(
-            (file) => file.type !== CONFIG.CONST_FILE.SUPPORTED_FILE_TYPE &&
+            (file) => !isTextFile(file) &&
                        !misnamedEpubCandidates.includes(file)
         );
         // const fontFiles = allFiles.filter((file) => CONFIG.CONST_FONT.SUPPORTED_FONT_TYPES.includes(file.type));
@@ -378,81 +361,60 @@ export class FileHandler {
             });
         }
 
-        // Check if there are no valid files
-        if (txtFiles.length === 0 && fontFiles.length === 0 && fileList.length > 0) {
-            // Hide loading screen
-            resetDropZoneState();
-            hideLoadingScreen();
-
-            return;
-        }
-
-        // Handle font files
         if (fontFiles.length > 0) {
-            // await resetUI();
-            cbReg.go("handleMultipleFonts", {
-                files: fontFiles,
-            });
+            await cbReg.go("handleMultipleFonts", { files: fontFiles });
         }
 
-        // Check if there are no valid text files
-        if (txtFiles.length === 0) {
-            // Hide loading screen
-            resetDropZoneState();
-            hideLoadingScreen();
-
+        signal?.throwIfAborted();
+        if (!bookshelfOnly) {
+            const [file] = txtFiles;
+            if (file) {
+                setIsFromLocal(file.name, getIsFromLocal(file.name) || isFromLocal);
+                setIsOnServer(file.name, getIsOnServer(file.name) || isOnServer);
+                await FileHandler.handleSelectedFile([file], null, null, false, signal);
+            }
             return;
         }
 
-        signal.throwIfAborted();
-        // Handle text files
-        if (txtFiles.length > 1 || isOnServer) {
-            resetVars();
-            // Trigger different events based on whether files should be loaded
-            const eventName = loadFiles ? "handleMultipleBooks" : "handleMultipleBooksWithoutLoading";
-            cbReg.go(eventName, {
-                files: txtFiles,
-                isFromLocal,
-                isOnServer,
+        const books = txtFiles.map(file => ({ file, isEpub: false }));
+        const oversized = [];
+        for (const file of epubFiles) {
+            if (file.size > CONFIG.CONST_FILE.MAX_EPUB_FILE_SIZE) oversized.push(file.name);
+            else books.push({ file, isEpub: true });
+        }
+
+        const notification = (label, names) => constructNotificationMessageFromArray(label, names, {
+            language: getCurrentDisplayLanguage(),
+            maxItems: 3,
+            messageSuffix: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_andMore,
+        });
+        if (oversized.length) {
+            PopupManager.showNotification({
+                iconName: "WRONG_FILE_TYPE", iconColor: "error",
+                text: notification(CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_epubTooLarge, oversized),
             });
+        }
+        if (!books.length) return;
 
-            if (eventName !== "handleMultipleBooksWithoutLoading") {
-                PopupManager.showNotification({
-                    iconName: "BOOK",
-                    text: constructNotificationMessageFromArray(
-                        CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_bookAdded,
-                        txtFiles.map((file) => file.name),
-                        {
-                            language: getCurrentDisplayLanguage(),
-                            maxItems: 3,
-                            messageSuffix: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_andMore,
-                        }
-                    ),
-                });
-            }
-        } else if (loadFiles && txtFiles.length === 1) {
-            resetVars();
-            const singleFile = txtFiles[0];
-            setIsFromLocal(singleFile.name, getIsFromLocal(singleFile.name) || isFromLocal);
-            setIsOnServer(singleFile.name, getIsOnServer(singleFile.name) || isOnServer);
-
-            // PopupManager.showNotification({
-            //     iconName: "BOOK",
-            //     text: constructNotificationMessageFromArray(
-            //         CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_bookAdded,
-            //         [singleFile.name],
-            //         {
-            //             language: getCurrentDisplayLanguage(),
-            //             maxItems: 3,
-            //             messageSuffix: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_andMore,
-            //         }
-            //     ),
-            // });
-
-            await FileHandler.handleSelectedFile(txtFiles, null, null, false, signal);
-        } else {
-            console.log("No valid file selected.");
-            await resetUI();
+        const { added = [], failed = [], unavailable = true } = await cbReg.go("importBooksToShelf", {
+            books, isFromLocal, isOnServer,
+        });
+        if (unavailable) {
+            PopupManager.showNotification({
+                iconName: "ERROR", iconColor: "error",
+                text: CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_batchShelfUnavailable,
+            });
+            return;
+        }
+        const messages = [];
+        if (added.length) messages.push(notification(CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_bookAdded, added));
+        if (failed.length) messages.push(notification(CONFIG.RUNTIME_VARS.STYLE.ui_notification_text_failedToSave, failed));
+        if (messages.length) {
+            PopupManager.showNotification({
+                iconName: failed.length ? "ERROR" : "BOOK",
+                iconColor: failed.length ? "error" : "info",
+                text: messages.join("\n"),
+            });
         }
     }
 

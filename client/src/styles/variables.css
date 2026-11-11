@@ -440,6 +440,9 @@
     --ui_notification_text_failedToSave: "";
     --ui_notification_text_failedToSave_zh: 保存失败，可能本地存储已满！;
     --ui_notification_text_failedToSave_en: Failed to save to local bookshelf (localStorage may be full).;
+    --ui_notification_text_batchShelfUnavailable: "";
+    --ui_notification_text_batchShelfUnavailable_zh: 批量导入需要启用书架并关闭匿名模式。;
+    --ui_notification_text_batchShelfUnavailable_en: Enable the bookshelf and turn off Anonymous Mode to import multiple books.;
     --ui_notification_text_bookAdded: "";
     --ui_notification_text_bookAdded_zh: 新增书籍;
     --ui_notification_text_bookAdded_en: Added book;
@@ -834,6 +837,7 @@
     --ui_notification_text_fontFileInvalid: var(--ui_notification_text_fontFileInvalid_zh);
     --ui_notification_text_fontNotSupportedInSafari: var(--ui_notification_text_fontNotSupportedInSafari_zh);
     --ui_notification_text_failedToSave: var(--ui_notification_text_failedToSave_zh);
+    --ui_notification_text_batchShelfUnavailable: var(--ui_notification_text_batchShelfUnavailable_zh);
     --ui_notification_text_bookAdded: var(--ui_notification_text_bookAdded_zh);
     --ui_notification_text_failedToOpen: var(--ui_notification_text_failedToOpen_zh);
     --ui_notification_text_settingsReset: var(--ui_notification_text_settingsReset_zh);
@@ -1015,6 +1019,7 @@
     --ui_notification_text_fontFileInvalid: var(--ui_notification_text_fontFileInvalid_en);
     --ui_notification_text_fontNotSupportedInSafari: var(--ui_notification_text_fontNotSupportedInSafari_en);
     --ui_notification_text_failedToSave: var(--ui_notification_text_failedToSave_en);
+    --ui_notification_text_batchShelfUnavailable: var(--ui_notification_text_batchShelfUnavailable_en);
     --ui_notification_text_bookAdded: var(--ui_notification_text_bookAdded_en);
     --ui_notification_text_failedToOpen: var(--ui_notification_text_failedToOpen_en);
     --ui_notification_text_settingsReset: var(--ui_notification_text_settingsReset_en);

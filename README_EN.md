@@ -92,7 +92,7 @@ Added by this repository (sixiang-world):
 
 ### Add Books
 
-Drag and drop **TXT or EPUB files** into the interface (batch import supported), or double-click to select files manually.
+Drag and drop **TXT or EPUB files** into the interface, or double-click to select files. A single book opens immediately. Selecting multiple files saves the books to the bookshelf for later reading. Batch import requires the bookshelf to be enabled and Anonymous Mode to be off.
 
 ### Bookshelf Management
 

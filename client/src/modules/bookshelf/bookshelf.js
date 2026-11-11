@@ -35,8 +35,8 @@ import { TextProcessor } from "../text/text-processor.js";
 import { FileHandler } from "../file/file-handler.js";
 import { PopupManager } from "../../components/popup-manager.js";
 import { isVariableDefined, getSizePrecise, removeFileExtension, convertUTCTimestampToLocalString, formatBytes, truncateText } from "../../utils/base.js";
-import { showLoadingScreen, hideLoadingScreen, resetUI, resetVars, resetDropZoneState, delegateScroll } from "../../utils/helpers/ui.js";
-import { setBookLastReadTimestamp, getBookLastReadTimestamp, setIsFromLocal, getIsFromLocal, setIsOnServer, getIsOnServer } from "../../utils/helpers/bookshelf.js";
+import { showLoadingScreen, hideLoadingScreen, resetUI, resetVars, delegateScroll } from "../../utils/helpers/ui.js";
+import { setBookLastReadTimestamp, getBookLastReadTimestamp } from "../../utils/helpers/bookshelf.js";
 import { getProgressText, removeHistory, getIsBookFinished } from "../../utils/helpers/reader.js";
 import { BookshelfDB } from "./bookshelf-db.js";
 export { BookshelfDB };
@@ -681,7 +681,7 @@ export const bookshelf = {
      * @param {boolean} [hardRefresh=false] - Whether to completely rebuild the book list
      * @param {boolean} [sortBookshelf=true] - Whether to sort the books
      */
-    async refreshBookList(hardRefresh = false, sortBookshelf = true) {
+    async refreshBookList(hardRefresh = false, sortBookshelf = true, reveal = true) {
         // console.log(
         //     "Refreshing book list...",
         //     "hardRefresh:",
@@ -772,7 +772,7 @@ export const bookshelf = {
             if (Object.keys(CONFIG.VARS.ALL_BOOKS_INFO).length <= 0) {
                 this.hide(true, false);
                 this.hideTriggerBtn();
-            } else {
+            } else if (reveal) {
                 await this.show(false);
                 // this.showTriggerBtn();
             }
@@ -1349,136 +1349,29 @@ export const bookshelf = {
                 this.hide();
             });
 
-            // Listen for handleMultipleBooks event
-            register("handleMultipleBooks", async (e) => {
-                const { files, isFromLocal, isOnServer } = e;
-
-                if (this.enabled) {
-                    showLoadingScreen();
-
-                    for (const [i, file] of files.entries()) {
-                        const final_isFromLocal = getIsFromLocal(file.name) || isFromLocal;
-                        const final_isOnServer = getIsOnServer(file.name) || isOnServer;
-                        setIsFromLocal(file.name, final_isFromLocal);
-                        setIsOnServer(file.name, final_isOnServer);
-                        // console.log(`Loading file ${i + 1} of ${files.length}; ${i === files.length - 1}`);
-
-                        await this.saveBook(
-                            file,
-                            final_isFromLocal,
-                            final_isOnServer,
-                            i === files.length - 1,
-                            false,
-                            i === files.length - 1
-                        );
-                    }
-
-                    resetDropZoneState();
-                    hideLoadingScreen(false);
-                } else {
-                    console.log(
-                        "Multiple files selected, only the first one will be loaded since bookshelf is disabled."
-                    );
-                    const firstFile = files[0];
-                    setIsFromLocal(firstFile.name, getIsFromLocal(firstFile.name) || isFromLocal);
-                    setIsOnServer(firstFile.name, getIsOnServer(firstFile.name) || isOnServer);
-                    setBookLastReadTimestamp(firstFile.name);
-                    await FileHandler.handleSelectedFile([firstFile], null, null, true);
+            register("importBooksToShelf", async ({ books, isFromLocal, isOnServer }) => {
+                const added = [];
+                const failed = [];
+                if (!this.enabled || CONFIG.CONST_CONFIG.ANONYMOUS_MODE) {
+                    return { added, failed, unavailable: true };
                 }
-            });
-
-            // Listen for handleMultipleBooksWithoutLoading event
-            register("handleMultipleBooksWithoutLoading", async (e) => {
-                const { files, isFromLocal, isOnServer } = e;
-
-                if (this.enabled) {
-                    showLoadingScreen();
-                    // CONFIG.VARS.ALL_BOOKS_INFO = {};
-
+                for (const { file, isEpub } of books) {
                     try {
-                        // Get all input books
-                        for (const [i, file] of files.entries()) {
-                            const final_isFromLocal = getIsFromLocal(file.name) || isFromLocal;
-                            const final_isOnServer = getIsOnServer(file.name) || isOnServer;
-                            setIsFromLocal(file.name, final_isFromLocal);
-                            setIsOnServer(file.name, final_isOnServer);
-                            // await this.saveBook(file, final_isFromLocal, final_isOnServer, (i === files.length - 1), false, (i === files.length - 1));
-                            file.isFromLocal = final_isFromLocal;
-                            file.isOnServer = final_isOnServer;
-                            file.isEastern = file.isEastern ?? true;
-                            file.encoding = file.encoding ?? "utf-8";
-                            file.size = file.size ?? 0;
-
-                            const lastOpenedTimestamp = getBookLastReadTimestamp(file.name);
-                            if (lastOpenedTimestamp) {
-                                file.lastOpenedTimestamp = lastOpenedTimestamp;
-                                file.progress = getProgressText(file.name, false);
-                            }
-                            // CONFIG.VARS.ALL_BOOKS_INFO.push(file);
-                            CONFIG.VARS.ALL_BOOKS_INFO[file.name] = file;
-                        }
-
-                        // // Get all existing books
-                        // const allBooks = await this.db.getAllBooks();
-                        // for (const book of allBooks) {
-                        //     const final_isFromLocal = book.isFromLocal || false;
-                        //     const final_isOnServer = book.isOnServer || false;
-                        //     const new_file = {
-                        //         name: book.name,
-                        //         size: book.data.size,
-                        //         isFromLocal: final_isFromLocal,
-                        //         isOnServer: final_isOnServer,
-                        //     };
-
-                        //     const lastOpenedTimestamp = localStorage.getItem(`${new_file.name}_lastopened`);
-                        //     if (lastOpenedTimestamp) {
-                        //         new_file.lastOpenedTimestamp = lastOpenedTimestamp;
-                        //         new_file.progress = getProgressText(new_file.name, false);
-                        //     }
-
-                        //     // CONFIG.VARS.ALL_BOOKS_INFO = CONFIG.VARS.ALL_BOOKS_INFO.filter(f => f.name !== new_file.name).concat([new_file]);
-                        //     CONFIG.VARS.ALL_BOOKS_INFO[new_file.name] = new_file;
-                        // }
-
-                        // Sort the bookshelf
-                        let allBooksInfo_names = Object.keys(CONFIG.VARS.ALL_BOOKS_INFO);
-                        allBooksInfo_names = this._sortBookshelf(allBooksInfo_names);
-
-                        // console.log("allBooksInfo", allBooksInfo_names);
-                        // console.log(allBooksInfo_names.length);
-
-                        const container = $(".bookshelf .booklist");
-                        container.html("");
-                        for (const [idx, bookname] of allBooksInfo_names.entries()) {
-                            const bookInfo = CONFIG.VARS.ALL_BOOKS_INFO[bookname];
-                            // console.log(idx, bookInfo);
-                            // container.append(this.genBookItem(bookInfo, idx));
-
-                            // Show book one by one
-                            // this.genBookItem(bookInfo, idx).hide().delay(idx*50).fadeIn(50).appendTo(container);
-
-                            // Show book all at once
-                            this.genBookItem(bookInfo, idx).hide().fadeIn(300).appendTo(container);
-                        }
-                        await container.trigger("contentchange");
-                    } catch (e) {
-                        console.log("Error in handleMultipleBooksWithoutLoading:", e);
+                        const stored = await this.db.putBook(allocateBookId(file), file, isFromLocal, isOnServer, { isEpub });
+                        (stored ? added : failed).push(file.name);
+                    } catch (error) {
+                        this.logger.error("Could not import book", error, { filename: file.name });
+                        failed.push(file.name);
                     }
-
-                    // If there is no book in bookshelf, hide the bookshelf
-                    // Otherwise, show the bookshelf, but not the bookshelf trigger button
-                    // Only show the bookshelf trigger button when a book is opened
-                    if (Object.keys(CONFIG.VARS.ALL_BOOKS_INFO).length <= 0) {
-                        this.hide();
-                        this.hideTriggerBtn();
-                    } else {
-                        await this.show();
-                        // this.showTriggerBtn();
-                    }
-
-                    resetDropZoneState();
-                    hideLoadingScreen(false);
                 }
+                if (added.length) {
+                    try {
+                        await this.refreshBookList(false, true, !CONFIG.VARS.IS_BOOK_OPENED);
+                    } catch (error) {
+                        this.logger.error("Could not refresh the bookshelf after import", error);
+                    }
+                }
+                return { added, failed, unavailable: false };
             });
 
             // Listen for printAllBooks event
