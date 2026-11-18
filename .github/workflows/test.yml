@@ -16,7 +16,7 @@ on:
 jobs:
   test:
     name: Run tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,12 +26,6 @@ jobs:
         with:
           node-version: "22"
 
-      # The project ships a package.json with a `test` script that runs ALL
-      # test suites in sequence (25 test files under test/, covering T2S,
-      # presets, pre-pagination, hooks, config sync, worker resolution,
-      # CSS/i18n completeness, EPUB image inlining, build integration, etc.).
-      # The `build` step below is REQUIRED: test-build-integration.mjs
-      # asserts that dist/ exists and contains the production artifacts.
       - name: Setup pnpm via corepack
         run: corepack enable
 
@@ -40,8 +34,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Chromium for browser regression tests
-        run: pnpm exec playwright-core install --with-deps chromium
+      - name: Install Chromium and Firefox for browser regression tests
+        run: pnpm exec playwright-core install --with-deps chromium firefox
 
       - name: Validate production workflow
-        run: sh build-tools/validate.sh
+        run: pnpm run validate
